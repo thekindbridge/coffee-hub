@@ -1,0 +1,7 @@
+{
+  "name": "COFFE HUB - Chinese Fast Food",
+  "description": "Modern mobile-first food ordering platform for COFFE HUB, serving authentic Indo-Chinese street food in Inkollu.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
