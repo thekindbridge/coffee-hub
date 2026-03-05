@@ -27,6 +27,12 @@ import {
 } from 'lucide-react';
 import { FirebaseError } from 'firebase/app';
 import {
+  GoogleAuthProvider,
+  onAuthStateChanged,
+  signInWithPopup,
+  signOut,
+} from 'firebase/auth';
+import {
   collection,
   doc,
   getDocs,
@@ -41,7 +47,7 @@ import {
 } from 'firebase/firestore';
 import type { QueryDocumentSnapshot, Timestamp } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'motion/react';
-import { db } from './firebase';
+import { auth, db } from './firebase';
 import { MenuItem, CartItem, Order, OrderItem } from './types';
 import AdminDashboard from './components/AdminDashboard';
 import MyOrders from './components/MyOrders';
@@ -50,22 +56,7 @@ import MyOrders from './components/MyOrders';
 
 const ORDER_STATUSES: Order['status'][] = ['Placed', 'Preparing', 'Out for Delivery', 'Delivered'];
 const ORDER_ITEMS_IN_QUERY_LIMIT = 10;
-const GUEST_USER_ID_STORAGE_KEY = 'coffe_hub_guest_user_id';
-
-const getOrCreateGuestUserId = () => {
-  if (typeof window === 'undefined') {
-    return 'guest-user';
-  }
-
-  const existingUserId = window.localStorage.getItem(GUEST_USER_ID_STORAGE_KEY);
-  if (existingUserId) {
-    return existingUserId;
-  }
-
-  const generatedUserId = `guest-${Math.random().toString(36).slice(2, 12)}`;
-  window.localStorage.setItem(GUEST_USER_ID_STORAGE_KEY, generatedUserId);
-  return generatedUserId;
-};
+const ADMIN_EMAIL = 'thekindbridge@gmail.com';
 
 const mapMenuDocToMenuItem = (snapshot: QueryDocumentSnapshot): MenuItem => {
   const data = snapshot.data() as Record<string, unknown>;
@@ -257,8 +248,11 @@ const FoodCard: React.FC<FoodCardProps> = ({ item, onAdd, cartQuantity }) => {
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'home' | 'menu' | 'offers' | 'orders' | 'cart' | 'tracking' | 'about' | 'contact' | 'admin'>('home');
-  const [currentUserId] = useState(() => getOrCreateGuestUserId());
-  const isAdmin = true;
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isAuthReady, setIsAuthReady] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState('');
+  const [currentUserEmail, setCurrentUserEmail] = useState('');
+  const [isAdmin, setIsAdmin] = useState(false);
   const [adminOrders, setAdminOrders] = useState<Order[]>([]);
   const [newOrderDocIds, setNewOrderDocIds] = useState<string[]>([]);
   const [userOrders, setUserOrders] = useState<Order[]>([]);
@@ -287,6 +281,35 @@ export default function App() {
   const userOrdersSnapshotVersionRef = useRef(0);
 
   useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, user => {
+      if (user) {
+        const email = user.email || '';
+        setIsLoggedIn(true);
+        setCurrentUserId(user.uid);
+        setCurrentUserEmail(email);
+        setIsAdmin(email.toLowerCase() === ADMIN_EMAIL);
+      } else {
+        setIsLoggedIn(false);
+        setCurrentUserId('');
+        setCurrentUserEmail('');
+        setIsAdmin(false);
+        setActiveTab(prev => (prev === 'admin' ? 'home' : prev));
+      }
+
+      setIsAuthReady(true);
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isLoggedIn) {
+      setMenu([]);
+      return;
+    }
+
     const menuQuery = collection(db, 'menu_items');
     const unsubscribe = onSnapshot(
       menuQuery,
@@ -302,7 +325,7 @@ export default function App() {
     return () => {
       unsubscribe();
     };
-  }, []);
+  }, [isLoggedIn]);
 
   useEffect(() => {
     if (!currentUserId) {
@@ -554,6 +577,26 @@ export default function App() {
     }
   };
 
+  const handleGoogleLogin = async () => {
+    try {
+      const provider = new GoogleAuthProvider();
+      await signInWithPopup(auth, provider);
+    } catch (error) {
+      console.error('Google sign-in failed', error);
+      alert('Unable to sign in with Google right now.');
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      setActiveTab('home');
+    } catch (error) {
+      console.error('Logout failed', error);
+      alert('Unable to log out right now.');
+    }
+  };
+
   const categories = useMemo(() => ['All', ...new Set(menu.map(item => item.category))], [menu]);
 
   const filteredMenu = useMemo(() => {
@@ -602,6 +645,11 @@ export default function App() {
     }
 
     if (cart.length === 0) {
+      return;
+    }
+
+    if (!currentUserId) {
+      alert('Please sign in with Google to place an order.');
       return;
     }
 
@@ -689,10 +737,8 @@ export default function App() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
           >
-            <span className="text-accent font-bold tracking-widest uppercase text-sm mb-2 block">Authentic Indo-Chinese</span>
-            <h1 className="text-5xl md:text-7xl font-display font-black leading-[0.9] mb-6">
-              HOT WOK.<br />
-              <span className="text-primary">FRESH FLAVORS.</span><br />
+            <span className="text-primary font-bold tracking-widest uppercase text-sm mb-2 block">COFFEE HUB - INKOLLU</span>
+            <h1 className="text-5xl md:text-7xl font-display font-black leading-[0.9] mb-6">FRESH FLAVORS.<br />
               DELIVERED FAST.
             </h1>
             <button 
@@ -1034,6 +1080,41 @@ export default function App() {
     </div>
   );
 
+  const renderLogin = () => (
+    <div className="min-h-screen bg-background px-6 text-ink">
+      <div className="mx-auto flex min-h-screen max-w-md items-center justify-center">
+        <div className="w-full rounded-3xl border border-white/10 bg-white/5 p-8 text-center">
+          <h1 className="mb-2 text-3xl font-black">Sign in to COFFE HUB</h1>
+          <p className="mb-8 text-sm text-ink-muted">Use your Google account to continue</p>
+          <button
+            onClick={() => {
+              void handleGoogleLogin();
+            }}
+            className="w-full rounded-2xl bg-primary px-6 py-4 text-sm font-black uppercase tracking-wide text-white"
+          >
+            Continue with Google
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  if (!isAuthReady) {
+    return (
+      <div className="min-h-screen bg-background px-6 text-ink">
+        <div className="mx-auto flex min-h-screen max-w-md items-center justify-center">
+          <div className="w-full rounded-3xl border border-white/10 bg-white/5 p-8 text-center">
+            <p className="text-sm font-bold uppercase tracking-wide text-ink-muted">Loading authentication...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isLoggedIn) {
+    return renderLogin();
+  }
+
   return (
     <div className="min-h-screen bg-background text-ink selection:bg-primary/30">
       {/* Header */}
@@ -1045,13 +1126,24 @@ export default function App() {
           <span className="font-display font-black text-xl tracking-tighter">COFFE <span className="text-primary">HUB</span></span>
         </div>
         
-        <div className="flex items-center gap-4">
-          <button 
-            onClick={() => setActiveTab('admin')}
-            title="Open Admin Dashboard"
-            className="w-10 h-10 rounded-full flex items-center justify-center border transition-colors bg-accent/20 border-accent text-accent"
+        <div className="flex items-center gap-3">
+          <span className="hidden text-xs font-bold text-ink-muted sm:block">{currentUserEmail}</span>
+          {isAdmin && (
+            <button 
+              onClick={() => setActiveTab('admin')}
+              title="Open Admin Dashboard"
+              className="w-10 h-10 rounded-full flex items-center justify-center border transition-colors bg-accent/20 border-accent text-accent"
+            >
+              <User size={20} />
+            </button>
+          )}
+          <button
+            onClick={() => {
+              void handleLogout();
+            }}
+            className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-ink-muted hover:bg-white/10"
           >
-            <User size={20} />
+            Logout
           </button>
         </div>
       </header>
@@ -1081,7 +1173,7 @@ export default function App() {
               void updateOrderStatus(orderDocId, status);
             }}
             onLogout={() => {
-              setActiveTab('home');
+              void handleLogout();
             }}
           />
         )}
@@ -1369,5 +1461,3 @@ export default function App() {
     </div>
   );
 }
-
-
