@@ -738,7 +738,8 @@ export default function App() {
             transition={{ duration: 0.6 }}
           >
             <span className="text-primary font-bold tracking-widest uppercase text-sm mb-2 block">COFFEE HUB - INKOLLU</span>
-            <h1 className="text-5xl md:text-7xl font-display font-black leading-[0.9] mb-6">FRESH FLAVORS.<br />
+            <h1 className="text-5xl md:text-7xl font-display font-black leading-[0.9] mb-6">HOT WOK.<br />
+              <span className="text-primary">FRESH FLAVORS.</span><br />
               DELIVERED FAST.
             </h1>
             <button 
