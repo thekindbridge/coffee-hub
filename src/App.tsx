@@ -23,12 +23,15 @@ import {
   ArrowRight,
   CheckCircle2,
   Search,
-  Filter
+  Filter,
+  Chrome
 } from 'lucide-react';
 import { FirebaseError } from 'firebase/app';
 import {
+  GoogleAuthProvider,
   onAuthStateChanged,
   RecaptchaVerifier,
+  signInWithPopup,
   signInWithPhoneNumber,
   signOut,
 } from 'firebase/auth';
@@ -57,6 +60,7 @@ import MyOrders from './components/MyOrders';
 
 const MENU_CACHE_KEY = 'coffe-hub-menu-cache-v1';
 const ADMIN_PHONE = '+917893504891';
+const ADMIN_EMAIL = 'admin@gmail.com';
 const ORDER_STATUSES: Order['status'][] = ['Placed', 'Preparing', 'Out for Delivery', 'Delivered'];
 const ORDER_ITEMS_IN_QUERY_LIMIT = 10;
 
@@ -282,6 +286,7 @@ export default function App() {
   const [authError, setAuthError] = useState('');
   const [currentUserId, setCurrentUserId] = useState('');
   const [currentUserPhone, setCurrentUserPhone] = useState('');
+  const [currentUserEmail, setCurrentUserEmail] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
   const [adminOrders, setAdminOrders] = useState<Order[]>([]);
   const [newOrderDocIds, setNewOrderDocIds] = useState<string[]>([]);
@@ -338,15 +343,18 @@ export default function App() {
     const unsubscribe = onAuthStateChanged(auth, user => {
       if (user) {
         const normalizedPhone = user.phoneNumber?.trim() || '';
+        const normalizedEmail = user.email?.trim().toLowerCase() || '';
         setIsLoggedIn(true);
         setCurrentUserId(user.uid);
         setCurrentUserPhone(normalizedPhone);
-        setIsAdmin(normalizedPhone === ADMIN_PHONE);
+        setCurrentUserEmail(normalizedEmail);
+        setIsAdmin(normalizedPhone === ADMIN_PHONE || normalizedEmail === ADMIN_EMAIL);
         setAuthError('');
       } else {
         setIsLoggedIn(false);
         setCurrentUserId('');
         setCurrentUserPhone('');
+        setCurrentUserEmail('');
         setIsAdmin(false);
         setAdminOrders([]);
         setUserOrders([]);
@@ -691,11 +699,36 @@ export default function App() {
     }
   };
 
+  const handleGoogleLogin = async () => {
+    setAuthError('');
+    setIsAuthLoading(true);
+
+    try {
+      const provider = new GoogleAuthProvider();
+      const result = await signInWithPopup(auth, provider);
+      const normalizedPhone = result.user.phoneNumber?.trim() || '';
+      const normalizedEmail = result.user.email?.trim().toLowerCase() || '';
+
+      setIsLoggedIn(true);
+      setCurrentUserId(result.user.uid);
+      setCurrentUserPhone(normalizedPhone);
+      setCurrentUserEmail(normalizedEmail);
+      setIsAdmin(normalizedPhone === ADMIN_PHONE || normalizedEmail === ADMIN_EMAIL);
+      clearOtpState();
+    } catch (error) {
+      console.error('Google login failed', error);
+      setAuthError('Google login failed. Please try again.');
+    } finally {
+      setIsAuthLoading(false);
+    }
+  };
+
   const handleLogout = async () => {
     try {
       await signOut(auth);
       setPhoneNumberInput('');
       setCurrentUserPhone('');
+      setCurrentUserEmail('');
       setAuthError('');
       setNewOrderDocIds([]);
       setAdminOrders([]);
@@ -1270,13 +1303,30 @@ export default function App() {
             <p className="text-center text-xs text-primary font-bold">{authError}</p>
           )}
           {!isOtpSent ? (
-            <button 
-              onClick={() => void handleSendOtp()}
-              disabled={isAuthLoading}
-              className="w-full bg-primary text-white py-4 rounded-2xl font-black text-lg disabled:opacity-70"
-            >
-              {isAuthLoading ? 'SENDING OTP...' : 'SEND OTP'}
-            </button>
+            <div className="space-y-4">
+              <button 
+                onClick={() => void handleSendOtp()}
+                disabled={isAuthLoading}
+                className="w-full bg-primary text-white py-4 rounded-2xl font-black text-lg disabled:opacity-70"
+              >
+                {isAuthLoading ? 'SENDING OTP...' : 'SEND OTP'}
+              </button>
+
+              <div className="flex items-center gap-3">
+                <div className="h-px flex-1 bg-white/10" />
+                <span className="text-xs font-bold uppercase tracking-widest text-ink-muted">OR</span>
+                <div className="h-px flex-1 bg-white/10" />
+              </div>
+
+              <button
+                onClick={() => void handleGoogleLogin()}
+                disabled={isAuthLoading}
+                className="w-full bg-white text-black py-4 rounded-2xl font-black text-base disabled:opacity-70 flex items-center justify-center gap-3"
+              >
+                <Chrome size={20} />
+                Continue with Google
+              </button>
+            </div>
           ) : (
             <div className="space-y-3">
               <button 
