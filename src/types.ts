@@ -31,9 +31,39 @@ export interface Order {
   phone: string;
   address: string;
   total_amount: number;
+  subtotal?: number;
+  discount?: number;
+  coupon_code?: string;
+  final_total?: number;
   status: 'Placed' | 'Preparing' | 'Out for Delivery' | 'Delivered';
   payment_method: string;
   created_at: string;
   user_id: string;
   items?: OrderItem[];
+}
+
+export type DiscountType = 'percentage' | 'flat';
+
+export interface Offer {
+  id: string;
+  title: string;
+  description: string;
+  couponCode: string;
+  discountType: DiscountType;
+  discountValue: number;
+  minOrderAmount: number;
+  maxDiscountAmount?: number;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface OfferInput {
+  title: string;
+  description: string;
+  couponCode: string;
+  discountType: DiscountType;
+  discountValue: number;
+  minOrderAmount: number;
+  maxDiscountAmount?: number;
+  isActive: boolean;
 }

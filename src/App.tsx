@@ -22,8 +22,7 @@ import {
   User,
   ArrowRight,
   CheckCircle2,
-  Search,
-  Filter
+  Search
 } from 'lucide-react';
 import { FirebaseError } from 'firebase/app';
 import {
@@ -49,6 +48,8 @@ import type { QueryDocumentSnapshot, Timestamp } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'motion/react';
 import { auth, db } from './firebase';
 import { MenuItem, CartItem, Order, OrderItem } from './types';
+import { useOffers } from './hooks/useOffers';
+import { calculateDiscount } from './utils/calculateDiscount';
 import AdminDashboard from './components/AdminDashboard';
 import MyOrders from './components/MyOrders';
 
@@ -78,6 +79,9 @@ const mapMenuDocToMenuItem = (snapshot: QueryDocumentSnapshot): MenuItem => {
 const mapOrderDocToOrder = (snapshot: QueryDocumentSnapshot): Order => {
   const data = snapshot.data() as Record<string, unknown>;
   const createdAtValue = data.createdAt as Timestamp | undefined;
+  const subtotal = Number(data.subtotal ?? data.total ?? 0);
+  const discount = Number(data.discount || 0);
+  const finalTotal = Number(data.finalTotal ?? data.total ?? Math.max(0, subtotal - discount));
 
   return {
     id: ((data.orderId as string) || snapshot.id).toUpperCase(),
@@ -85,7 +89,11 @@ const mapOrderDocToOrder = (snapshot: QueryDocumentSnapshot): Order => {
     customer_name: (data.name as string) || '',
     phone: (data.phone as string) || '',
     address: (data.address as string) || '',
-    total_amount: Number(data.total || 0),
+    total_amount: finalTotal,
+    subtotal,
+    discount,
+    coupon_code: ((data.couponCode as string) || '').toUpperCase(),
+    final_total: finalTotal,
     status: (data.status as Order['status']) || 'Placed',
     payment_method: (data.paymentMethod as string) || 'UPI',
     created_at: createdAtValue?.toDate()?.toISOString() || new Date().toISOString(),
@@ -274,11 +282,29 @@ export default function App() {
     address: '',
     payment: 'UPI'
   });
+  const [couponInput, setCouponInput] = useState('');
+  const [appliedCouponCode, setAppliedCouponCode] = useState('');
+  const [couponError, setCouponError] = useState('');
+  const [couponSuccess, setCouponSuccess] = useState('');
+  const [isApplyingCoupon, setIsApplyingCoupon] = useState(false);
+  const [isCouponAppliedPulseVisible, setIsCouponAppliedPulseVisible] = useState(false);
   const previousAdminOrderCountRef = useRef(0);
   const hasInitializedAdminOrdersRef = useRef(false);
   const orderAlertAudioRef = useRef<HTMLAudioElement | null>(null);
   const adminOrdersSnapshotVersionRef = useRef(0);
   const userOrdersSnapshotVersionRef = useRef(0);
+
+  const {
+    offers,
+    activeOffers,
+    isLoading: isOffersLoading,
+    error: offersError,
+    createOffer,
+    updateOffer,
+    deleteOffer,
+    toggleOfferStatus,
+    findActiveOfferByCode,
+  } = useOffers({ includeInactive: isAdmin });
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, user => {
@@ -609,6 +635,61 @@ export default function App() {
 
   const cartTotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+  const appliedOffer = useMemo(
+    () => activeOffers.find(offer => offer.couponCode === appliedCouponCode) || null,
+    [activeOffers, appliedCouponCode],
+  );
+  const { discount: discountAmount, finalTotal: finalCartTotal } = useMemo(() => {
+    if (!appliedOffer || cartTotal < appliedOffer.minOrderAmount) {
+      return { discount: 0, finalTotal: cartTotal };
+    }
+
+    return calculateDiscount(cartTotal, appliedOffer);
+  }, [appliedOffer, cartTotal]);
+
+  useEffect(() => {
+    if (!appliedCouponCode) {
+      return;
+    }
+
+    if (!appliedOffer) {
+      setAppliedCouponCode('');
+      setCouponSuccess('');
+      setCouponError('Coupon is no longer active.');
+      return;
+    }
+
+    if (cartTotal < appliedOffer.minOrderAmount) {
+      setAppliedCouponCode('');
+      setCouponSuccess('');
+      setCouponError(`Coupon removed. Minimum order is ₹${appliedOffer.minOrderAmount}.`);
+    }
+  }, [appliedCouponCode, appliedOffer, cartTotal]);
+
+  useEffect(() => {
+    if (cart.length > 0) {
+      return;
+    }
+
+    setAppliedCouponCode('');
+    setCouponInput('');
+    setCouponError('');
+    setCouponSuccess('');
+  }, [cart.length]);
+
+  useEffect(() => {
+    if (!isCouponAppliedPulseVisible) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setIsCouponAppliedPulseVisible(false);
+    }, 650);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [isCouponAppliedPulseVisible]);
 
   const handleAddToCart = (item: MenuItem, delta: number) => {
     setCart(prev => {
@@ -621,6 +702,57 @@ export default function App() {
       if (delta > 0) return [...prev, { ...item, quantity: 1 }];
       return prev;
     });
+  };
+
+  const handleApplyCoupon = async () => {
+    const normalizedCouponCode = couponInput.trim().toUpperCase();
+    if (!normalizedCouponCode) {
+      setCouponError('Enter a coupon code.');
+      setCouponSuccess('');
+      return;
+    }
+
+    setIsApplyingCoupon(true);
+    setCouponError('');
+    setCouponSuccess('');
+
+    try {
+      const matchingOffer = await findActiveOfferByCode(normalizedCouponCode);
+      if (!matchingOffer) {
+        setAppliedCouponCode('');
+        setCouponError('Invalid coupon code.');
+        return;
+      }
+
+      if (cartTotal < matchingOffer.minOrderAmount) {
+        setAppliedCouponCode('');
+        setCouponError(`Minimum order amount is ₹${matchingOffer.minOrderAmount}.`);
+        return;
+      }
+
+      const { discount } = calculateDiscount(cartTotal, matchingOffer);
+      if (discount <= 0) {
+        setAppliedCouponCode('');
+        setCouponError('Coupon is not applicable for this cart total.');
+        return;
+      }
+
+      setAppliedCouponCode(matchingOffer.couponCode);
+      setCouponInput(matchingOffer.couponCode);
+      setCouponSuccess(`Coupon ${matchingOffer.couponCode} applied.`);
+      setIsCouponAppliedPulseVisible(true);
+    } catch (error) {
+      console.error('Failed to apply coupon', error);
+      setCouponError('Unable to apply coupon right now.');
+    } finally {
+      setIsApplyingCoupon(false);
+    }
+  };
+
+  const handleRemoveCoupon = () => {
+    setAppliedCouponCode('');
+    setCouponError('');
+    setCouponSuccess('');
   };
 
   const getNextOrderId = async () => {
@@ -656,6 +788,25 @@ export default function App() {
     setIsPlacingOrder(true);
 
     try {
+      const subtotalValue = cartTotal;
+      let discountValue = 0;
+      let finalTotalValue = subtotalValue;
+      let couponCodeValue = '';
+
+      if (appliedCouponCode) {
+        const matchingOffer = await findActiveOfferByCode(appliedCouponCode);
+        if (matchingOffer && subtotalValue >= matchingOffer.minOrderAmount) {
+          const recalculated = calculateDiscount(subtotalValue, matchingOffer);
+          discountValue = recalculated.discount;
+          finalTotalValue = recalculated.finalTotal;
+          couponCodeValue = matchingOffer.couponCode;
+        } else {
+          setAppliedCouponCode('');
+          setCouponSuccess('');
+          setCouponError('Coupon was removed because it is no longer valid.');
+        }
+      }
+
       const orderId = await getNextOrderId();
       const orderRef = doc(collection(db, 'orders'));
       const batch = writeBatch(db);
@@ -668,7 +819,11 @@ export default function App() {
         address: customerDetails.address,
         paymentMethod: customerDetails.payment,
         status: 'Placed',
-        total: cartTotal,
+        subtotal: subtotalValue,
+        discount: discountValue,
+        couponCode: couponCodeValue,
+        finalTotal: finalTotalValue,
+        total: finalTotalValue,
         createdAt: serverTimestamp(),
       });
 
@@ -691,7 +846,11 @@ export default function App() {
         customer_name: customerDetails.name,
         phone: customerDetails.phone,
         address: customerDetails.address,
-        total_amount: cartTotal,
+        total_amount: finalTotalValue,
+        subtotal: subtotalValue,
+        discount: discountValue,
+        coupon_code: couponCodeValue,
+        final_total: finalTotalValue,
         status: 'Placed',
         payment_method: customerDetails.payment,
         created_at: new Date().toISOString(),
@@ -709,6 +868,10 @@ export default function App() {
       setTrackingOrderId(orderId);
       setCheckoutStep('success');
       setCart([]);
+      setAppliedCouponCode('');
+      setCouponInput('');
+      setCouponError('');
+      setCouponSuccess('');
     } catch (error) {
       console.error('Failed to place order', error);
       alert('Unable to place order right now. Please try again.');
@@ -752,25 +915,29 @@ export default function App() {
         </div>
       </section>
 
-      {/* Offers Banner */}
-      <div className="px-6 -mt-10 relative z-20">
-        <motion.div 
-          whileHover={{ scale: 1.02 }}
-          className="bg-accent rounded-3xl p-6 flex items-center justify-between text-black overflow-hidden relative"
-        >
-          <div className="relative z-10">
-            <h3 className="font-black text-2xl">🔥 20% OFF</h3>
-            <p className="font-bold opacity-80">On orders above ₹299</p>
-          </div>
-          <div className="bg-black text-white px-4 py-2 rounded-xl font-black text-sm relative z-10">
-            USE: WOK20
-          </div>
-          <div className="absolute -right-4 -bottom-4 opacity-20">
-            <Tag size={120} />
-          </div>
-        </motion.div>
-      </div>
-
+      {activeOffers[0] && (
+        <div className="relative z-20 -mt-10 px-6">
+          <motion.div
+            whileHover={{ scale: 1.02 }}
+            className="relative flex items-center justify-between overflow-hidden rounded-3xl bg-accent p-6 text-black"
+          >
+            <div className="relative z-10">
+              <h3 className="text-2xl font-black">{activeOffers[0].title}</h3>
+              <p className="font-bold opacity-80">{activeOffers[0].description}</p>
+            </div>
+            <div className="relative z-10 rounded-xl bg-black px-4 py-2 text-sm font-black text-white">
+              USE: {activeOffers[0].couponCode}
+            </div>
+            <motion.div
+              className="absolute -bottom-4 -right-4 opacity-20"
+              animate={{ rotate: [0, 8, 0], scale: [1, 1.04, 1] }}
+              transition={{ duration: 2.6, repeat: Infinity }}
+            >
+              <Tag size={120} />
+            </motion.div>
+          </motion.div>
+        </div>
+      )}
       {/* Popular Items */}
       <section className="mt-12 px-6">
         <div className="flex justify-between items-end mb-6">
@@ -812,33 +979,51 @@ export default function App() {
       </section>
     </div>
   );
-
   const renderOffers = () => (
     <div className="pt-24 pb-24 px-6 space-y-6">
       <h2 className="text-3xl font-black mb-8">Exclusive Offers</h2>
-      
-      {[
-        { title: '🔥 10% OFF on Noodles', desc: 'Valid on all noodle items', code: 'NOODLE10', color: 'bg-primary' },
-        { title: '🔥 Free Manchurian', desc: 'On orders above ₹399', code: 'FREEBALLS', color: 'bg-accent' },
-        { title: '🔥 Combo Discount', desc: 'Flat ₹50 off on combos', code: 'COMBO50', color: 'bg-emerald-500' },
-      ].map(offer => (
-        <motion.div 
-          key={offer.code}
-          whileHover={{ scale: 1.02 }}
-          className={`${offer.color} rounded-3xl p-6 text-black flex justify-between items-center`}
-        >
-          <div>
-            <h3 className="font-black text-xl">{offer.title}</h3>
-            <p className="font-bold opacity-70">{offer.desc}</p>
-          </div>
-          <div className="bg-black/20 backdrop-blur-md border border-black/10 px-4 py-2 rounded-xl font-black text-sm">
-            {offer.code}
-          </div>
-        </motion.div>
-      ))}
+
+      {offersError ? (
+        <div className="rounded-3xl border border-white/10 bg-white/5 p-6 text-sm text-primary">
+          {offersError}
+        </div>
+      ) : isOffersLoading ? (
+        <div className="rounded-3xl border border-white/10 bg-white/5 p-6 text-sm text-ink-muted">
+          Loading offers...
+        </div>
+      ) : activeOffers.length === 0 ? (
+        <div className="rounded-3xl border border-white/10 bg-white/5 p-6 text-sm text-ink-muted">
+          No active offers available right now.
+        </div>
+      ) : (
+        activeOffers.map(offer => (
+          <motion.div
+            key={offer.id}
+            whileHover={{ scale: 1.02 }}
+            className="relative flex items-center justify-between overflow-hidden rounded-3xl border border-accent/20 bg-accent/90 p-6 text-black"
+          >
+            <div>
+              <h3 className="text-xl font-black">{offer.title}</h3>
+              <p className="font-bold opacity-80">{offer.description}</p>
+              <p className="mt-2 text-xs font-black uppercase tracking-wide">
+                {offer.discountType === 'percentage' ? `${offer.discountValue}% OFF` : `FLAT Rs ${offer.discountValue} OFF`}
+              </p>
+            </div>
+            <div className="rounded-xl bg-black/20 px-4 py-2 text-sm font-black">
+              {offer.couponCode}
+            </div>
+            <motion.div
+              className="absolute -bottom-4 -right-4 opacity-20"
+              animate={{ rotate: [0, 8, 0], scale: [1, 1.04, 1] }}
+              transition={{ duration: 2.4, repeat: Infinity }}
+            >
+              <Tag size={120} />
+            </motion.div>
+          </motion.div>
+        ))
+      )}
     </div>
   );
-
   const renderMenu = () => (
     <div className="pt-20 pb-24 px-6">
       <div className="sticky top-20 z-30 bg-background/80 backdrop-blur-xl -mx-6 px-6 py-4 border-b border-white/5">
@@ -1055,7 +1240,6 @@ export default function App() {
             </div>
           </div>
         </div>
-        
         <div className="bg-white/5 p-6 rounded-[40px] border border-white/10">
           <h4 className="font-bold mb-4">Follow Us</h4>
           <div className="flex gap-4">
@@ -1085,7 +1269,7 @@ export default function App() {
     <div className="min-h-screen bg-background px-6 text-ink">
       <div className="mx-auto flex min-h-screen max-w-md items-center justify-center">
         <div className="w-full rounded-3xl border border-white/10 bg-white/5 p-8 text-center">
-          <h1 className="mb-2 text-3xl font-black">Sign in to COFFE HUB</h1>
+          <h1 className="mb-2 text-3xl font-black">Sign in to COFFEE HUB</h1>
           <p className="mb-8 text-sm text-ink-muted">Use your Google account to continue</p>
           <button
             onClick={() => {
@@ -1168,11 +1352,18 @@ export default function App() {
           <AdminDashboard
             isAdmin={isAdmin}
             orders={adminOrders}
+            offers={offers}
+            isOffersLoading={isOffersLoading}
+            offersError={offersError}
             newOrderDocIds={newOrderDocIds}
             orderStatuses={ORDER_STATUSES}
             onUpdateStatus={(orderDocId, status) => {
               void updateOrderStatus(orderDocId, status);
             }}
+            onCreateOffer={createOffer}
+            onUpdateOffer={updateOffer}
+            onDeleteOffer={deleteOffer}
+            onToggleOfferStatus={toggleOfferStatus}
             onLogout={() => {
               void handleLogout();
             }}
@@ -1219,7 +1410,7 @@ export default function App() {
             <span>VIEW CART</span>
           </div>
           <div className="flex items-center gap-1">
-            <span>₹{cartTotal}</span>
+            <span>₹{finalCartTotal}</span>
             <ChevronRight size={20} />
           </div>
         </motion.button>
@@ -1340,19 +1531,88 @@ export default function App() {
                       </div>
                     ))}
                     
-                    <div className="pt-6 border-t border-white/5 space-y-2">
+                    <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                      <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-ink-muted">
+                        Enter Coupon Code
+                      </label>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={couponInput}
+                          onChange={e => setCouponInput(e.target.value.toUpperCase())}
+                          placeholder="e.g. SAVE20"
+                          className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm uppercase focus:border-primary focus:outline-none"
+                        />
+                        <button
+                          onClick={() => void handleApplyCoupon()}
+                          disabled={isApplyingCoupon || cart.length === 0}
+                          className="rounded-xl bg-primary px-4 py-2 text-xs font-black text-white disabled:opacity-60"
+                        >
+                          {isApplyingCoupon ? 'APPLYING...' : 'APPLY'}
+                        </button>
+                      </div>
+                      {appliedCouponCode && (
+                        <button
+                          onClick={handleRemoveCoupon}
+                          className="mt-2 text-xs font-bold uppercase tracking-wide text-ink-muted hover:text-white"
+                        >
+                          Remove Coupon
+                        </button>
+                      )}
+                      {couponError && <p className="mt-2 text-xs font-bold text-primary">{couponError}</p>}
+                      <AnimatePresence mode="wait">
+                        {couponSuccess && (
+                          <motion.p
+                            key={couponSuccess}
+                            initial={{ opacity: 0, y: 6 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -6 }}
+                            className="mt-2 text-xs font-bold text-emerald-400"
+                          >
+                            {couponSuccess}
+                          </motion.p>
+                        )}
+                      </AnimatePresence>
+                    </div>
+
+                    <div className="space-y-2 border-t border-white/5 pt-6">
                       <div className="flex justify-between text-ink-muted">
                         <span>Subtotal</span>
                         <span>₹{cartTotal}</span>
                       </div>
-                      <div className="flex justify-between text-ink-muted">
-                        <span>Delivery Fee</span>
-                        <span className="text-emerald-500">FREE</span>
-                      </div>
-                      <div className="flex justify-between text-xl font-black pt-2">
-                        <span>Total</span>
-                        <span className="text-primary">₹{cartTotal}</span>
-                      </div>
+                      <AnimatePresence initial={false}>
+                        {discountAmount > 0 && (
+                          <motion.div
+                            key={`discount-${discountAmount}`}
+                            initial={{ opacity: 0, y: 6 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -6 }}
+                            className="flex justify-between text-emerald-400"
+                          >
+                            <span>Discount</span>
+                            <span>-₹{discountAmount}</span>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                      {appliedCouponCode && (
+                        <div className="flex justify-between text-ink-muted">
+                          <span>Coupon Applied</span>
+                          <span className="font-bold text-accent">{appliedCouponCode}</span>
+                        </div>
+                      )}
+                      <motion.div
+                        key={`final-total-${finalCartTotal}-${discountAmount}`}
+                        initial={{ opacity: 0.75, scale: 0.98 }}
+                        animate={{
+                          opacity: 1,
+                          scale: isCouponAppliedPulseVisible ? [1, 1.03, 1] : 1,
+                        }}
+                        transition={{ duration: 0.35 }}
+                        className="flex justify-between pt-2 text-xl font-black"
+                      >
+                        <span>Final Total</span>
+                        <span className="text-primary">₹{finalCartTotal}</span>
+                      </motion.div>
                     </div>
                   </>
                 )}
@@ -1462,3 +1722,8 @@ export default function App() {
     </div>
   );
 }
+
+
+
+
+
