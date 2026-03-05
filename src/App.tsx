@@ -1266,30 +1266,54 @@ export default function App() {
   );
 
   const renderLogin = () => (
-    <div className="min-h-screen bg-background px-6 text-ink">
-      <div className="mx-auto flex min-h-screen max-w-md items-center justify-center">
-        <div className="w-full rounded-3xl border border-white/10 bg-white/5 p-8 text-center">
-          <h1 className="mb-2 text-3xl font-black">Sign in to COFFEE HUB</h1>
-          <p className="mb-8 text-sm text-ink-muted">Use your Google account to continue</p>
+    <div
+      className="relative min-h-screen bg-cover bg-center bg-no-repeat px-5 text-ink"
+      style={{
+        backgroundImage: 'url(https://res.cloudinary.com/ddfhaqeme/image/upload/v1772713816/5f272fcd-02a1-4f33-b91c-9ff009e08610_z4faz2.jpg)',
+      }}
+    >
+      <div className="absolute inset-0 bg-black/60" />
+      <div className="relative mx-auto flex min-h-screen w-full max-w-md items-center justify-center">
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45, ease: 'easeOut' }}
+          className="w-full rounded-[30px] border border-white/25 bg-white/15 p-7 text-center shadow-2xl shadow-black/30 backdrop-blur-xl"
+        >
+          <h1 className="font-display text-4xl font-black tracking-tight text-white sm:text-5xl">
+            COFFEE HUB
+          </h1>
+          <p className="mt-2 text-xs font-bold uppercase tracking-[0.45em] text-white/80">
+            INKOLLU
+          </p>
           <button
             onClick={() => {
               void handleGoogleLogin();
             }}
-            className="w-full rounded-2xl bg-primary px-6 py-4 text-sm font-black uppercase tracking-wide text-white"
+            className="mt-8 flex w-full items-center justify-center gap-3 rounded-full bg-white px-6 py-3.5 text-sm font-black text-black shadow-xl transition-transform duration-200 hover:scale-[1.02] active:scale-[0.99]"
           >
-            Continue with Google
+            <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+              <path fill="#EA4335" d="M12 10.2v3.9h5.4c-.2 1.3-1.6 3.9-5.4 3.9-3.2 0-5.9-2.7-5.9-6s2.6-6 5.9-6c1.8 0 3 .8 3.7 1.4l2.5-2.4C16.7 3.6 14.5 2.8 12 2.8 6.9 2.8 2.8 6.9 2.8 12s4.1 9.2 9.2 9.2c5.3 0 8.9-3.7 8.9-8.9 0-.6-.1-1.1-.2-1.6H12z" />
+            </svg>
+            Sign in with Google
           </button>
-        </div>
+        </motion.div>
       </div>
     </div>
   );
 
   if (!isAuthReady) {
     return (
-      <div className="min-h-screen bg-background px-6 text-ink">
-        <div className="mx-auto flex min-h-screen max-w-md items-center justify-center">
-          <div className="w-full rounded-3xl border border-white/10 bg-white/5 p-8 text-center">
-            <p className="text-sm font-bold uppercase tracking-wide text-ink-muted">Loading authentication...</p>
+      <div
+        className="relative min-h-screen bg-cover bg-center bg-no-repeat px-5 text-ink"
+        style={{
+          backgroundImage: 'url(https://res.cloudinary.com/ddfhaqeme/image/upload/v1772713816/5f272fcd-02a1-4f33-b91c-9ff009e08610_z4faz2.jpg)',
+        }}
+      >
+        <div className="absolute inset-0 bg-black/60" />
+        <div className="relative mx-auto flex min-h-screen w-full max-w-md items-center justify-center">
+          <div className="w-full rounded-[30px] border border-white/25 bg-white/15 p-7 text-center backdrop-blur-xl">
+            <p className="text-sm font-bold uppercase tracking-[0.2em] text-white/90">Loading authentication...</p>
           </div>
         </div>
       </div>
