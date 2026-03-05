@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "clean": "vite build --emptyOutDir",
     "lint": "tsc --noEmit",
-    "seed-menu": "node --experimental-strip-types src/scripts/uploadMenu.ts"
+    "seed-menu": "node --experimental-strip-types src/scripts/seedMenu.ts"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.14",

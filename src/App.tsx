@@ -23,18 +23,9 @@ import {
   ArrowRight,
   CheckCircle2,
   Search,
-  Filter,
-  Chrome
+  Filter
 } from 'lucide-react';
 import { FirebaseError } from 'firebase/app';
-import {
-  GoogleAuthProvider,
-  onAuthStateChanged,
-  RecaptchaVerifier,
-  signInWithPopup,
-  signInWithPhoneNumber,
-  signOut,
-} from 'firebase/auth';
 import {
   collection,
   doc,
@@ -48,59 +39,32 @@ import {
   where,
   writeBatch,
 } from 'firebase/firestore';
-import type { ConfirmationResult } from 'firebase/auth';
 import type { QueryDocumentSnapshot, Timestamp } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'motion/react';
-import { auth, db } from './firebase';
+import { db } from './firebase';
 import { MenuItem, CartItem, Order, OrderItem } from './types';
 import AdminDashboard from './components/AdminDashboard';
 import MyOrders from './components/MyOrders';
-import { menuItems as seededMenuItems } from './data/menuItems';
 
 // --- Components ---
 
-const MENU_CACHE_KEY = 'coffe-hub-menu-cache-v1';
-const ADMIN_PHONE = '+917893504891';
-const ADMIN_EMAIL = 'admin@gmail.com';
 const ORDER_STATUSES: Order['status'][] = ['Placed', 'Preparing', 'Out for Delivery', 'Delivered'];
 const ORDER_ITEMS_IN_QUERY_LIMIT = 10;
+const GUEST_USER_ID_STORAGE_KEY = 'coffe_hub_guest_user_id';
 
-const normalizeMenuName = (name: string) => name.trim().toLowerCase();
+const getOrCreateGuestUserId = () => {
+  if (typeof window === 'undefined') {
+    return 'guest-user';
+  }
 
-const mapSeedMenuItemToMenuItem = (item: (typeof seededMenuItems)[number], index: number): MenuItem => {
-  const slug = item.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  const existingUserId = window.localStorage.getItem(GUEST_USER_ID_STORAGE_KEY);
+  if (existingUserId) {
+    return existingUserId;
+  }
 
-  return {
-    id: `seed-${slug || index}-${index}`,
-    name: item.name,
-    category: item.category,
-    price: item.price,
-    spice_level: item.spiceLevel,
-    is_veg: item.veg,
-    rating: item.rating,
-    image_url: item.image,
-    description: item.description,
-    is_available: item.isAvailable,
-  };
-};
-
-const mergeMenuItems = (firestoreItems: MenuItem[]) => {
-  const merged = new Map<string, MenuItem>();
-
-  seededMenuItems.forEach((item, index) => {
-    const mappedSeedItem = mapSeedMenuItemToMenuItem(item, index);
-    if (mappedSeedItem.is_available) {
-      merged.set(normalizeMenuName(mappedSeedItem.name), mappedSeedItem);
-    }
-  });
-
-  firestoreItems.forEach(item => {
-    if (item.is_available) {
-      merged.set(normalizeMenuName(item.name), item);
-    }
-  });
-
-  return Array.from(merged.values());
+  const generatedUserId = `guest-${Math.random().toString(36).slice(2, 12)}`;
+  window.localStorage.setItem(GUEST_USER_ID_STORAGE_KEY, generatedUserId);
+  return generatedUserId;
 };
 
 const mapMenuDocToMenuItem = (snapshot: QueryDocumentSnapshot): MenuItem => {
@@ -193,29 +157,6 @@ const fetchOrderItemsMap = async (orderIds: string[]) => {
   }));
 
   return itemsByOrderId;
-};
-
-const mapFirebaseError = (error: unknown): string => {
-  if (error instanceof FirebaseError) {
-    switch (error.code) {
-      case 'auth/invalid-phone-number':
-        return 'Please enter a valid 10-digit mobile number.';
-      case 'auth/missing-phone-number':
-        return 'Phone number is required.';
-      case 'auth/invalid-verification-code':
-        return 'Invalid OTP. Please check and try again.';
-      case 'auth/code-expired':
-        return 'OTP expired. Please request a new OTP.';
-      case 'auth/too-many-requests':
-        return 'Too many requests. Please wait and try again.';
-      case 'auth/captcha-check-failed':
-        return 'reCAPTCHA verification failed. Please try again.';
-      default:
-        return 'Phone authentication failed. Please try again.';
-    }
-  }
-
-  return 'Something went wrong. Please try again.';
 };
 
 const SpiceMeter = ({ level }: { level: number }) => {
@@ -316,17 +257,8 @@ const FoodCard: React.FC<FoodCardProps> = ({ item, onAdd, cartQuantity }) => {
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'home' | 'menu' | 'offers' | 'orders' | 'cart' | 'tracking' | 'about' | 'contact' | 'admin'>('home');
-  const [isAuthReady, setIsAuthReady] = useState(false);
-  const [isAuthLoading, setIsAuthLoading] = useState(false);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [phoneNumberInput, setPhoneNumberInput] = useState('');
-  const [otpInput, setOtpInput] = useState('');
-  const [isOtpSent, setIsOtpSent] = useState(false);
-  const [authError, setAuthError] = useState('');
-  const [currentUserId, setCurrentUserId] = useState('');
-  const [currentUserPhone, setCurrentUserPhone] = useState('');
-  const [currentUserEmail, setCurrentUserEmail] = useState('');
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [currentUserId] = useState(() => getOrCreateGuestUserId());
+  const isAdmin = true;
   const [adminOrders, setAdminOrders] = useState<Order[]>([]);
   const [newOrderDocIds, setNewOrderDocIds] = useState<string[]>([]);
   const [userOrders, setUserOrders] = useState<Order[]>([]);
@@ -348,109 +280,32 @@ export default function App() {
     address: '',
     payment: 'UPI'
   });
-  const recaptchaVerifierRef = useRef<RecaptchaVerifier | null>(null);
-  const confirmationResultRef = useRef<ConfirmationResult | null>(null);
   const previousAdminOrderCountRef = useRef(0);
   const hasInitializedAdminOrdersRef = useRef(false);
   const orderAlertAudioRef = useRef<HTMLAudioElement | null>(null);
   const adminOrdersSnapshotVersionRef = useRef(0);
   const userOrdersSnapshotVersionRef = useRef(0);
 
-  const clearOtpState = () => {
-    setOtpInput('');
-    setIsOtpSent(false);
-    confirmationResultRef.current = null;
-  };
-
-  const setupRecaptchaVerifier = () => {
-    if (!recaptchaVerifierRef.current) {
-      recaptchaVerifierRef.current = new RecaptchaVerifier(auth, 'recaptcha-container', {
-        size: 'invisible',
-      });
-    }
-    return recaptchaVerifierRef.current;
-  };
-
-  const validatePhoneNumber = (value: string) => /^[0-9]{10}$/.test(value.trim());
-
-  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value.replace(/\D/g, '').slice(0, 10);
-    setPhoneNumberInput(value);
-  };
-
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, user => {
-      if (user) {
-        const normalizedPhone = user.phoneNumber?.trim() || '';
-        const normalizedEmail = user.email?.trim().toLowerCase() || '';
-        setIsLoggedIn(true);
-        setCurrentUserId(user.uid);
-        setCurrentUserPhone(normalizedPhone);
-        setCurrentUserEmail(normalizedEmail);
-        setIsAdmin(normalizedPhone === ADMIN_PHONE || normalizedEmail === ADMIN_EMAIL);
-        setAuthError('');
-      } else {
-        setIsLoggedIn(false);
-        setCurrentUserId('');
-        setCurrentUserPhone('');
-        setCurrentUserEmail('');
-        setIsAdmin(false);
-        setAdminOrders([]);
-        setUserOrders([]);
-        setIsUserOrdersLoading(false);
-        clearOtpState();
-      }
-      setIsAuthReady(true);
-    });
-
-    return unsubscribe;
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      recaptchaVerifierRef.current?.clear();
-      recaptchaVerifierRef.current = null;
-    };
-  }, []);
-
-  useEffect(() => {
-    let isCancelled = false;
-
-    const cached = localStorage.getItem(MENU_CACHE_KEY);
-    if (cached) {
-      try {
-        const parsed = JSON.parse(cached) as MenuItem[];
-        if (!isCancelled && Array.isArray(parsed)) {
-          setMenu(mergeMenuItems(parsed));
-        }
-      } catch (error) {
-        console.error('Menu cache parse failed', error);
-      }
-    }
-
-    const loadMenu = async () => {
-      const menuSnapshot = await getDocs(collection(db, 'menu_items'));
-      const firestoreMenuItems = menuSnapshot.docs.map(mapMenuDocToMenuItem).filter(item => item.is_available);
-      const mergedMenuItems = mergeMenuItems(firestoreMenuItems);
-
-      if (!isCancelled) {
-        setMenu(mergedMenuItems);
-      }
-
-      localStorage.setItem(MENU_CACHE_KEY, JSON.stringify(mergedMenuItems));
-    };
-
-    loadMenu().catch(error => {
-      console.error('Failed to load menu', error);
-    });
+    const menuQuery = collection(db, 'menu_items');
+    const unsubscribe = onSnapshot(
+      menuQuery,
+      snapshot => {
+        const firestoreMenuItems = snapshot.docs.map(mapMenuDocToMenuItem).filter(item => item.is_available);
+        setMenu(firestoreMenuItems);
+      },
+      error => {
+        console.error('Failed to subscribe to menu items', error);
+      },
+    );
 
     return () => {
-      isCancelled = true;
+      unsubscribe();
     };
   }, []);
 
   useEffect(() => {
-    if (!isLoggedIn || !currentUserId) {
+    if (!currentUserId) {
       setUserOrders([]);
       setIsUserOrdersLoading(false);
       userOrdersSnapshotVersionRef.current = 0;
@@ -526,7 +381,7 @@ export default function App() {
     return () => {
       activeUnsubscribe?.();
     };
-  }, [currentUserId, isLoggedIn]);
+  }, [currentUserId]);
 
   useEffect(() => {
     if (!isAdmin) {
@@ -625,12 +480,6 @@ export default function App() {
     };
   }, [isAdmin]);
 
-  useEffect(() => {
-    if (!isAdmin && activeTab === 'admin') {
-      setActiveTab('home');
-    }
-  }, [activeTab, isAdmin]);
-
   const handleTrackOrderLookup = () => {
     const orderId = trackingOrderId.trim().toUpperCase();
     if (!orderId) {
@@ -688,104 +537,6 @@ export default function App() {
       };
     });
   }, [orderStatus?.id, userOrders]);
-
-  const handleSendOtp = async () => {
-    const phoneNumber = phoneNumberInput.trim().replace(/\D/g, '').slice(0, 10);
-    if (!validatePhoneNumber(phoneNumber)) {
-      setAuthError('Please enter a valid 10-digit mobile number.');
-      return;
-    }
-
-    setAuthError('');
-    setIsAuthLoading(true);
-
-    try {
-      const verifier = setupRecaptchaVerifier();
-      const fullPhone = `+91${phoneNumber}`;
-      const confirmationResult = await signInWithPhoneNumber(auth, fullPhone, verifier);
-      confirmationResultRef.current = confirmationResult;
-      setIsOtpSent(true);
-    } catch (error) {
-      setAuthError(mapFirebaseError(error));
-      recaptchaVerifierRef.current?.clear();
-      recaptchaVerifierRef.current = null;
-    } finally {
-      setIsAuthLoading(false);
-    }
-  };
-
-  const handleVerifyOtp = async () => {
-    const code = otpInput.trim();
-    if (!code) {
-      setAuthError('Please enter the OTP sent to your phone.');
-      return;
-    }
-
-    if (!confirmationResultRef.current) {
-      setAuthError('Please request OTP first.');
-      return;
-    }
-
-    setAuthError('');
-    setIsAuthLoading(true);
-
-    try {
-      await confirmationResultRef.current.confirm(code);
-      clearOtpState();
-    } catch (error) {
-      setAuthError(mapFirebaseError(error));
-    } finally {
-      setIsAuthLoading(false);
-    }
-  };
-
-  const handleGoogleLogin = async () => {
-    setAuthError('');
-    setIsAuthLoading(true);
-
-    try {
-      const provider = new GoogleAuthProvider();
-      const result = await signInWithPopup(auth, provider);
-      const normalizedPhone = result.user.phoneNumber?.trim() || '';
-      const normalizedEmail = result.user.email?.trim().toLowerCase() || '';
-
-      setIsLoggedIn(true);
-      setCurrentUserId(result.user.uid);
-      setCurrentUserPhone(normalizedPhone);
-      setCurrentUserEmail(normalizedEmail);
-      setIsAdmin(normalizedPhone === ADMIN_PHONE || normalizedEmail === ADMIN_EMAIL);
-      clearOtpState();
-    } catch (error) {
-      console.error('Google login failed', error);
-      setAuthError('Google login failed. Please try again.');
-    } finally {
-      setIsAuthLoading(false);
-    }
-  };
-
-  const handleLogout = async () => {
-    try {
-      await signOut(auth);
-      setPhoneNumberInput('');
-      setCurrentUserPhone('');
-      setCurrentUserEmail('');
-      setAuthError('');
-      setNewOrderDocIds([]);
-      setAdminOrders([]);
-      setUserOrders([]);
-      setIsUserOrdersLoading(false);
-      previousAdminOrderCountRef.current = 0;
-      hasInitializedAdminOrdersRef.current = false;
-      userOrdersSnapshotVersionRef.current = 0;
-      clearOtpState();
-      setOrderStatus(null);
-      setCart([]);
-      setCheckoutStep('cart');
-      setActiveTab('home');
-    } catch (error) {
-      console.error('Sign out failed', error);
-    }
-  };
 
   const updateOrderStatus = async (orderDocId: string, status: Order['status']) => {
     try {
@@ -847,12 +598,6 @@ export default function App() {
   const handlePlaceOrder = async () => {
     if (!customerDetails.name || !customerDetails.phone || !customerDetails.address) {
       alert("Please fill all details");
-      return;
-    }
-
-    if (!isLoggedIn || !currentUserId) {
-      setAuthError('Please login to place an order.');
-      setIsCartOpen(false);
       return;
     }
 
@@ -1289,118 +1034,8 @@ export default function App() {
     </div>
   );
 
-  const renderLogin = () => (
-    <div className="fixed inset-0 z-[100] bg-background flex items-center justify-center p-6">
-      <div className="w-full max-w-md bg-white/5 rounded-[40px] p-8 border border-white/10">
-        <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-primary rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-primary/20">
-            <Flame className="text-white" fill="white" size={32} />
-          </div>
-          <h2 className="text-3xl font-black">Phone Login</h2>
-          <p className="text-ink-muted">Login to COFFE HUB using OTP</p>
-        </div>
-
-        <div className="space-y-4">
-          <div className="phone-input flex w-full overflow-hidden rounded-2xl border border-white/10 bg-white/5 focus-within:border-primary">
-            <span className="country-code flex items-center border-r border-white/10 bg-white/10 px-4 text-sm font-bold tracking-wide">
-              +91
-            </span>
-            <input
-              type="tel"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              maxLength={10}
-              placeholder="Enter 10-digit mobile number"
-              className="w-full bg-transparent p-4 focus:outline-none"
-              value={phoneNumberInput}
-              onChange={handlePhoneChange}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  if (isOtpSent) {
-                    void handleVerifyOtp();
-                  } else {
-                    void handleSendOtp();
-                  }
-                }
-              }}
-            />
-          </div>
-          {isOtpSent && (
-            <input 
-              type="text" 
-              placeholder="Enter OTP"
-              className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 focus:outline-none focus:border-primary"
-              value={otpInput}
-              onChange={(e) => setOtpInput(e.target.value.replace(/\D/g, '').slice(0, 6))}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  void handleVerifyOtp();
-                }
-              }}
-            />
-          )}
-          {authError && (
-            <p className="text-center text-xs text-primary font-bold">{authError}</p>
-          )}
-          {!isOtpSent ? (
-            <div className="space-y-4">
-              <button 
-                onClick={() => void handleSendOtp()}
-                disabled={isAuthLoading}
-                className="w-full bg-primary text-white py-4 rounded-2xl font-black text-lg disabled:opacity-70"
-              >
-                {isAuthLoading ? 'SENDING OTP...' : 'SEND OTP'}
-              </button>
-
-              <div className="flex items-center gap-3">
-                <div className="h-px flex-1 bg-white/10" />
-                <span className="text-xs font-bold uppercase tracking-widest text-ink-muted">OR</span>
-                <div className="h-px flex-1 bg-white/10" />
-              </div>
-
-              <button
-                onClick={() => void handleGoogleLogin()}
-                disabled={isAuthLoading}
-                className="w-full bg-white text-black py-4 rounded-2xl font-black text-base disabled:opacity-70 flex items-center justify-center gap-3"
-              >
-                <Chrome size={20} />
-                Continue with Google
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <button 
-                onClick={() => void handleVerifyOtp()}
-                disabled={isAuthLoading}
-                className="w-full bg-primary text-white py-4 rounded-2xl font-black text-lg disabled:opacity-70"
-              >
-                {isAuthLoading ? 'VERIFYING...' : 'VERIFY OTP'}
-              </button>
-              <button
-                onClick={() => {
-                  clearOtpState();
-                  setAuthError('');
-                }}
-                className="w-full text-center text-sm text-ink-muted font-bold"
-              >
-                Edit Phone Number
-              </button>
-            </div>
-          )}
-          <div id="recaptcha-container" />
-        </div>
-      </div>
-    </div>
-  );
-
   return (
     <div className="min-h-screen bg-background text-ink selection:bg-primary/30">
-      {!isAuthReady ? (
-        <div className="fixed inset-0 z-[100] bg-background flex items-center justify-center">
-          <p className="text-sm font-bold text-ink-muted uppercase tracking-widest">Loading...</p>
-        </div>
-      ) : !isLoggedIn ? renderLogin() : null}
-      
       {/* Header */}
       <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-xl border-b border-white/5 px-6 py-4 flex justify-between items-center">
         <div className="flex items-center gap-2 cursor-pointer" onClick={() => setActiveTab('home')}>
@@ -1412,18 +1047,9 @@ export default function App() {
         
         <div className="flex items-center gap-4">
           <button 
-            onClick={() => {
-              if (isAdmin) {
-                setActiveTab('admin');
-                return;
-              }
-
-              void handleLogout();
-            }}
-            title={isAdmin ? 'Open Admin Dashboard' : 'Logout'}
-            className={`w-10 h-10 rounded-full flex items-center justify-center border transition-colors ${
-              isAdmin ? "bg-accent/20 border-accent text-accent" : "bg-white/5 border-white/10"
-            }`}
+            onClick={() => setActiveTab('admin')}
+            title="Open Admin Dashboard"
+            className="w-10 h-10 rounded-full flex items-center justify-center border transition-colors bg-accent/20 border-accent text-accent"
           >
             <User size={20} />
           </button>
@@ -1455,7 +1081,7 @@ export default function App() {
               void updateOrderStatus(orderDocId, status);
             }}
             onLogout={() => {
-              void handleLogout();
+              setActiveTab('home');
             }}
           />
         )}
