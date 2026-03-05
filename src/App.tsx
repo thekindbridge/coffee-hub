@@ -55,6 +55,7 @@ import { auth, db } from './firebase';
 import { MenuItem, CartItem, Order, OrderItem } from './types';
 import AdminDashboard from './components/AdminDashboard';
 import MyOrders from './components/MyOrders';
+import { menuItems as seededMenuItems } from './data/menuItems';
 
 // --- Components ---
 
@@ -63,6 +64,44 @@ const ADMIN_PHONE = '+917893504891';
 const ADMIN_EMAIL = 'admin@gmail.com';
 const ORDER_STATUSES: Order['status'][] = ['Placed', 'Preparing', 'Out for Delivery', 'Delivered'];
 const ORDER_ITEMS_IN_QUERY_LIMIT = 10;
+
+const normalizeMenuName = (name: string) => name.trim().toLowerCase();
+
+const mapSeedMenuItemToMenuItem = (item: (typeof seededMenuItems)[number], index: number): MenuItem => {
+  const slug = item.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
+  return {
+    id: `seed-${slug || index}-${index}`,
+    name: item.name,
+    category: item.category,
+    price: item.price,
+    spice_level: item.spiceLevel,
+    is_veg: item.veg,
+    rating: item.rating,
+    image_url: item.image,
+    description: item.description,
+    is_available: item.isAvailable,
+  };
+};
+
+const mergeMenuItems = (firestoreItems: MenuItem[]) => {
+  const merged = new Map<string, MenuItem>();
+
+  seededMenuItems.forEach((item, index) => {
+    const mappedSeedItem = mapSeedMenuItemToMenuItem(item, index);
+    if (mappedSeedItem.is_available) {
+      merged.set(normalizeMenuName(mappedSeedItem.name), mappedSeedItem);
+    }
+  });
+
+  firestoreItems.forEach(item => {
+    if (item.is_available) {
+      merged.set(normalizeMenuName(item.name), item);
+    }
+  });
+
+  return Array.from(merged.values());
+};
 
 const mapMenuDocToMenuItem = (snapshot: QueryDocumentSnapshot): MenuItem => {
   const data = snapshot.data() as Record<string, unknown>;
@@ -382,7 +421,7 @@ export default function App() {
       try {
         const parsed = JSON.parse(cached) as MenuItem[];
         if (!isCancelled && Array.isArray(parsed)) {
-          setMenu(parsed);
+          setMenu(mergeMenuItems(parsed));
         }
       } catch (error) {
         console.error('Menu cache parse failed', error);
@@ -391,13 +430,14 @@ export default function App() {
 
     const loadMenu = async () => {
       const menuSnapshot = await getDocs(collection(db, 'menu_items'));
-      const menuItems = menuSnapshot.docs.map(mapMenuDocToMenuItem).filter(item => item.is_available);
+      const firestoreMenuItems = menuSnapshot.docs.map(mapMenuDocToMenuItem).filter(item => item.is_available);
+      const mergedMenuItems = mergeMenuItems(firestoreMenuItems);
 
       if (!isCancelled) {
-        setMenu(menuItems);
+        setMenu(mergedMenuItems);
       }
 
-      localStorage.setItem(MENU_CACHE_KEY, JSON.stringify(menuItems));
+      localStorage.setItem(MENU_CACHE_KEY, JSON.stringify(mergedMenuItems));
     };
 
     loadMenu().catch(error => {
