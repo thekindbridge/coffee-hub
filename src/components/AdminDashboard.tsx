@@ -17,7 +17,6 @@ interface AdminDashboardProps {
   orderStatuses: Order['status'][];
   deliveryAgents: DeliveryAgent[];
   onUpdateStatus: (orderDocId: string, status: Order['status']) => void;
-  onAssignAgent: (order: Order, agentId: string) => void;
   onCreateOffer: (offerInput: OfferInput) => Promise<void>;
   onUpdateOffer: (offerId: string, offerInput: OfferInput) => Promise<void>;
   onDeleteOffer: (offerId: string) => Promise<void>;
@@ -56,7 +55,6 @@ export default function AdminDashboard({
   orderStatuses,
   deliveryAgents,
   onUpdateStatus,
-  onAssignAgent,
   onCreateOffer,
   onUpdateOffer,
   onDeleteOffer,
@@ -109,7 +107,6 @@ export default function AdminDashboard({
             orderStatuses={orderStatuses}
             deliveryAgents={deliveryAgents}
             onUpdateStatus={onUpdateStatus}
-            onAssignAgent={onAssignAgent}
           />
         )}
 

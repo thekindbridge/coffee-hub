@@ -1224,87 +1224,6 @@ export default function App() {
     }));
   };
 
-  const assignDeliveryAgentToOrder = async (order: Order, agentId: string) => {
-    if (!agentId) {
-      alert('Select a delivery agent before dispatching the order.');
-      return;
-    }
-
-    if (!order.customer_location) {
-      alert('Customer location is required before delivery tracking can start.');
-      return;
-    }
-
-    const selectedAgent = deliveryAgents.find(agent => agent.id === agentId);
-    if (!selectedAgent) {
-      alert('The selected delivery agent is not available.');
-      return;
-    }
-
-    try {
-      const batch = writeBatch(db);
-      batch.update(doc(db, 'orders', order.doc_id), {
-        status: 'Out for Delivery',
-        deliveryAgentId: selectedAgent.id,
-        deliveryAgentName: selectedAgent.name,
-        deliveryAgentPhone: selectedAgent.phone,
-        deliveryAssignedAt: serverTimestamp(),
-      });
-      batch.set(
-        doc(db, 'delivery_sessions', order.id),
-        {
-          agentId: selectedAgent.id,
-          agentName: selectedAgent.name,
-          completedAt: null,
-          customerLocation: order.customer_location,
-          orderDocId: order.doc_id,
-          orderId: order.id,
-          startedAt: null,
-          status: 'assigned',
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true },
-      );
-      batch.set(
-        doc(db, 'delivery_agents', selectedAgent.id),
-        {
-          currentOrderId: order.id,
-          isActive: true,
-          name: selectedAgent.name,
-          phone: selectedAgent.phone,
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true },
-      );
-
-      if (order.delivery_agent_id && order.delivery_agent_id !== selectedAgent.id) {
-        batch.set(
-          doc(db, 'delivery_agents', order.delivery_agent_id),
-          {
-            currentOrderId: '',
-            updatedAt: serverTimestamp(),
-          },
-          { merge: true },
-        );
-      }
-
-      await batch.commit();
-
-      applyOrderLocalUpdate(order.doc_id, currentOrder => ({
-        ...currentOrder,
-        status: 'Out for Delivery',
-        delivery_agent_id: selectedAgent.id,
-        delivery_agent_name: selectedAgent.name,
-        delivery_agent_phone: selectedAgent.phone,
-        delivery_assigned_at: new Date().toISOString(),
-      }));
-      setNewOrderDocIds(prev => prev.filter(id => id !== order.doc_id));
-    } catch (error) {
-      console.error('Failed to assign delivery agent', error);
-      alert('Unable to assign the delivery agent right now.');
-    }
-  };
-
   const handleStartDelivery = async () => {
     if (!currentDeliveryOrder?.customer_location) {
       alert('This order is missing customer coordinates, so live delivery cannot start.');
@@ -1379,7 +1298,7 @@ export default function App() {
     }
 
     if (normalizedStatus === 'Out for Delivery') {
-      await assignDeliveryAgentToOrder(existingOrder, existingOrder.delivery_agent_id || '');
+      alert('Use Assign & Dispatch to start delivery tracking for this order.');
       return;
     }
 
@@ -2576,9 +2495,6 @@ export default function App() {
             deliveryAgents={deliveryAgents}
             onUpdateStatus={(orderDocId, status) => {
               void updateOrderStatus(orderDocId, status);
-            }}
-            onAssignAgent={(order, agentId) => {
-              void assignDeliveryAgentToOrder(order, agentId);
             }}
             onCreateOffer={createOffer}
             onUpdateOffer={updateOffer}
