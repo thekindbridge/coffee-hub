@@ -2,8 +2,8 @@ import { FieldValue } from 'firebase-admin/firestore';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import Razorpay from 'razorpay';
 import { ApiError } from './_lib/errors.js';
-import { adminDb, verifyRequestUser } from './_lib/firebaseAdmin.ts';
-import { assertPricingMatches, parseCreateOrderBody, recalculatePricing } from './_lib/orderPricing';
+import { adminDb, verifyRequestUser } from './_lib/firebaseAdmin.js';
+import { assertPricingMatches, parseCreateOrderBody, recalculatePricing } from './_lib/orderPricing.js';
 
 const getRazorpayClient = () => {
   const keyId = process.env.RAZORPAY_KEY_ID;

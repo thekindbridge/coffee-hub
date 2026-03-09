@@ -1,9 +1,10 @@
 import crypto from 'node:crypto';
 import { FieldValue } from 'firebase-admin/firestore';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { ApiError } from './_lib/errors';
-import { adminDb, verifyRequestUser } from './_lib/firebaseAdmin';
-import { parseVerifyPaymentBody } from './_lib/orderPricing';
+
+import { ApiError } from './_lib/errors.js';
+import { adminDb, verifyRequestUser } from './_lib/firebaseAdmin.js';
+import { parseVerifyPaymentBody } from './_lib/orderPricing.js';
 
 interface PaymentSessionRecord {
   orderId: string;
