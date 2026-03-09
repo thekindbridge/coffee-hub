@@ -49,9 +49,22 @@ import {
 import type { QueryDocumentSnapshot, Timestamp } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'motion/react';
 import { auth, db } from './firebase';
-import { MenuItem, CartItem, Order, OrderItem } from './types';
+import {
+  MenuItem,
+  CartItem,
+  CheckoutCustomerDetails,
+  CheckoutOrderDraft,
+  CheckoutOrderItemPayload,
+  CheckoutPaymentOption,
+  Order,
+  OrderItem,
+  RazorpayOrderResponse,
+  RazorpayVerificationResponse,
+} from './types';
 import { useOffers } from './hooks/useOffers';
 import { calculateDiscount } from './utils/calculateDiscount';
+import { loadRazorpayCheckout } from './utils/loadRazorpayCheckout';
+import { postPaymentApi } from './utils/paymentApi';
 import AdminDashboard from './components/AdminDashboard';
 import AgentDashboard from './components/AgentDashboard';
 import MyOrders from './components/MyOrders';
@@ -63,13 +76,14 @@ const ORDER_ITEMS_IN_QUERY_LIMIT = 10;
 const ADMIN_EMAIL = 'thekindbridge@gmail.com';
 const DELIVERY_AGENT_EMAIL = 'pavankumarnaidu343@gmail.com';
 const CURRENCY_SYMBOL = '\u20B9';
-const STANDARD_DELIVERY_FEE = 30;
-const FREE_DELIVERY_THRESHOLD = 499;
+const STANDARD_DELIVERY_FEE = 50;
 const AUTH_BACKGROUND_IMAGE = 'url(https://res.cloudinary.com/ddfhaqeme/image/upload/v1772713816/5f272fcd-02a1-4f33-b91c-9ff009e08610_z4faz2.jpg)';
 const DEFAULT_DELIVERY_AGENT = {
   id: 'INKOLLU_AGENT_01',
   name: 'Inkollu Delivery Agent',
 };
+const CHECKOUT_PAYMENT_OPTIONS: CheckoutPaymentOption[] = ['Pay Online', 'Cash on Delivery'];
+const RAZORPAY_KEY_ID = (import.meta.env.VITE_RAZORPAY_KEY_ID || '').trim();
 
 const normalizeOrderStatus = (status: unknown): Order['status'] => {
   if (status === 'Placed' || status === 'Pending') {
@@ -105,6 +119,7 @@ const mapOrderDocToOrder = (snapshot: QueryDocumentSnapshot): Order => {
   const createdAtValue = data.createdAt as Timestamp | undefined;
   const subtotal = Number(data.subtotal ?? data.total ?? 0);
   const discount = Number(data.discount || 0);
+  const deliveryFee = Number(data.deliveryFee || 0);
   const finalTotal = Number(data.finalTotal ?? data.total ?? Math.max(0, subtotal - discount));
 
   return {
@@ -116,17 +131,69 @@ const mapOrderDocToOrder = (snapshot: QueryDocumentSnapshot): Order => {
     total_amount: finalTotal,
     subtotal,
     discount,
+    delivery_fee: deliveryFee,
     coupon_code: ((data.couponCode as string) || '').toUpperCase(),
     final_total: finalTotal,
     status: normalizeOrderStatus(data.status),
-    payment_method: (data.paymentMethod as string) || 'UPI',
+    payment_method: (data.paymentMethod as string) || 'Cash on Delivery',
+    payment_status: (data.paymentStatus as Order['payment_status']) || 'pending',
     created_at: createdAtValue?.toDate()?.toISOString() || new Date().toISOString(),
     user_id: (data.userId as string) || '',
+    razorpay_order_id: (data.razorpayOrderId as string) || '',
+    razorpay_payment_id: (data.razorpayPaymentId as string) || '',
+    razorpay_signature: (data.razorpaySignature as string) || '',
     delivery_agent_id: (data.deliveryAgentId as string) || '',
     delivery_agent_name: (data.deliveryAgentName as string) || '',
     delivery_assigned_at: ((data.deliveryAssignedAt as Timestamp | undefined)?.toDate()?.toISOString()) || '',
   };
 };
+
+const buildLocalOrderState = (params: {
+  docId: string;
+  orderId: string;
+  customer: Omit<CheckoutCustomerDetails, 'payment'>;
+  paymentMethod: string;
+  paymentStatus?: Order['payment_status'];
+  userId: string;
+  subtotal: number;
+  discount: number;
+  deliveryFee: number;
+  couponCode: string;
+  finalTotal: number;
+  items: CheckoutOrderItemPayload[];
+  razorpayOrderId?: string;
+  razorpayPaymentId?: string;
+  razorpaySignature?: string;
+  createdAt?: string;
+}): Order => ({
+  id: params.orderId,
+  doc_id: params.docId,
+  customer_name: params.customer.name,
+  phone: params.customer.phone,
+  address: params.customer.address,
+  total_amount: params.finalTotal,
+  subtotal: params.subtotal,
+  discount: params.discount,
+  delivery_fee: params.deliveryFee,
+  coupon_code: params.couponCode,
+  final_total: params.finalTotal,
+  status: 'Pending',
+  payment_method: params.paymentMethod,
+  payment_status: params.paymentStatus || 'pending',
+  created_at: params.createdAt || new Date().toISOString(),
+  user_id: params.userId,
+  razorpay_order_id: params.razorpayOrderId || '',
+  razorpay_payment_id: params.razorpayPaymentId || '',
+  razorpay_signature: params.razorpaySignature || '',
+  items: params.items.map(item => ({
+    id: item.id,
+    order_id: params.orderId,
+    menu_item_id: item.id,
+    name: item.name,
+    quantity: item.quantity,
+    price: item.price,
+  })),
+});
 
 const chunkValues = <T,>(values: T[], size: number): T[][] => {
   const chunks: T[][] = [];
@@ -327,12 +394,14 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [checkoutStep, setCheckoutStep] = useState<'cart' | 'details' | 'success'>('cart');
-  const [customerDetails, setCustomerDetails] = useState({
+  const [customerDetails, setCustomerDetails] = useState<CheckoutCustomerDetails>({
     name: '',
     phone: '',
     address: '',
-    payment: 'UPI'
+    payment: 'Pay Online',
   });
+  const [checkoutError, setCheckoutError] = useState('');
+  const [draftOrderId, setDraftOrderId] = useState('');
   const [couponInput, setCouponInput] = useState('');
   const [appliedCouponCode, setAppliedCouponCode] = useState('');
   const [couponError, setCouponError] = useState('');
@@ -743,12 +812,16 @@ export default function App() {
       return 0;
     }
 
-    return cartTotal >= FREE_DELIVERY_THRESHOLD ? 0 : STANDARD_DELIVERY_FEE;
-  }, [cartTotal, hasCartItems]);
+    return STANDARD_DELIVERY_FEE;
+  }, [hasCartItems]);
   const payableCartTotal = useMemo(
     () => Number((finalCartTotal + deliveryFee).toFixed(2)),
     [deliveryFee, finalCartTotal],
   );
+  const isPayOnlineSelected = customerDetails.payment === 'Pay Online';
+  const checkoutPrimaryActionLabel = isPlacingOrder
+    ? (isPayOnlineSelected ? 'OPENING PAYMENT...' : 'PLACING ORDER...')
+    : (isPayOnlineSelected ? 'PAY ONLINE' : 'CONFIRM ORDER');
 
   useEffect(() => {
     if (!appliedCouponCode) {
@@ -786,6 +859,8 @@ export default function App() {
     }
 
     setCheckoutStep('cart');
+    setDraftOrderId('');
+    setCheckoutError('');
   }, [cart.length, checkoutStep]);
 
   useEffect(() => {
@@ -801,6 +876,23 @@ export default function App() {
       window.clearTimeout(timeoutId);
     };
   }, [isCouponAppliedPulseVisible]);
+
+  useEffect(() => {
+    if (checkoutStep !== 'success' || !orderStatus) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setIsCartOpen(false);
+      setCheckoutStep('cart');
+      setActiveTab('tracking');
+      setDraftOrderId('');
+    }, 1800);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [checkoutStep, orderStatus]);
 
   const handleAddToCart = (item: MenuItem, delta: number) => {
     setCart(prev => {
@@ -822,6 +914,8 @@ export default function App() {
     setActiveTab('menu');
     setIsCartOpen(false);
     setCheckoutStep('cart');
+    setCheckoutError('');
+    setDraftOrderId('');
 
     window.setTimeout(() => {
       const menuSection = document.getElementById('menu-section');
@@ -900,70 +994,119 @@ export default function App() {
     return `COF${String(nextNumber).padStart(4, '0')}`;
   };
 
-  const handlePlaceOrder = async () => {
-    if (!customerDetails.name || !customerDetails.phone || !customerDetails.address) {
-      alert("Please fill all details");
-      return;
+  const resetCheckoutAfterSuccess = (nextOrder: Order) => {
+    setOrderStatus(nextOrder);
+    setTrackingOrderId(nextOrder.id);
+    setCheckoutStep('success');
+    setCart([]);
+    setDraftOrderId('');
+    setAppliedCouponCode('');
+    setCouponInput('');
+    setCouponError('');
+    setCouponSuccess('');
+    setCheckoutError('');
+  };
+
+  const buildCheckoutDraft = async () => {
+    const name = customerDetails.name.trim();
+    const phone = customerDetails.phone.trim();
+    const address = customerDetails.address.trim();
+
+    if (!name || !phone || !address) {
+      setCheckoutError('Please fill in your name, phone number, and delivery address.');
+      return null;
     }
 
     if (cart.length === 0) {
-      return;
+      setCheckoutError('Your cart is empty.');
+      return null;
     }
 
     if (!currentUserId) {
-      alert('Please sign in with Google to place an order.');
-      return;
+      setCheckoutError('Please sign in with Google to place an order.');
+      return null;
     }
 
-    setIsPlacingOrder(true);
+    const subtotalValue = cartTotal;
+    const deliveryFeeValue = hasCartItems ? STANDARD_DELIVERY_FEE : 0;
+    let discountValue = 0;
+    let discountedSubtotalValue = subtotalValue;
+    let couponCodeValue = '';
 
-    try {
-      const subtotalValue = cartTotal;
-      const deliveryFeeValue = subtotalValue >= FREE_DELIVERY_THRESHOLD ? 0 : STANDARD_DELIVERY_FEE;
-      let discountValue = 0;
-      let discountedSubtotalValue = subtotalValue;
-      let couponCodeValue = '';
-
-      if (appliedCouponCode) {
-        const matchingOffer = await findActiveOfferByCode(appliedCouponCode);
-        if (matchingOffer && subtotalValue >= matchingOffer.minOrderAmount) {
-          const recalculated = calculateDiscount(subtotalValue, matchingOffer);
-          discountValue = recalculated.discount;
-          discountedSubtotalValue = recalculated.finalTotal;
-          couponCodeValue = matchingOffer.couponCode;
-        } else {
-          setAppliedCouponCode('');
-          setCouponSuccess('');
-          setCouponError('Coupon was removed because it is no longer valid.');
-        }
+    if (appliedCouponCode) {
+      const matchingOffer = await findActiveOfferByCode(appliedCouponCode);
+      if (matchingOffer && subtotalValue >= matchingOffer.minOrderAmount) {
+        const recalculated = calculateDiscount(subtotalValue, matchingOffer);
+        discountValue = recalculated.discount;
+        discountedSubtotalValue = recalculated.finalTotal;
+        couponCodeValue = matchingOffer.couponCode;
+      } else {
+        setAppliedCouponCode('');
+        setCouponSuccess('');
+        setCouponError('Coupon was removed because it is no longer valid.');
       }
-      const finalTotalValue = Number((discountedSubtotalValue + deliveryFeeValue).toFixed(2));
+    }
 
-      const orderId = await getNextOrderId();
-      const orderRef = doc(collection(db, 'orders'));
-      const batch = writeBatch(db);
+    const finalTotalValue = Number((discountedSubtotalValue + deliveryFeeValue).toFixed(2));
+    const orderId = draftOrderId || await getNextOrderId();
+    setDraftOrderId(orderId);
 
-      batch.set(orderRef, {
+    const items: CheckoutOrderItemPayload[] = cart.map(item => ({
+      id: item.id,
+      name: item.name,
+      quantity: item.quantity,
+      price: item.price,
+    }));
+
+    return {
+      order: {
         orderId,
-        userId: currentUserId,
-        name: customerDetails.name,
-        phone: customerDetails.phone,
-        address: customerDetails.address,
-        paymentMethod: customerDetails.payment,
-        status: 'Pending',
+        customer: {
+          name,
+          phone,
+          address,
+        },
+        items,
         subtotal: subtotalValue,
         discount: discountValue,
         deliveryFee: deliveryFeeValue,
         couponCode: couponCodeValue,
         finalTotal: finalTotalValue,
-        total: finalTotalValue,
+      } satisfies CheckoutOrderDraft,
+      items,
+    };
+  };
+
+  const placeCashOnDeliveryOrder = async (draft: CheckoutOrderDraft) => {
+    setIsPlacingOrder(true);
+    setCheckoutError('');
+
+    try {
+      const orderRef = doc(collection(db, 'orders'));
+      const batch = writeBatch(db);
+
+      batch.set(orderRef, {
+        orderId: draft.orderId,
+        userId: currentUserId,
+        name: draft.customer.name,
+        phone: draft.customer.phone,
+        address: draft.customer.address,
+        paymentMethod: 'Cash on Delivery',
+        paymentStatus: 'pending',
+        status: 'Pending',
+        subtotal: draft.subtotal,
+        discount: draft.discount,
+        deliveryFee: draft.deliveryFee,
+        couponCode: draft.couponCode,
+        finalTotal: draft.finalTotal,
+        total: draft.finalTotal,
         createdAt: serverTimestamp(),
       });
 
-      for (const item of cart) {
+      for (const item of draft.items) {
         const orderItemRef = doc(collection(db, 'order_items'));
         batch.set(orderItemRef, {
-          orderId,
+          orderId: draft.orderId,
           itemId: item.id,
           name: item.name,
           quantity: item.quantity,
@@ -973,44 +1116,146 @@ export default function App() {
 
       await batch.commit();
 
-      setOrderStatus({
-        id: orderId,
-        doc_id: orderRef.id,
-        customer_name: customerDetails.name,
-        phone: customerDetails.phone,
-        address: customerDetails.address,
-        total_amount: finalTotalValue,
-        subtotal: subtotalValue,
-        discount: discountValue,
-        coupon_code: couponCodeValue,
-        final_total: finalTotalValue,
-        status: 'Pending',
-        payment_method: customerDetails.payment,
-        created_at: new Date().toISOString(),
-        user_id: currentUserId,
-        items: cart.map(item => ({
-          id: item.id,
-          order_id: orderId,
-          menu_item_id: item.id,
-          name: item.name,
-          quantity: item.quantity,
-          price: item.price,
-        })),
-      });
-
-      setTrackingOrderId(orderId);
-      setCheckoutStep('success');
-      setCart([]);
-      setAppliedCouponCode('');
-      setCouponInput('');
-      setCouponError('');
-      setCouponSuccess('');
+      resetCheckoutAfterSuccess(buildLocalOrderState({
+        docId: orderRef.id,
+        orderId: draft.orderId,
+        customer: draft.customer,
+        paymentMethod: 'Cash on Delivery',
+        paymentStatus: 'pending',
+        userId: currentUserId,
+        subtotal: draft.subtotal,
+        discount: draft.discount,
+        deliveryFee: draft.deliveryFee,
+        couponCode: draft.couponCode,
+        finalTotal: draft.finalTotal,
+        items: draft.items,
+      }));
     } catch (error) {
-      console.error('Failed to place order', error);
-      alert('Unable to place order right now. Please try again.');
+      console.error('Failed to place cash on delivery order', error);
+      setCheckoutError('Unable to place your order right now. Please try again.');
     } finally {
       setIsPlacingOrder(false);
     }
+  };
+
+  const startOnlinePayment = async (draft: CheckoutOrderDraft) => {
+    if (!RAZORPAY_KEY_ID) {
+      setCheckoutError('Razorpay key is missing. Add VITE_RAZORPAY_KEY_ID to your frontend environment.');
+      return;
+    }
+
+    setIsPlacingOrder(true);
+    setCheckoutError('');
+
+    try {
+      const idToken = await auth.currentUser?.getIdToken();
+      if (!idToken) {
+        setCheckoutError('Please sign in again before starting payment.');
+        setIsPlacingOrder(false);
+        return;
+      }
+
+      const didLoadScript = await loadRazorpayCheckout();
+      if (!didLoadScript || !window.Razorpay) {
+        setCheckoutError('Unable to load Razorpay checkout right now. Please try again.');
+        setDraftOrderId('');
+        setIsPlacingOrder(false);
+        return;
+      }
+
+      const paymentOrder = await postPaymentApi<RazorpayOrderResponse>(
+        '/api/create-order',
+        {
+          orderDraft: draft,
+          userId: currentUserId,
+        },
+        idToken,
+      );
+
+      const razorpay = new window.Razorpay({
+        key: RAZORPAY_KEY_ID,
+        amount: paymentOrder.amount,
+        currency: paymentOrder.currency,
+        name: 'Coffee HUB',
+        description: 'Food Order Payment',
+        order_id: paymentOrder.razorpayOrderId,
+        prefill: {
+          name: draft.customer.name,
+          email: currentUserEmail,
+          contact: draft.customer.phone,
+        },
+        notes: {
+          orderId: draft.orderId,
+        },
+        theme: {
+          color: '#8b4a20',
+        },
+        handler: async response => {
+          setIsPlacingOrder(true);
+
+          try {
+            const verificationToken = await auth.currentUser?.getIdToken();
+            if (!verificationToken) {
+              throw new Error('Please sign in again before verifying payment.');
+            }
+
+            const verificationResult = await postPaymentApi<RazorpayVerificationResponse>(
+              '/api/verify-payment',
+              {
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+              },
+              verificationToken,
+            );
+
+            resetCheckoutAfterSuccess(verificationResult.order);
+          } catch (error) {
+            console.error('Failed to verify Razorpay payment', error);
+            setCheckoutError('Payment was captured, but verification failed. Please contact support if the order is not visible.');
+            setDraftOrderId('');
+          } finally {
+            setIsPlacingOrder(false);
+          }
+        },
+        modal: {
+          ondismiss: () => {
+            setCheckoutError('Payment was cancelled before completion.');
+            setDraftOrderId('');
+            setIsPlacingOrder(false);
+          },
+        },
+      });
+
+      razorpay.on('payment.failed', response => {
+        setCheckoutError(response.error?.description || 'Payment failed. Please try again.');
+        setDraftOrderId('');
+        setIsPlacingOrder(false);
+      });
+
+      setIsPlacingOrder(false);
+      razorpay.open();
+    } catch (error) {
+      console.error('Failed to start online payment', error);
+      const typedError = error as Error;
+      setCheckoutError(typedError.message || 'Unable to start online payment right now. Please try again.');
+      setDraftOrderId('');
+      setIsPlacingOrder(false);
+    }
+  };
+
+  const handlePlaceOrder = async () => {
+    const preparedOrder = await buildCheckoutDraft();
+    if (!preparedOrder) {
+      return;
+    }
+
+    if (customerDetails.payment === 'Pay Online') {
+      await startOnlinePayment(preparedOrder.order);
+      return;
+    }
+
+    await placeCashOnDeliveryOrder(preparedOrder.order);
   };
 
   const renderHome = () => (
@@ -1847,11 +2092,7 @@ export default function App() {
                           </AnimatePresence>
                           <div className="flex justify-between text-ink-muted">
                             <span>Delivery Fee</span>
-                            {deliveryFee > 0 ? (
-                              <span>{CURRENCY_SYMBOL}{deliveryFee}</span>
-                            ) : (
-                              <span className="font-bold text-emerald-400">FREE</span>
-                            )}
+                            <span>{CURRENCY_SYMBOL}{deliveryFee}</span>
                           </div>
                           {appliedCouponCode && (
                             <div className="flex justify-between text-ink-muted">
@@ -1878,51 +2119,112 @@ export default function App() {
                   </>
                 )}
                 {checkoutStep === 'details' && (
-                  <div className="space-y-4">
+                  <div className="space-y-5">
+                    <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-xs font-bold uppercase tracking-wide text-ink-muted">Order Summary</p>
+                          <p className="mt-1 text-sm text-ink-muted">{cartCount} item{cartCount === 1 ? '' : 's'} in this order</p>
+                        </div>
+                        <p className="text-lg font-black text-primary">{CURRENCY_SYMBOL}{payableCartTotal}</p>
+                      </div>
+                      <div className="mt-4 space-y-3">
+                        {cart.map(item => (
+                          <div key={`summary-${item.id}`} className="flex items-start justify-between gap-4 text-sm">
+                            <div>
+                              <p className="font-bold">{item.name}</p>
+                              <p className="text-xs text-ink-muted">Qty {item.quantity}</p>
+                            </div>
+                            <span className="font-bold text-ink-muted">{CURRENCY_SYMBOL}{item.price * item.quantity}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="mt-4 space-y-2 border-t border-white/10 pt-4 text-sm">
+                        <div className="flex justify-between text-ink-muted">
+                          <span>Subtotal</span>
+                          <span>{CURRENCY_SYMBOL}{cartTotal}</span>
+                        </div>
+                        {discountAmount > 0 && (
+                          <div className="flex justify-between text-emerald-400">
+                            <span>Discount</span>
+                            <span>-{CURRENCY_SYMBOL}{discountAmount}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between text-ink-muted">
+                          <span>Delivery Charge</span>
+                          <span>{CURRENCY_SYMBOL}{deliveryFee}</span>
+                        </div>
+                        <div className="flex justify-between pt-2 text-base font-black">
+                          <span>Total Amount</span>
+                          <span className="text-primary">{CURRENCY_SYMBOL}{payableCartTotal}</span>
+                        </div>
+                      </div>
+                    </div>
+
                     <div>
-                      <label className="text-xs font-bold uppercase text-ink-muted mb-2 block">Full Name</label>
-                      <input 
-                        type="text" 
-                        className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 focus:outline-none focus:border-primary"
+                      <label className="mb-2 block text-xs font-bold uppercase text-ink-muted">Full Name</label>
+                      <input
+                        type="text"
+                        className="w-full rounded-2xl border border-white/10 bg-white/5 p-4 focus:border-primary focus:outline-none"
                         value={customerDetails.name}
-                        onChange={(e) => setCustomerDetails(prev => ({ ...prev, name: e.target.value }))}
+                        onChange={event => {
+                          setCheckoutError('');
+                          setCustomerDetails(prev => ({ ...prev, name: event.target.value }));
+                        }}
                       />
                     </div>
                     <div>
-                      <label className="text-xs font-bold uppercase text-ink-muted mb-2 block">Phone Number</label>
-                      <input 
-                        type="tel" 
-                        className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 focus:outline-none focus:border-primary"
+                      <label className="mb-2 block text-xs font-bold uppercase text-ink-muted">Phone Number</label>
+                      <input
+                        type="tel"
+                        className="w-full rounded-2xl border border-white/10 bg-white/5 p-4 focus:border-primary focus:outline-none"
                         value={customerDetails.phone}
-                        onChange={(e) => setCustomerDetails(prev => ({ ...prev, phone: e.target.value }))}
+                        onChange={event => {
+                          setCheckoutError('');
+                          setCustomerDetails(prev => ({ ...prev, phone: event.target.value }));
+                        }}
                       />
                     </div>
                     <div>
-                      <label className="text-xs font-bold uppercase text-ink-muted mb-2 block">Delivery Address</label>
-                      <textarea 
-                        className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 focus:outline-none focus:border-primary h-24"
+                      <label className="mb-2 block text-xs font-bold uppercase text-ink-muted">Delivery Address</label>
+                      <textarea
+                        className="h-24 w-full rounded-2xl border border-white/10 bg-white/5 p-4 focus:border-primary focus:outline-none"
                         value={customerDetails.address}
-                        onChange={(e) => setCustomerDetails(prev => ({ ...prev, address: e.target.value }))}
+                        onChange={event => {
+                          setCheckoutError('');
+                          setCustomerDetails(prev => ({ ...prev, address: event.target.value }));
+                        }}
                       />
                     </div>
                     <div>
-                      <label className="text-xs font-bold uppercase text-ink-muted mb-2 block">Payment Method</label>
-                      <div className="grid grid-cols-3 gap-2">
-                        {['UPI', 'Card', 'Cash'].map(method => (
+                      <label className="mb-2 block text-xs font-bold uppercase text-ink-muted">Payment Method</label>
+                      <div className="grid grid-cols-2 gap-3">
+                        {CHECKOUT_PAYMENT_OPTIONS.map(method => (
                           <button
                             key={method}
-                            onClick={() => setCustomerDetails(prev => ({ ...prev, payment: method }))}
-                            className={`py-3 rounded-xl font-bold text-sm border transition-all ${
-                              customerDetails.payment === method 
-                              ? "bg-primary border-primary text-white" 
-                              : "bg-white/5 border-white/10 text-ink-muted"
+                            onClick={() => {
+                              setCheckoutError('');
+                              setCustomerDetails(prev => ({ ...prev, payment: method }));
+                            }}
+                            className={`rounded-2xl border p-4 text-left transition-all ${
+                              customerDetails.payment === method
+                                ? 'border-primary bg-primary/15 text-white shadow-lg shadow-primary/10'
+                                : 'border-white/10 bg-white/5 text-ink-muted'
                             }`}
                           >
-                            {method}
+                            <p className="font-bold">{method}</p>
+                            <p className="mt-1 text-xs">
+                              {method === 'Pay Online' ? 'UPI, cards, and netbanking via Razorpay' : 'Pay at delivery after the order arrives'}
+                            </p>
                           </button>
                         ))}
                       </div>
                     </div>
+                    {checkoutError && (
+                      <div className="rounded-2xl border border-primary/25 bg-primary/10 px-4 py-3 text-sm font-bold text-primary">
+                        {checkoutError}
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -1932,12 +2234,16 @@ export default function App() {
                       <CheckCircle2 size={40} />
                     </div>
                     <h2 className="text-3xl font-black mb-2">Order Confirmed!</h2>
-                    <p className="text-ink-muted mb-8">Your order #{orderStatus?.id} is being prepared.</p>
+                    <p className="text-ink-muted mb-2">Your order #{orderStatus?.id} is being prepared.</p>
+                    <p className="text-sm font-bold text-accent mb-8">
+                      {orderStatus?.payment_method === 'razorpay' ? 'Payment received successfully.' : 'Cash on delivery selected.'}
+                    </p>
                     <button 
                       onClick={() => {
                         setIsCartOpen(false);
                         setCheckoutStep('cart');
                         setActiveTab('tracking');
+                        setDraftOrderId('');
                       }}
                       className="bg-primary text-white px-8 py-4 rounded-2xl font-black w-full"
                     >
@@ -1952,7 +2258,10 @@ export default function App() {
                   {checkoutStep === 'cart' ? (
                     hasCartItems ? (
                       <button 
-                        onClick={() => setCheckoutStep('details')}
+                        onClick={() => {
+                          setCheckoutError('');
+                          setCheckoutStep('details');
+                        }}
                         disabled={!hasCartItems}
                         className="w-full bg-primary text-white py-4 rounded-2xl font-black text-lg flex items-center justify-center gap-2 disabled:opacity-70"
                       >
@@ -1962,7 +2271,10 @@ export default function App() {
                   ) : (
                     <div className="flex gap-4">
                       <button 
-                        onClick={() => setCheckoutStep('cart')}
+                        onClick={() => {
+                          setCheckoutError('');
+                          setCheckoutStep('cart');
+                        }}
                         className="w-1/3 bg-white/5 text-ink-muted py-4 rounded-2xl font-black"
                       >
                         BACK
@@ -1972,7 +2284,7 @@ export default function App() {
                         disabled={isPlacingOrder || !hasCartItems}
                         className="flex-grow bg-primary text-white py-4 rounded-2xl font-black text-lg disabled:opacity-70"
                       >
-                        {isPlacingOrder ? 'PLACING ORDER...' : 'CONFIRM ORDER'}
+                        {checkoutPrimaryActionLabel}
                       </button>
                     </div>
                   )}
