@@ -18,6 +18,10 @@ interface PaymentSessionRecord {
     name: string;
     phone: string;
     address: string;
+    location: {
+      lat: number;
+      lng: number;
+    };
   };
   items: Array<{
     id: string;
@@ -73,6 +77,7 @@ const buildOrderResponse = (params: {
     customer_name: params.session.customer.name,
     phone: params.session.customer.phone,
     address: params.session.customer.address,
+    customer_location: params.session.customer.location,
     total_amount: params.session.pricing.finalTotal,
     subtotal: params.session.pricing.subtotal,
     discount: params.session.pricing.discount,
@@ -259,6 +264,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
         name: freshSession.customer.name,
         phone: freshSession.customer.phone,
         address: freshSession.customer.address,
+        customerLocation: freshSession.customer.location,
         paymentMethod: 'razorpay',
         paymentStatus: 'paid',
         razorpayOrderId,

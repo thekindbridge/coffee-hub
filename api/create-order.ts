@@ -14,6 +14,10 @@ interface PaymentSessionRecord {
     name: string;
     phone: string;
     address: string;
+    location: {
+      lat: number;
+      lng: number;
+    };
   };
   pricing: {
     finalTotal: number;

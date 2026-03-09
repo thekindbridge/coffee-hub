@@ -10,6 +10,10 @@ export interface CheckoutOrderCustomerPayload {
   name: string;
   phone: string;
   address: string;
+  location: {
+    lat: number;
+    lng: number;
+  };
 }
 
 export interface CheckoutOrderItemPayload {
@@ -95,6 +99,15 @@ const ensureNonNegativeMoney = (value: unknown, fieldName: string) => {
   return Number(numericValue.toFixed(2));
 };
 
+const ensureFiniteCoordinate = (value: unknown, fieldName: string) => {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) {
+    throw new ApiError(400, `${fieldName} must be a valid coordinate.`);
+  }
+
+  return numericValue;
+};
+
 const ensurePositiveInteger = (value: unknown, fieldName: string) => {
   const numericValue = Number(value);
   if (!Number.isInteger(numericValue) || numericValue <= 0) {
@@ -126,6 +139,7 @@ const parseItem = (value: unknown): CheckoutOrderItemPayload => {
 export const parseOrderDraft = (value: unknown): SanitizedOrderDraft => {
   const payload = parseObjectPayload(value, 'Order payload is invalid.');
   const customer = parseObjectPayload(payload.customer, 'Customer details are required.');
+  const customerLocation = parseObjectPayload(customer.location, 'Customer location is required.');
   const itemsValue = Array.isArray(payload.items) ? payload.items : [];
 
   if (itemsValue.length === 0) {
@@ -138,6 +152,10 @@ export const parseOrderDraft = (value: unknown): SanitizedOrderDraft => {
       name: ensureString(customer.name, 'Customer name'),
       phone: ensureString(customer.phone, 'Phone number'),
       address: ensureString(customer.address, 'Delivery address'),
+      location: {
+        lat: ensureFiniteCoordinate(customerLocation.lat, 'Customer latitude'),
+        lng: ensureFiniteCoordinate(customerLocation.lng, 'Customer longitude'),
+      },
     },
     items: itemsValue.map(parseItem),
     couponCode: normalizeCouponCode(payload.couponCode ?? payload.coupon_code),

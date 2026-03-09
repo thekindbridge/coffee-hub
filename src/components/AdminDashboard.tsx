@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { LayoutGrid, Package2, ReceiptText, TicketPercent } from 'lucide-react';
 
-import type { Offer, OfferInput, Order } from '../types';
+import type { DeliveryAgent, Offer, OfferInput, Order } from '../types';
 import AdminMenuManager from './AdminMenuManager';
 import AdminOffersManager from './AdminOffersManager';
 import AdminOrders from './AdminOrders';
@@ -15,7 +15,9 @@ interface AdminDashboardProps {
   offersError: string;
   newOrderDocIds: string[];
   orderStatuses: Order['status'][];
+  deliveryAgents: DeliveryAgent[];
   onUpdateStatus: (orderDocId: string, status: Order['status']) => void;
+  onAssignAgent: (order: Order, agentId: string) => void;
   onCreateOffer: (offerInput: OfferInput) => Promise<void>;
   onUpdateOffer: (offerId: string, offerInput: OfferInput) => Promise<void>;
   onDeleteOffer: (offerId: string) => Promise<void>;
@@ -52,7 +54,9 @@ export default function AdminDashboard({
   offersError,
   newOrderDocIds,
   orderStatuses,
+  deliveryAgents,
   onUpdateStatus,
+  onAssignAgent,
   onCreateOffer,
   onUpdateOffer,
   onDeleteOffer,
@@ -103,7 +107,9 @@ export default function AdminDashboard({
             orders={orders}
             newOrderDocIds={newOrderDocIds}
             orderStatuses={orderStatuses}
+            deliveryAgents={deliveryAgents}
             onUpdateStatus={onUpdateStatus}
+            onAssignAgent={onAssignAgent}
           />
         )}
 

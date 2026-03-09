@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   DirectionsRenderer,
   GoogleMap,
@@ -6,41 +6,64 @@ import {
   useJsApiLoader,
 } from '@react-google-maps/api';
 import { doc, onSnapshot } from 'firebase/firestore';
+import { Bike, MapPin, Store } from 'lucide-react';
 import { db } from '../firebase';
+import type { DeliveryLocation, DeliveryRouteMetrics } from '../types';
 
-const GOOGLE_MAPS_SCRIPT_ID = 'coffee-hub-delivery-tracking-map';
+const GOOGLE_MAPS_SCRIPT_ID = 'coffee-hub-premium-delivery-tracking-map';
+const DEFAULT_AGENT_ICON_URL = '/assets/delivery-scooter.png';
 const MAP_CONTAINER_STYLE = {
   width: '100%',
   height: '100%',
 };
+const ROUTE_COLOR = '#f97316';
+const ANIMATION_DURATION_MS = 1200;
+const DARK_MAP_STYLES: google.maps.MapTypeStyle[] = [
+  { elementType: 'geometry', stylers: [{ color: '#15110f' }] },
+  { elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
+  { elementType: 'labels.text.fill', stylers: [{ color: '#9f8b7b' }] },
+  { elementType: 'labels.text.stroke', stylers: [{ color: '#110d0b' }] },
+  { featureType: 'administrative', elementType: 'geometry', stylers: [{ color: '#2b241f' }] },
+  { featureType: 'poi', elementType: 'geometry', stylers: [{ color: '#211915' }] },
+  { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#16211b' }] },
+  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#2d241f' }] },
+  { featureType: 'road.arterial', elementType: 'geometry', stylers: [{ color: '#382d27' }] },
+  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#4b372b' }] },
+  { featureType: 'road.highway', elementType: 'geometry.stroke', stylers: [{ color: '#6a4934' }] },
+  { featureType: 'transit', elementType: 'geometry', stylers: [{ color: '#1e1714' }] },
+  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0e2331' }] },
+];
+
 const MAP_OPTIONS: google.maps.MapOptions = {
   clickableIcons: false,
+  disableDefaultUI: true,
   fullscreenControl: false,
+  gestureHandling: 'greedy',
+  keyboardShortcuts: false,
   mapTypeControl: false,
   streetViewControl: false,
+  styles: DARK_MAP_STYLES,
   zoomControl: true,
 };
+
 const ROUTE_RENDERER_OPTIONS: google.maps.DirectionsRendererOptions = {
   preserveViewport: true,
   suppressMarkers: true,
   polylineOptions: {
-    strokeColor: '#c2410c',
-    strokeOpacity: 0.92,
+    strokeColor: ROUTE_COLOR,
+    strokeOpacity: 0.94,
     strokeWeight: 5,
   },
 };
 
-export interface DeliveryTrackingLocation {
-  lat: number;
-  lng: number;
-}
-
 export interface DeliveryTrackingMapProps {
   orderId: string;
-  coffeeShopLocation: DeliveryTrackingLocation;
-  customerLocation: DeliveryTrackingLocation;
+  coffeeShopLocation: DeliveryLocation;
+  customerLocation: DeliveryLocation;
   className?: string;
   mapClassName?: string;
+  agentIconUrl?: string;
+  onRouteMetricsChange?: (metrics: DeliveryRouteMetrics | null) => void;
 }
 
 const joinClassNames = (...classNames: Array<string | undefined>) =>
@@ -50,24 +73,56 @@ const isFiniteCoordinate = (value: unknown): value is number =>
   typeof value === 'number' && Number.isFinite(value);
 
 const isValidLocation = (
-  location: Partial<DeliveryTrackingLocation> | null | undefined,
-): location is DeliveryTrackingLocation =>
+  location: Partial<DeliveryLocation> | null | undefined,
+): location is DeliveryLocation =>
   isFiniteCoordinate(location?.lat) && isFiniteCoordinate(location?.lng);
 
-const createMarkerIcon = (fillColor: string): google.maps.Symbol => ({
+const easeOutCubic = (value: number) => 1 - ((1 - value) ** 3);
+
+const buildStaticMarkerIcon = (
+  fillColor: string,
+): google.maps.Symbol => ({
   path: google.maps.SymbolPath.CIRCLE,
   fillColor,
   fillOpacity: 1,
-  scale: 9,
+  scale: 8.5,
   strokeColor: '#fff7ed',
-  strokeWeight: 2.5,
+  strokeWeight: 2.2,
 });
 
-const MarkerLabelStyles: google.maps.MarkerLabel = {
+const buildLabel = (text: string): google.maps.MarkerLabel => ({
   color: '#ffffff',
   fontSize: '11px',
   fontWeight: '700',
-  text: '',
+  text,
+});
+
+const buildAgentIcon = (url: string): google.maps.Icon => ({
+  url,
+  scaledSize: new google.maps.Size(68, 68),
+  anchor: new google.maps.Point(34, 34),
+});
+
+const formatMetricsFromDirections = (
+  directions: google.maps.DirectionsResult,
+): DeliveryRouteMetrics | null => {
+  const primaryLeg = directions.routes[0]?.legs[0];
+  if (!primaryLeg) {
+    return null;
+  }
+
+  const durationInTrafficSeconds = primaryLeg.duration_in_traffic?.value ?? primaryLeg.duration?.value;
+  const etaMinutes = typeof durationInTrafficSeconds === 'number'
+    ? Math.max(1, Math.round(durationInTrafficSeconds / 60))
+    : null;
+
+  return {
+    distance_meters: primaryLeg.distance?.value ?? null,
+    distance_text: primaryLeg.distance?.text || '--',
+    duration_text: primaryLeg.duration?.text || '--',
+    duration_in_traffic_text: primaryLeg.duration_in_traffic?.text || primaryLeg.duration?.text || '--',
+    eta_minutes: etaMinutes,
+  };
 };
 
 const MapMessage = ({
@@ -81,16 +136,16 @@ const MapMessage = ({
 }) => (
   <div
     className={joinClassNames(
-      'flex min-h-[280px] w-full items-center justify-center rounded-[28px] border border-white/10 bg-[#120d0b] px-6 py-10 text-center text-[#fffaf5]',
+      'flex min-h-[380px] w-full items-center justify-center rounded-[32px] border border-white/10 bg-[linear-gradient(180deg,#17110e,#0d0907)] px-6 py-10 text-center text-[#fff8f2]',
       className,
     )}
   >
-    <div className="max-w-md space-y-2">
-      <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#d4a373]">
-        Delivery Tracking
+    <div className="max-w-lg space-y-3">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.32em] text-[#e1a66c]">
+        Live Delivery Tracking
       </p>
-      <h2 className="text-xl font-semibold text-[#fffaf5]">{title}</h2>
-      <p className="text-sm leading-6 text-[#d9cabd]">{description}</p>
+      <h2 className="text-2xl font-semibold text-[#fff8f2]">{title}</h2>
+      <p className="text-sm leading-6 text-[#d8c7ba]">{description}</p>
     </div>
   </div>
 );
@@ -101,80 +156,150 @@ export default function DeliveryTrackingMap({
   customerLocation,
   className,
   mapClassName,
+  agentIconUrl = DEFAULT_AGENT_ICON_URL,
+  onRouteMetricsChange,
 }: DeliveryTrackingMapProps) {
-  const normalizedOrderId = orderId.trim();
+  const normalizedOrderId = orderId.trim().toUpperCase();
   const apiKey = (import.meta.env.VITE_GOOGLE_MAP_KEY || '').trim();
   const mapRef = useRef<google.maps.Map | null>(null);
-  const [agentLocation, setAgentLocation] = useState<DeliveryTrackingLocation | null>(null);
+  const animationFrameRef = useRef<number | null>(null);
+  const animatedLocationRef = useRef<DeliveryLocation | null>(null);
+  const hasInitializedViewportRef = useRef(false);
+  const [agentLocation, setAgentLocation] = useState<DeliveryLocation | null>(null);
+  const [animatedAgentLocation, setAnimatedAgentLocation] = useState<DeliveryLocation | null>(null);
   const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null);
-  const [trackingMessage, setTrackingMessage] = useState(
-    'Connecting to live delivery updates...',
-  );
+  const [trackingLabel, setTrackingLabel] = useState('Connecting to the rider...');
   const [routeError, setRouteError] = useState('');
+
   const { isLoaded, loadError } = useJsApiLoader({
     id: GOOGLE_MAPS_SCRIPT_ID,
     googleMapsApiKey: apiKey,
     preventGoogleFontsLoading: true,
   });
 
+  const shopMarkerIcon = useMemo(
+    () => (isLoaded ? buildStaticMarkerIcon('#6f4e37') : undefined),
+    [isLoaded],
+  );
+  const customerMarkerIcon = useMemo(
+    () => (isLoaded ? buildStaticMarkerIcon('#16a34a') : undefined),
+    [isLoaded],
+  );
+  const agentMarkerIcon = useMemo(
+    () => (isLoaded ? buildAgentIcon(agentIconUrl) : undefined),
+    [agentIconUrl, isLoaded],
+  );
+
   useEffect(() => {
     if (!normalizedOrderId) {
       setAgentLocation(null);
+      setAnimatedAgentLocation(null);
       setDirections(null);
-      setTrackingMessage('Order ID is required to subscribe to delivery updates.');
+      setTrackingLabel('Enter an order to load live tracking.');
+      onRouteMetricsChange?.(null);
       return undefined;
     }
-
-    setTrackingMessage('Connecting to live delivery updates...');
 
     const unsubscribe = onSnapshot(
       doc(db, 'agent_locations', normalizedOrderId),
       snapshot => {
         if (!snapshot.exists()) {
           setAgentLocation(null);
+          setAnimatedAgentLocation(null);
           setDirections(null);
-          setTrackingMessage('Waiting for the delivery partner to start sharing location.');
+          setTrackingLabel('Waiting for the delivery partner to start sharing location.');
+          onRouteMetricsChange?.(null);
           return;
         }
 
-        const nextLocation = snapshot.data() as Partial<DeliveryTrackingLocation>;
-
+        const nextLocation = snapshot.data() as Partial<DeliveryLocation>;
         if (!isValidLocation(nextLocation)) {
           setAgentLocation(null);
+          setAnimatedAgentLocation(null);
           setDirections(null);
-          setTrackingMessage('Delivery partner location is unavailable right now.');
+          setTrackingLabel('Delivery partner location is temporarily unavailable.');
+          onRouteMetricsChange?.(null);
           return;
         }
 
         setAgentLocation({
           lat: nextLocation.lat,
           lng: nextLocation.lng,
+          accuracy: isFiniteCoordinate(nextLocation.accuracy) ? nextLocation.accuracy : undefined,
         });
-        setTrackingMessage('Live delivery updates are active.');
+        setTrackingLabel('Rider is live on the route.');
       },
       error => {
-        console.error('Failed to subscribe to delivery agent location', error);
+        console.error('Failed to subscribe to delivery location', error);
         setAgentLocation(null);
+        setAnimatedAgentLocation(null);
         setDirections(null);
-        setTrackingMessage('Unable to load live delivery updates right now.');
+        setTrackingLabel('Unable to load the rider location right now.');
+        onRouteMetricsChange?.(null);
       },
     );
 
-    return unsubscribe;
-  }, [normalizedOrderId]);
+    return () => {
+      unsubscribe();
+    };
+  }, [normalizedOrderId, onRouteMetricsChange]);
 
   useEffect(() => {
-    if (!agentLocation || !mapRef.current) {
-      return;
+    if (animationFrameRef.current !== null) {
+      window.cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
     }
 
-    mapRef.current.panTo(agentLocation);
+    if (!agentLocation) {
+      animatedLocationRef.current = null;
+      setAnimatedAgentLocation(null);
+      return undefined;
+    }
+
+    const startLocation = animatedLocationRef.current || agentLocation;
+    if (
+      startLocation.lat === agentLocation.lat &&
+      startLocation.lng === agentLocation.lng
+    ) {
+      animatedLocationRef.current = agentLocation;
+      setAnimatedAgentLocation(agentLocation);
+      return undefined;
+    }
+
+    const animationStart = performance.now();
+
+    const animate = (frameTime: number) => {
+      const progress = Math.min(1, (frameTime - animationStart) / ANIMATION_DURATION_MS);
+      const easedProgress = easeOutCubic(progress);
+      const nextAnimatedLocation = {
+        lat: startLocation.lat + ((agentLocation.lat - startLocation.lat) * easedProgress),
+        lng: startLocation.lng + ((agentLocation.lng - startLocation.lng) * easedProgress),
+      };
+
+      animatedLocationRef.current = nextAnimatedLocation;
+      setAnimatedAgentLocation(nextAnimatedLocation);
+      mapRef.current?.panTo(nextAnimatedLocation);
+
+      if (progress < 1) {
+        animationFrameRef.current = window.requestAnimationFrame(animate);
+      }
+    };
+
+    animationFrameRef.current = window.requestAnimationFrame(animate);
+
+    return () => {
+      if (animationFrameRef.current !== null) {
+        window.cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
+    };
   }, [agentLocation]);
 
   useEffect(() => {
     if (!isLoaded || !agentLocation) {
       setDirections(null);
       setRouteError('');
+      onRouteMetricsChange?.(null);
       return;
     }
 
@@ -183,23 +308,32 @@ export default function DeliveryTrackingMap({
 
     const loadRoute = async () => {
       try {
-        setRouteError('');
         const nextDirections = await directionsService.route({
-          origin: agentLocation,
           destination: customerLocation,
+          drivingOptions: {
+            departureTime: new Date(),
+            trafficModel: google.maps.TrafficModel.BEST_GUESS,
+          },
+          origin: agentLocation,
           travelMode: google.maps.TravelMode.DRIVING,
         });
 
-        if (!isCancelled) {
-          setDirections(nextDirections);
+        if (isCancelled) {
+          return;
         }
-      } catch (error) {
-        console.error('Failed to render delivery route', error);
 
-        if (!isCancelled) {
-          setDirections(null);
-          setRouteError('Route preview is temporarily unavailable.');
+        setDirections(nextDirections);
+        setRouteError('');
+        onRouteMetricsChange?.(formatMetricsFromDirections(nextDirections));
+      } catch (error) {
+        console.error('Failed to load delivery route', error);
+        if (isCancelled) {
+          return;
         }
+
+        setDirections(null);
+        setRouteError('Route preview is temporarily unavailable.');
+        onRouteMetricsChange?.(null);
       }
     };
 
@@ -208,13 +342,41 @@ export default function DeliveryTrackingMap({
     return () => {
       isCancelled = true;
     };
-  }, [agentLocation, customerLocation.lat, customerLocation.lng, isLoaded]);
+  }, [agentLocation, customerLocation, isLoaded, onRouteMetricsChange]);
+
+  useEffect(() => {
+    if (!isLoaded || !mapRef.current) {
+      return;
+    }
+
+    if (hasInitializedViewportRef.current) {
+      return;
+    }
+
+    const bounds = new google.maps.LatLngBounds();
+    bounds.extend(coffeeShopLocation);
+    bounds.extend(customerLocation);
+    if (agentLocation) {
+      bounds.extend(agentLocation);
+    }
+
+    mapRef.current.fitBounds(bounds, 96);
+    hasInitializedViewportRef.current = true;
+  }, [agentLocation, coffeeShopLocation, customerLocation, isLoaded]);
+
+  useEffect(() => {
+    return () => {
+      if (animationFrameRef.current !== null) {
+        window.cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
+  }, []);
 
   if (!apiKey) {
     return (
       <MapMessage
-        title="Missing Google Maps key"
-        description="Add VITE_GOOGLE_MAP_KEY to your Vite environment before rendering the delivery map."
+        title="Google Maps key missing"
+        description="Add VITE_GOOGLE_MAP_KEY to your frontend environment before rendering delivery tracking."
         className={className}
       />
     );
@@ -223,8 +385,8 @@ export default function DeliveryTrackingMap({
   if (!isValidLocation(coffeeShopLocation) || !isValidLocation(customerLocation)) {
     return (
       <MapMessage
-        title="Missing location coordinates"
-        description="Pass valid lat/lng coordinates for both the coffee shop and the customer before loading delivery tracking."
+        title="Customer location unavailable"
+        description="Coffee Hub needs valid coffee shop and customer coordinates to render live delivery tracking."
         className={className}
       />
     );
@@ -234,46 +396,34 @@ export default function DeliveryTrackingMap({
     return (
       <MapMessage
         title="Unable to load Google Maps"
-        description="The Google Maps script failed to load. Check your API key, allowed domains, and enabled APIs."
+        description="The map script failed to load. Check your Google Maps key, enabled APIs, and allowed Vercel domains."
         className={className}
       />
     );
   }
 
-  const mapCenter = agentLocation || coffeeShopLocation;
-  const shopIcon = isLoaded ? createMarkerIcon('#6f4e25') : undefined;
-  const agentIcon = isLoaded ? createMarkerIcon('#2563eb') : undefined;
-  const customerIcon = isLoaded ? createMarkerIcon('#16a34a') : undefined;
-
   return (
     <section
       className={joinClassNames(
-        'w-full overflow-hidden rounded-[28px] border border-white/10 bg-[#120d0b] text-[#fffaf5] shadow-[0_24px_60px_rgba(18,13,11,0.25)]',
+        'relative w-full overflow-hidden rounded-[34px] border border-white/10 bg-[linear-gradient(180deg,#18110d,#0f0a08)] shadow-[0_30px_80px_rgba(9,6,5,0.34)]',
         className,
       )}
     >
-      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 bg-[#18120f] px-4 py-3 sm:px-5">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#d4a373]">
-            Live Delivery Tracking
-          </p>
-          <p className="mt-1 text-sm text-[#f5ede3]">{trackingMessage}</p>
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-20 bg-[linear-gradient(180deg,rgba(10,7,6,0.94),rgba(10,7,6,0.36),transparent)] px-4 pb-12 pt-4 sm:px-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="rounded-full border border-white/10 bg-black/30 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.28em] text-[#f6c18b] backdrop-blur-xl">
+            Live route
+          </div>
+          <div className="rounded-full border border-white/10 bg-black/30 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#f5ede3] backdrop-blur-xl">
+            {trackingLabel}
+          </div>
         </div>
-        <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-[#f5ede3]">
-          {normalizedOrderId || 'Order ID Missing'}
-        </div>
-      </header>
+      </div>
 
-      {routeError && (
-        <div className="border-b border-white/10 bg-[#2a130a] px-4 py-2 text-sm text-[#f7c59f] sm:px-5">
-          {routeError}
-        </div>
-      )}
-
-      <div className={joinClassNames('h-[420px] w-full sm:h-[520px]', mapClassName)}>
+      <div className={joinClassNames('h-[420px] w-full sm:h-[560px]', mapClassName)}>
         {isLoaded ? (
           <GoogleMap
-            center={mapCenter}
+            center={animatedAgentLocation || coffeeShopLocation}
             mapContainerStyle={MAP_CONTAINER_STYLE}
             onLoad={map => {
               mapRef.current = map;
@@ -285,23 +435,22 @@ export default function DeliveryTrackingMap({
             zoom={15}
           >
             <MarkerF
-              icon={shopIcon}
-              label={{ ...MarkerLabelStyles, text: 'S' }}
+              icon={shopMarkerIcon}
+              label={buildLabel('S')}
               position={coffeeShopLocation}
-              title="Coffee shop"
+              title="Coffee Hub"
             />
             <MarkerF
-              icon={customerIcon}
-              label={{ ...MarkerLabelStyles, text: 'C' }}
+              icon={customerMarkerIcon}
+              label={buildLabel('C')}
               position={customerLocation}
               title="Customer"
             />
-            {agentLocation && (
+            {animatedAgentLocation && (
               <MarkerF
-                icon={agentIcon}
-                label={{ ...MarkerLabelStyles, text: 'A' }}
-                position={agentLocation}
-                title="Delivery agent"
+                icon={agentMarkerIcon}
+                position={animatedAgentLocation}
+                title="Delivery partner"
               />
             )}
             {directions && (
@@ -312,17 +461,47 @@ export default function DeliveryTrackingMap({
             )}
           </GoogleMap>
         ) : (
-          <div className="flex h-full items-center justify-center bg-[radial-gradient(circle_at_top,rgba(212,163,115,0.14),transparent_34%),linear-gradient(180deg,#120d0b,#0b0806)] px-6 text-center">
+          <div className="flex h-full items-center justify-center bg-[radial-gradient(circle_at_top,rgba(249,115,22,0.15),transparent_34%),linear-gradient(180deg,#18110d,#0f0a08)] px-6 text-center">
             <div className="space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#d4a373]">
-                Loading Map
+              <p className="text-[11px] font-semibold uppercase tracking-[0.32em] text-[#f6c18b]">
+                Initializing Map
               </p>
-              <p className="text-sm text-[#d9cabd]">
-                Initializing Google Maps and live delivery markers...
+              <p className="text-sm leading-6 text-[#d8c7ba]">
+                Loading Google Maps, delivery route, and live rider updates...
               </p>
             </div>
           </div>
         )}
+      </div>
+
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 grid gap-2 bg-[linear-gradient(0deg,rgba(10,7,6,0.96),rgba(10,7,6,0.34),transparent)] px-4 pb-4 pt-10 sm:px-5">
+        {routeError && (
+          <div className="rounded-2xl border border-[#f59e0b]/20 bg-[#382113]/88 px-4 py-3 text-sm text-[#fcd9b1] backdrop-blur-xl">
+            {routeError}
+          </div>
+        )}
+        <div className="grid gap-2 sm:grid-cols-3">
+          <div className="rounded-2xl border border-white/10 bg-black/30 px-3 py-2.5 backdrop-blur-xl">
+            <div className="flex items-center gap-2 text-[#f5ede3]">
+              <Store size={14} className="text-[#f6c18b]" />
+              <span className="text-xs font-semibold uppercase tracking-[0.18em]">Coffee shop</span>
+            </div>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-black/30 px-3 py-2.5 backdrop-blur-xl">
+            <div className="flex items-center gap-2 text-[#f5ede3]">
+              <Bike size={14} className="text-[#f97316]" />
+              <span className="text-xs font-semibold uppercase tracking-[0.18em]">
+                {animatedAgentLocation ? 'Agent live' : 'Awaiting rider'}
+              </span>
+            </div>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-black/30 px-3 py-2.5 backdrop-blur-xl">
+            <div className="flex items-center gap-2 text-[#f5ede3]">
+              <MapPin size={14} className="text-[#22c55e]" />
+              <span className="text-xs font-semibold uppercase tracking-[0.18em]">Customer stop</span>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
   );

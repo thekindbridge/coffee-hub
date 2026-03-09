@@ -49,6 +49,7 @@ import {
   orderBy,
   query,
   runTransaction,
+  setDoc,
   serverTimestamp,
   updateDoc,
   where,
@@ -61,6 +62,9 @@ import {
   MenuItem,
   CartItem,
   CheckoutCustomerDetails,
+  DeliveryAgent,
+  DeliveryLocation,
+  DeliverySession,
   CheckoutOrderDraft,
   CheckoutOrderItemPayload,
   CheckoutPaymentOption,
@@ -73,9 +77,15 @@ import { useOffers } from './hooks/useOffers';
 import { calculateDiscount } from './utils/calculateDiscount';
 import { loadRazorpayCheckout } from './utils/loadRazorpayCheckout';
 import { postPaymentApi } from './utils/paymentApi';
+import {
+  createAgentTracker,
+  type AgentTrackerPermissionState,
+  type AgentTrackerStatus,
+} from './agent/agentTracker';
 import AdminDashboard from './components/AdminDashboard';
 import AgentDashboard from './components/AgentDashboard';
 import MyOrders from './components/MyOrders';
+import OrderTrackingPage from './pages/OrderTrackingPage';
 
 // --- Components ---
 
@@ -89,9 +99,77 @@ const AUTH_BACKGROUND_IMAGE = 'url(https://res.cloudinary.com/ddfhaqeme/image/up
 const DEFAULT_DELIVERY_AGENT = {
   id: 'INKOLLU_AGENT_01',
   name: 'Inkollu Delivery Agent',
+  phone: '',
+};
+const COFFEE_SHOP_LOCATION: DeliveryLocation = {
+  lat: 15.5057,
+  lng: 80.0499,
 };
 const CHECKOUT_PAYMENT_OPTIONS: CheckoutPaymentOption[] = ['Pay Online', 'Cash on Delivery'];
 const RAZORPAY_KEY_ID = (import.meta.env.VITE_RAZORPAY_KEY_ID || '').trim();
+const DEFAULT_TRACKER_STATUS: AgentTrackerStatus = {
+  lifecycle: 'idle',
+  message: 'Start delivery to begin live GPS streaming.',
+};
+
+const mapTimestampToIsoString = (value: unknown) => {
+  if (
+    value &&
+    typeof value === 'object' &&
+    typeof (value as { toDate?: () => Date }).toDate === 'function'
+  ) {
+    return (value as { toDate: () => Date }).toDate().toISOString();
+  }
+
+  return '';
+};
+
+const mapLocationRecord = (value: unknown): DeliveryLocation | null => {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  const data = value as Record<string, unknown>;
+  const lat = Number(data.lat);
+  const lng = Number(data.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    return null;
+  }
+
+  return {
+    lat,
+    lng,
+    accuracy: Number.isFinite(Number(data.accuracy)) ? Number(data.accuracy) : undefined,
+    updated_at: mapTimestampToIsoString(data.updatedAt),
+  };
+};
+
+const mapDeliveryAgentDocToAgent = (snapshot: QueryDocumentSnapshot): DeliveryAgent => {
+  const data = snapshot.data() as Record<string, unknown>;
+
+  return {
+    id: snapshot.id,
+    name: (data.name as string) || 'Delivery Partner',
+    phone: (data.phone as string) || '',
+    is_active: Boolean(data.isActive ?? false),
+    current_order_id: (data.currentOrderId as string) || '',
+    last_location: mapLocationRecord(data.lastLocation),
+  };
+};
+
+const mapDeliverySessionDocToSession = (snapshot: QueryDocumentSnapshot): DeliverySession => {
+  const data = snapshot.data() as Record<string, unknown>;
+
+  return {
+    order_id: snapshot.id,
+    order_doc_id: (data.orderDocId as string) || '',
+    agent_id: (data.agentId as string) || '',
+    agent_name: (data.agentName as string) || '',
+    status: ((data.status as DeliverySession['status']) || 'assigned'),
+    started_at: mapTimestampToIsoString(data.startedAt),
+    completed_at: mapTimestampToIsoString(data.completedAt),
+  };
+};
 
 const normalizeOrderStatus = (status: unknown): Order['status'] => {
   if (status === 'Placed' || status === 'Pending') {
@@ -136,6 +214,7 @@ const mapOrderDocToOrder = (snapshot: QueryDocumentSnapshot): Order => {
     customer_name: (data.name as string) || '',
     phone: (data.phone as string) || '',
     address: (data.address as string) || '',
+    customer_location: mapLocationRecord(data.customerLocation),
     total_amount: finalTotal,
     subtotal,
     discount,
@@ -152,6 +231,7 @@ const mapOrderDocToOrder = (snapshot: QueryDocumentSnapshot): Order => {
     razorpay_signature: (data.razorpaySignature as string) || '',
     delivery_agent_id: (data.deliveryAgentId as string) || '',
     delivery_agent_name: (data.deliveryAgentName as string) || '',
+    delivery_agent_phone: (data.deliveryAgentPhone as string) || '',
     delivery_assigned_at: ((data.deliveryAssignedAt as Timestamp | undefined)?.toDate()?.toISOString()) || '',
   };
 };
@@ -179,6 +259,7 @@ const buildLocalOrderState = (params: {
   customer_name: params.customer.name,
   phone: params.customer.phone,
   address: params.customer.address,
+  customer_location: params.customer.location,
   total_amount: params.finalTotal,
   subtotal: params.subtotal,
   discount: params.discount,
@@ -533,6 +614,8 @@ export default function App() {
   const [isDeliveryAgent, setIsDeliveryAgent] = useState(false);
   const [adminOrders, setAdminOrders] = useState<Order[]>([]);
   const [newOrderDocIds, setNewOrderDocIds] = useState<string[]>([]);
+  const [deliveryAgents, setDeliveryAgents] = useState<DeliveryAgent[]>([]);
+  const [deliverySessions, setDeliverySessions] = useState<DeliverySession[]>([]);
   const [userOrders, setUserOrders] = useState<Order[]>([]);
   const [isUserOrdersLoading, setIsUserOrdersLoading] = useState(false);
   const [menu, setMenu] = useState<MenuItem[]>([]);
@@ -551,9 +634,12 @@ export default function App() {
     name: '',
     phone: '',
     address: '',
+    location: null,
     payment: 'Pay Online',
   });
   const [checkoutError, setCheckoutError] = useState('');
+  const [isLocatingCustomer, setIsLocatingCustomer] = useState(false);
+  const [customerLocationError, setCustomerLocationError] = useState('');
   const [draftOrderId, setDraftOrderId] = useState('');
   const [couponInput, setCouponInput] = useState('');
   const [appliedCouponCode, setAppliedCouponCode] = useState('');
@@ -566,6 +652,12 @@ export default function App() {
   const orderAlertAudioRef = useRef<HTMLAudioElement | null>(null);
   const adminOrdersSnapshotVersionRef = useRef(0);
   const userOrdersSnapshotVersionRef = useRef(0);
+  const agentTrackerRef = useRef<ReturnType<typeof createAgentTracker> | null>(null);
+  const trackedOrderIdRef = useRef('');
+  const [isAgentTracking, setIsAgentTracking] = useState(false);
+  const [agentPermissionState, setAgentPermissionState] = useState<AgentTrackerPermissionState>('unavailable');
+  const [agentTrackerStatus, setAgentTrackerStatus] = useState<AgentTrackerStatus>(DEFAULT_TRACKER_STATUS);
+  const [agentLastTrackedLocation, setAgentLastTrackedLocation] = useState<DeliveryLocation | null>(null);
 
   const {
     offers,
@@ -815,6 +907,85 @@ export default function App() {
     };
   }, [isAdmin, isDeliveryAgent]);
 
+  useEffect(() => {
+    if (!isAdmin && !isDeliveryAgent) {
+      return;
+    }
+
+    const seededAgentName = isDeliveryAgent
+      ? auth.currentUser?.displayName || DEFAULT_DELIVERY_AGENT.name
+      : DEFAULT_DELIVERY_AGENT.name;
+    const seededAgentPhone = isDeliveryAgent
+      ? auth.currentUser?.phoneNumber || DEFAULT_DELIVERY_AGENT.phone
+      : DEFAULT_DELIVERY_AGENT.phone;
+
+    void setDoc(
+      doc(db, 'delivery_agents', DEFAULT_DELIVERY_AGENT.id),
+      {
+        email: DELIVERY_AGENT_EMAIL,
+        isActive: true,
+        name: seededAgentName,
+        phone: seededAgentPhone,
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    ).catch(error => {
+      console.error('Failed to seed delivery agent profile', error);
+    });
+  }, [isAdmin, isDeliveryAgent]);
+
+  useEffect(() => {
+    if (!isAdmin && !isDeliveryAgent) {
+      setDeliveryAgents([]);
+      return;
+    }
+
+    const unsubscribe = onSnapshot(
+      collection(db, 'delivery_agents'),
+      snapshot => {
+        const mappedAgents = snapshot.docs.map(mapDeliveryAgentDocToAgent);
+        setDeliveryAgents(mappedAgents);
+      },
+      error => {
+        console.error('Failed to subscribe to delivery agents', error);
+        setDeliveryAgents([]);
+      },
+    );
+
+    return () => {
+      unsubscribe();
+    };
+  }, [isAdmin, isDeliveryAgent]);
+
+  useEffect(() => {
+    if (!isAdmin && !isDeliveryAgent) {
+      setDeliverySessions([]);
+      return;
+    }
+
+    const unsubscribe = onSnapshot(
+      collection(db, 'delivery_sessions'),
+      snapshot => {
+        const mappedSessions = snapshot.docs.map(mapDeliverySessionDocToSession);
+        setDeliverySessions(mappedSessions);
+      },
+      error => {
+        console.error('Failed to subscribe to delivery sessions', error);
+        setDeliverySessions([]);
+      },
+    );
+
+    return () => {
+      unsubscribe();
+    };
+  }, [isAdmin, isDeliveryAgent]);
+
+  useEffect(() => {
+    return () => {
+      agentTrackerRef.current?.stop();
+    };
+  }, []);
+
   const handleTrackOrderLookup = () => {
     const orderId = trackingOrderId.trim().toUpperCase();
     if (!orderId) {
@@ -860,9 +1031,12 @@ export default function App() {
       const isSameStatus = prev.status === syncedOrder.status;
       const isSameTotal = prev.total_amount === syncedOrder.total_amount;
       const isSameAddress = prev.address === syncedOrder.address;
+      const isSameCustomerLocation =
+        prev.customer_location?.lat === syncedOrder.customer_location?.lat &&
+        prev.customer_location?.lng === syncedOrder.customer_location?.lng;
       const isSameItemsRef = prev.items === mergedItems;
 
-      if (isSameStatus && isSameTotal && isSameAddress && isSameItemsRef) {
+      if (isSameStatus && isSameTotal && isSameAddress && isSameCustomerLocation && isSameItemsRef) {
         return prev;
       }
 
@@ -873,43 +1047,388 @@ export default function App() {
     });
   }, [orderStatus?.id, userOrders]);
 
-  const updateOrderStatus = async (orderDocId: string, status: Order['status']) => {
-    const normalizedStatus = normalizeOrderStatus(status);
-    const shouldAssignDeliveryAgent = normalizedStatus === 'Out for Delivery';
-    const isDeliveredStatus = normalizedStatus === 'Delivered';
+  const currentDeliveryAgent = useMemo(
+    () => deliveryAgents.find(agent => agent.id === DEFAULT_DELIVERY_AGENT.id) || null,
+    [deliveryAgents],
+  );
 
-    const statusPayload: Record<string, unknown> = {
-      status: normalizedStatus,
-      deliveryAgentId: shouldAssignDeliveryAgent ? DEFAULT_DELIVERY_AGENT.id : deleteField(),
-      deliveryAgentName: shouldAssignDeliveryAgent ? DEFAULT_DELIVERY_AGENT.name : deleteField(),
-      deliveryAssignedAt: shouldAssignDeliveryAgent || isDeliveredStatus ? serverTimestamp() : deleteField(),
-    };
+  const currentDeliverySession = useMemo(() => {
+    const activeSessions = deliverySessions.filter(session => {
+      const sessionOrder = adminOrders.find(order => order.id === session.order_id);
+      return Boolean(sessionOrder && sessionOrder.status === 'Out for Delivery' && session.status !== 'completed');
+    });
+
+    const matchingSessionByOrder = activeSessions.find(
+      session => session.order_id === currentDeliveryAgent?.current_order_id,
+    );
+    if (matchingSessionByOrder) {
+      return matchingSessionByOrder;
+    }
+
+    return activeSessions.find(
+      session => session.agent_id === DEFAULT_DELIVERY_AGENT.id && session.status !== 'completed',
+    ) || null;
+  }, [adminOrders, currentDeliveryAgent?.current_order_id, deliverySessions]);
+
+  const currentDeliveryOrder = useMemo(() => {
+    const targetOrderId = currentDeliverySession?.order_id || currentDeliveryAgent?.current_order_id;
+    if (targetOrderId) {
+      return adminOrders.find(order => order.id === targetOrderId) || null;
+    }
+
+    return adminOrders.find(
+      order => order.delivery_agent_id === DEFAULT_DELIVERY_AGENT.id && order.status === 'Out for Delivery',
+    ) || null;
+  }, [
+    adminOrders,
+    currentDeliveryAgent?.current_order_id,
+    currentDeliverySession?.order_id,
+  ]);
+
+  useEffect(() => {
+    if (
+      agentTrackerRef.current &&
+      trackedOrderIdRef.current &&
+      currentDeliveryOrder?.id &&
+      currentDeliveryOrder.id !== trackedOrderIdRef.current
+    ) {
+      agentTrackerRef.current.stop();
+      agentTrackerRef.current = null;
+      trackedOrderIdRef.current = '';
+      setIsAgentTracking(false);
+      setAgentTrackerStatus(DEFAULT_TRACKER_STATUS);
+      setAgentLastTrackedLocation(null);
+      return;
+    }
+
+    if (!currentDeliveryOrder && agentTrackerRef.current) {
+      agentTrackerRef.current.stop();
+      agentTrackerRef.current = null;
+      trackedOrderIdRef.current = '';
+      setIsAgentTracking(false);
+      setAgentTrackerStatus(DEFAULT_TRACKER_STATUS);
+      setAgentLastTrackedLocation(null);
+      return;
+    }
+
+    if (currentDeliveryOrder?.status === 'Delivered' && agentTrackerRef.current) {
+      agentTrackerRef.current.stop();
+      agentTrackerRef.current = null;
+      trackedOrderIdRef.current = '';
+      setIsAgentTracking(false);
+      setAgentTrackerStatus({
+        lifecycle: 'completed',
+        message: 'Delivery completed and GPS tracking stopped.',
+      });
+    }
+  }, [currentDeliveryOrder?.doc_id, currentDeliveryOrder?.status]);
+
+  const applyOrderLocalUpdate = (orderDocId: string, updater: (order: Order) => Order) => {
+    setAdminOrders(prev => prev.map(order => (
+      order.doc_id === orderDocId ? updater(order) : order
+    )));
+    setUserOrders(prev => prev.map(order => (
+      order.doc_id === orderDocId ? updater(order) : order
+    )));
+    setOrderStatus(prev => (
+      prev && prev.doc_id === orderDocId ? updater(prev) : prev
+    ));
+  };
+
+  const getCurrentBrowserLocation = () => new Promise<DeliveryLocation>((resolve, reject) => {
+    if (typeof window === 'undefined' || !('geolocation' in navigator)) {
+      reject(new Error('Geolocation is not supported in this browser.'));
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      position => {
+        resolve({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+          accuracy: Number.isFinite(position.coords.accuracy)
+            ? Number(position.coords.accuracy.toFixed(1))
+            : undefined,
+        });
+      },
+      error => {
+        reject(new Error(error.message || 'Unable to access your location.'));
+      },
+      {
+        enableHighAccuracy: true,
+        maximumAge: 0,
+        timeout: 15000,
+      },
+    );
+  });
+
+  const handleCaptureCustomerLocation = async () => {
+    setIsLocatingCustomer(true);
+    setCustomerLocationError('');
+    setCheckoutError('');
 
     try {
-      await updateDoc(doc(db, 'orders', orderDocId), statusPayload);
-      setAdminOrders(prev => prev.map(order => (
-        order.doc_id === orderDocId
-          ? {
-            ...order,
-            status: normalizedStatus,
-            delivery_agent_id: shouldAssignDeliveryAgent ? DEFAULT_DELIVERY_AGENT.id : '',
-            delivery_agent_name: shouldAssignDeliveryAgent ? DEFAULT_DELIVERY_AGENT.name : '',
-            delivery_assigned_at: shouldAssignDeliveryAgent || isDeliveredStatus ? new Date().toISOString() : '',
-          }
-          : order
-      )));
+      const nextLocation = await getCurrentBrowserLocation();
+      setCustomerDetails(prev => ({
+        ...prev,
+        location: nextLocation,
+      }));
+    } catch (error) {
+      console.error('Failed to capture customer location', error);
+      setCustomerLocationError(
+        error instanceof Error
+          ? error.message
+          : 'Unable to capture your location right now.',
+      );
+    } finally {
+      setIsLocatingCustomer(false);
+    }
+  };
+
+  const markOrderDelivered = async (order: Order) => {
+    const batch = writeBatch(db);
+    batch.update(doc(db, 'orders', order.doc_id), {
+      status: 'Delivered',
+      deliveredAt: serverTimestamp(),
+    });
+    batch.set(
+      doc(db, 'delivery_sessions', order.id),
+      {
+        agentId: order.delivery_agent_id || '',
+        agentName: order.delivery_agent_name || '',
+        completedAt: serverTimestamp(),
+        orderDocId: order.doc_id,
+        orderId: order.id,
+        status: 'completed',
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    );
+
+    if (order.delivery_agent_id) {
+      batch.set(
+        doc(db, 'delivery_agents', order.delivery_agent_id),
+        {
+          currentOrderId: '',
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      );
+    }
+
+    await batch.commit();
+
+    applyOrderLocalUpdate(order.doc_id, currentOrder => ({
+      ...currentOrder,
+      status: 'Delivered',
+    }));
+  };
+
+  const assignDeliveryAgentToOrder = async (order: Order, agentId: string) => {
+    if (!agentId) {
+      alert('Select a delivery agent before dispatching the order.');
+      return;
+    }
+
+    if (!order.customer_location) {
+      alert('Customer location is required before delivery tracking can start.');
+      return;
+    }
+
+    const selectedAgent = deliveryAgents.find(agent => agent.id === agentId);
+    if (!selectedAgent) {
+      alert('The selected delivery agent is not available.');
+      return;
+    }
+
+    try {
+      const batch = writeBatch(db);
+      batch.update(doc(db, 'orders', order.doc_id), {
+        status: 'Out for Delivery',
+        deliveryAgentId: selectedAgent.id,
+        deliveryAgentName: selectedAgent.name,
+        deliveryAgentPhone: selectedAgent.phone,
+        deliveryAssignedAt: serverTimestamp(),
+      });
+      batch.set(
+        doc(db, 'delivery_sessions', order.id),
+        {
+          agentId: selectedAgent.id,
+          agentName: selectedAgent.name,
+          completedAt: null,
+          customerLocation: order.customer_location,
+          orderDocId: order.doc_id,
+          orderId: order.id,
+          startedAt: null,
+          status: 'assigned',
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      );
+      batch.set(
+        doc(db, 'delivery_agents', selectedAgent.id),
+        {
+          currentOrderId: order.id,
+          isActive: true,
+          name: selectedAgent.name,
+          phone: selectedAgent.phone,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      );
+
+      if (order.delivery_agent_id && order.delivery_agent_id !== selectedAgent.id) {
+        batch.set(
+          doc(db, 'delivery_agents', order.delivery_agent_id),
+          {
+            currentOrderId: '',
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true },
+        );
+      }
+
+      await batch.commit();
+
+      applyOrderLocalUpdate(order.doc_id, currentOrder => ({
+        ...currentOrder,
+        status: 'Out for Delivery',
+        delivery_agent_id: selectedAgent.id,
+        delivery_agent_name: selectedAgent.name,
+        delivery_agent_phone: selectedAgent.phone,
+        delivery_assigned_at: new Date().toISOString(),
+      }));
+      setNewOrderDocIds(prev => prev.filter(id => id !== order.doc_id));
+    } catch (error) {
+      console.error('Failed to assign delivery agent', error);
+      alert('Unable to assign the delivery agent right now.');
+    }
+  };
+
+  const handleStartDelivery = async () => {
+    if (!currentDeliveryOrder?.customer_location) {
+      alert('This order is missing customer coordinates, so live delivery cannot start.');
+      return;
+    }
+
+    const agentId = currentDeliveryAgent?.id || DEFAULT_DELIVERY_AGENT.id;
+    agentTrackerRef.current?.stop();
+
+    const tracker = createAgentTracker({
+      agentId,
+      customerLocation: currentDeliveryOrder.customer_location,
+      onAutoComplete: () => {
+        setIsAgentTracking(false);
+        trackedOrderIdRef.current = '';
+        setAgentTrackerStatus({
+          lifecycle: 'completed',
+          message: 'Customer reached. Delivery completed automatically.',
+        });
+      },
+      onError: message => {
+        console.error('Agent tracker error', message);
+      },
+      onLocation: location => {
+        setAgentLastTrackedLocation(location);
+      },
+      onPermissionChange: permissionState => {
+        setAgentPermissionState(permissionState);
+      },
+      onStatusChange: status => {
+        setAgentTrackerStatus(status);
+        setIsAgentTracking(status.lifecycle === 'starting' || status.lifecycle === 'watching' || status.lifecycle === 'restarting');
+      },
+      orderDocId: currentDeliveryOrder.doc_id,
+      orderId: currentDeliveryOrder.id,
+    });
+
+    agentTrackerRef.current = tracker;
+    const didStart = await tracker.start();
+    if (!didStart) {
+      setIsAgentTracking(false);
+      return;
+    }
+
+    trackedOrderIdRef.current = currentDeliveryOrder.id;
+
+    await setDoc(
+      doc(db, 'delivery_sessions', currentDeliveryOrder.id),
+      {
+        agentId,
+        agentName: currentDeliveryAgent?.name || DEFAULT_DELIVERY_AGENT.name,
+        orderDocId: currentDeliveryOrder.doc_id,
+        orderId: currentDeliveryOrder.id,
+        startedAt: serverTimestamp(),
+        status: 'active',
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    );
+  };
+
+  const updateOrderStatus = async (orderDocId: string, status: Order['status']) => {
+    const normalizedStatus = normalizeOrderStatus(status);
+    const existingOrder =
+      adminOrders.find(order => order.doc_id === orderDocId) ||
+      userOrders.find(order => order.doc_id === orderDocId) ||
+      (orderStatus?.doc_id === orderDocId ? orderStatus : null);
+
+    if (!existingOrder) {
+      alert('Unable to find the order for this update.');
+      return;
+    }
+
+    if (normalizedStatus === 'Out for Delivery') {
+      await assignDeliveryAgentToOrder(existingOrder, existingOrder.delivery_agent_id || '');
+      return;
+    }
+
+    if (normalizedStatus === 'Delivered') {
+      try {
+        agentTrackerRef.current?.stop();
+        agentTrackerRef.current = null;
+        trackedOrderIdRef.current = '';
+        setIsAgentTracking(false);
+        await markOrderDelivered(existingOrder);
+      } catch (error) {
+        console.error('Failed to complete delivery', error);
+        alert('Unable to mark this order as delivered right now.');
+      }
+      return;
+    }
+
+    try {
+      const batch = writeBatch(db);
+      batch.update(doc(db, 'orders', orderDocId), {
+        status: normalizedStatus,
+        deliveryAgentId: deleteField(),
+        deliveryAgentName: deleteField(),
+        deliveryAgentPhone: deleteField(),
+        deliveryAssignedAt: deleteField(),
+      });
+
+      if (existingOrder.delivery_agent_id) {
+        batch.set(
+          doc(db, 'delivery_agents', existingOrder.delivery_agent_id),
+          {
+            currentOrderId: '',
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true },
+        );
+      }
+
+      await batch.commit();
+
+      applyOrderLocalUpdate(orderDocId, order => ({
+        ...order,
+        status: normalizedStatus,
+        delivery_agent_id: '',
+        delivery_agent_name: '',
+        delivery_agent_phone: '',
+        delivery_assigned_at: '',
+      }));
       setNewOrderDocIds(prev => prev.filter(id => id !== orderDocId));
-      setOrderStatus(prev => (
-        prev && prev.doc_id === orderDocId
-          ? {
-            ...prev,
-            status: normalizedStatus,
-            delivery_agent_id: shouldAssignDeliveryAgent ? DEFAULT_DELIVERY_AGENT.id : '',
-            delivery_agent_name: shouldAssignDeliveryAgent ? DEFAULT_DELIVERY_AGENT.name : '',
-            delivery_assigned_at: shouldAssignDeliveryAgent || isDeliveredStatus ? new Date().toISOString() : '',
-          }
-          : prev
-      ));
     } catch (error) {
       console.error('Failed to update order status', error);
       alert('Unable to update order status right now.');
@@ -928,6 +1447,12 @@ export default function App() {
 
   const handleLogout = async () => {
     try {
+      agentTrackerRef.current?.stop();
+      agentTrackerRef.current = null;
+      trackedOrderIdRef.current = '';
+      setIsAgentTracking(false);
+      setAgentTrackerStatus(DEFAULT_TRACKER_STATUS);
+      setAgentLastTrackedLocation(null);
       await signOut(auth);
       setActiveTab('home');
     } catch (error) {
@@ -1168,9 +1693,15 @@ export default function App() {
     const name = customerDetails.name.trim();
     const phone = customerDetails.phone.trim();
     const address = customerDetails.address.trim();
+    const customerLocation = customerDetails.location;
 
     if (!name || !phone || !address) {
       setCheckoutError('Please fill in your name, phone number, and delivery address.');
+      return null;
+    }
+
+    if (!customerLocation) {
+      setCheckoutError('Share your live delivery location to enable rider tracking and ETA updates.');
       return null;
     }
 
@@ -1222,6 +1753,7 @@ export default function App() {
           name,
           phone,
           address,
+          location: customerLocation,
         },
         items,
         subtotal: subtotalValue,
@@ -1248,6 +1780,7 @@ export default function App() {
         name: draft.customer.name,
         phone: draft.customer.phone,
         address: draft.customer.address,
+        customerLocation: draft.customer.location,
         paymentMethod: 'Cash on Delivery',
         paymentStatus: 'pending',
         status: 'Pending',
@@ -1426,7 +1959,7 @@ export default function App() {
         >
           <div className="absolute inset-0">
             <img
-              src="https://images.unsplash.com/photo-1512058560366-cd242d4235cd?auto=format&fit=crop&w=1200&q=80"
+              src="https://res.cloudinary.com/ddfhaqeme/image/upload/v1772699634/e0818545-8027-4b28-8a1f-d521f79fdb6a_plei96.jpg"
               alt="Coffee HUB hero"
               className="h-full w-full object-cover opacity-30"
               referrerPolicy="no-referrer"
@@ -1781,6 +2314,61 @@ export default function App() {
     </div>
   );
 
+  const renderTrackingExperience = () => (
+    <div className="px-4 pb-24 pt-24 sm:px-6">
+      {!orderStatus ? (
+        <div className="mx-auto max-w-screen-md py-16">
+          <div className="overflow-hidden rounded-[34px] border border-white/10 bg-[linear-gradient(180deg,rgba(23,16,14,0.98),rgba(11,8,7,0.98))] px-6 py-10 text-center shadow-[0_26px_80px_rgba(0,0,0,0.28)]">
+            <ShoppingBag size={64} className="mx-auto mb-6 text-ink-muted opacity-20" />
+            <p className="text-[11px] font-semibold uppercase tracking-[0.34em] text-secondary">
+              Live Tracking
+            </p>
+            <h2 className="mt-3 text-3xl font-semibold text-accent">Track your delivery</h2>
+            <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-ink-muted">
+              Enter your order ID to open the live map, rider route, and premium delivery updates.
+            </p>
+
+            <div className="mx-auto mt-8 max-w-md space-y-4 rounded-[28px] border border-white/10 bg-white/5 p-5 text-left">
+              <input
+                type="text"
+                placeholder="Order ID (e.g. COF1001)"
+                className="w-full rounded-2xl border border-white/10 bg-white/5 p-4 uppercase focus:border-primary focus:outline-none"
+                value={trackingOrderId}
+                onChange={event => setTrackingOrderId(event.target.value.toUpperCase())}
+              />
+              {trackingError && (
+                <p className="text-xs font-bold text-primary">{trackingError}</p>
+              )}
+              <button
+                onClick={handleTrackOrderLookup}
+                disabled={isTrackingOrder}
+                className="w-full rounded-2xl bg-primary py-3 font-bold text-white disabled:opacity-70"
+              >
+                {isTrackingOrder ? 'TRACKING...' : 'TRACK ORDER'}
+              </button>
+            </div>
+
+            <button
+              onClick={() => setActiveTab('menu')}
+              className="mt-5 w-full rounded-2xl bg-white/5 py-3 font-bold text-ink sm:mx-auto sm:max-w-md"
+            >
+              Go to Menu
+            </button>
+          </div>
+        </div>
+      ) : (
+        <OrderTrackingPage
+          coffeeShopLocation={COFFEE_SHOP_LOCATION}
+          onClearTracking={() => {
+            setOrderStatus(null);
+            setTrackingError('');
+          }}
+          order={orderStatus}
+        />
+      )}
+    </div>
+  );
+
   const renderAbout = () => (
     <div className="pt-24 pb-24 px-6 max-w-2xl mx-auto">
       <h2 className="text-4xl font-black mb-8">Our Story</h2>
@@ -1985,8 +2573,12 @@ export default function App() {
             offersError={offersError}
             newOrderDocIds={newOrderDocIds}
             orderStatuses={ORDER_STATUSES}
+            deliveryAgents={deliveryAgents}
             onUpdateStatus={(orderDocId, status) => {
               void updateOrderStatus(orderDocId, status);
+            }}
+            onAssignAgent={(order, agentId) => {
+              void assignDeliveryAgentToOrder(order, agentId);
             }}
             onCreateOffer={createOffer}
             onUpdateOffer={updateOffer}
@@ -2025,11 +2617,21 @@ export default function App() {
 
         <main className="mx-auto max-w-screen-md">
           <AgentDashboard
+            activeOrder={currentDeliveryOrder}
+            deliveryAgent={currentDeliveryAgent}
+            deliverySession={currentDeliverySession}
             isAuthorized={currentUserEmail.toLowerCase() === DELIVERY_AGENT_EMAIL}
+            isTracking={isAgentTracking}
+            lastTrackedLocation={agentLastTrackedLocation}
             orders={adminOrders}
-            onMarkDelivered={orderDocId => {
+            onCompleteDelivery={orderDocId => {
               void updateOrderStatus(orderDocId, 'Delivered');
             }}
+            onStartDelivery={() => {
+              void handleStartDelivery();
+            }}
+            permissionState={agentPermissionState}
+            trackerStatus={agentTrackerStatus}
           />
         </main>
       </div>
@@ -2082,7 +2684,7 @@ export default function App() {
             onBrowseMenu={() => setActiveTab('menu')}
           />
         )}
-        {activeTab === 'tracking' && renderTracking()}
+        {activeTab === 'tracking' && renderTrackingExperience()}
         {activeTab === 'about' && renderAbout()}
         {activeTab === 'contact' && renderContact()}
       </main>
@@ -2170,11 +2772,11 @@ export default function App() {
               onClick: () => setActiveTab('orders'),
             },
             {
-              id: 'cart',
-              icon: ShoppingBag,
-              label: 'Cart',
-              active: isCartOpen,
-              onClick: () => setIsCartOpen(true),
+              id: 'tracking',
+              icon: MapPin,
+              label: 'Track',
+              active: activeTab === 'tracking',
+              onClick: () => setActiveTab('tracking'),
             },
           ].map(item => (
             <button
@@ -2452,6 +3054,39 @@ export default function App() {
                           setCustomerDetails(prev => ({ ...prev, address: event.target.value }));
                         }}
                       />
+                    </div>
+                    <div className="rounded-[24px] border border-white/10 bg-white/5 p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <label className="block text-[11px] font-semibold uppercase tracking-[0.22em] text-ink-muted">
+                            Live Delivery Location
+                          </label>
+                          <p className="mt-2 text-sm leading-6 text-ink-muted">
+                            Share your current location once so Coffee Hub can show the rider on a live map and auto-complete delivery near your doorstep.
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => {
+                            void handleCaptureCustomerLocation();
+                          }}
+                          disabled={isLocatingCustomer}
+                          className="coffee-btn-primary min-h-11 px-4 text-[11px] uppercase tracking-[0.18em] disabled:opacity-60"
+                        >
+                          {isLocatingCustomer ? 'Locating...' : 'Use Current Location'}
+                        </button>
+                      </div>
+                      <div className="mt-4 rounded-[18px] border border-white/10 bg-[#120d0b]/80 px-4 py-3 text-sm">
+                        {customerDetails.location ? (
+                          <p className="font-semibold text-accent">
+                            Location ready: {customerDetails.location.lat.toFixed(5)}, {customerDetails.location.lng.toFixed(5)}
+                          </p>
+                        ) : (
+                          <p className="text-ink-muted">Location not captured yet.</p>
+                        )}
+                      </div>
+                      {customerLocationError && (
+                        <p className="mt-3 text-xs font-semibold text-primary">{customerLocationError}</p>
+                      )}
                     </div>
                     <div>
                       <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.22em] text-ink-muted">Payment Method</label>

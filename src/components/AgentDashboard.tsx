@@ -1,21 +1,46 @@
 import { useState } from 'react';
 import { Bike, History } from 'lucide-react';
-import type { Order } from '../types';
+import type {
+  AgentTrackerPermissionState,
+  AgentTrackerStatus,
+} from '../agent/agentTracker';
+import AgentDeliveryPage from '../agent/AgentDeliveryPage';
+import type {
+  DeliveryAgent,
+  DeliveryLocation,
+  DeliverySession,
+  Order,
+} from '../types';
 import AgentHistory from './AgentHistory';
-import AgentOrders from './AgentOrders';
 
 type AgentTab = 'active' | 'history';
 
 interface AgentDashboardProps {
   isAuthorized: boolean;
   orders: Order[];
-  onMarkDelivered: (orderDocId: string) => void;
+  activeOrder: Order | null;
+  deliveryAgent: DeliveryAgent | null;
+  deliverySession: DeliverySession | null;
+  isTracking: boolean;
+  lastTrackedLocation: DeliveryLocation | null;
+  permissionState: AgentTrackerPermissionState;
+  trackerStatus: AgentTrackerStatus;
+  onStartDelivery: () => void | Promise<void>;
+  onCompleteDelivery: (orderDocId: string) => void | Promise<void>;
 }
 
 export default function AgentDashboard({
   isAuthorized,
   orders,
-  onMarkDelivered,
+  activeOrder,
+  deliveryAgent,
+  deliverySession,
+  isTracking,
+  lastTrackedLocation,
+  permissionState,
+  trackerStatus,
+  onStartDelivery,
+  onCompleteDelivery,
 }: AgentDashboardProps) {
   const [activeTab, setActiveTab] = useState<AgentTab>('active');
 
@@ -32,7 +57,23 @@ export default function AgentDashboard({
   return (
     <div className="px-4 pb-28 pt-24 sm:px-6">
       {activeTab === 'active' ? (
-        <AgentOrders orders={orders} onMarkDelivered={onMarkDelivered} />
+        <AgentDeliveryPage
+          deliveryAgent={deliveryAgent}
+          deliverySession={deliverySession}
+          isTracking={isTracking}
+          lastTrackedLocation={lastTrackedLocation}
+          onEndDelivery={() => {
+            if (!activeOrder) {
+              return;
+            }
+
+            void onCompleteDelivery(activeOrder.doc_id);
+          }}
+          onStartDelivery={onStartDelivery}
+          order={activeOrder}
+          permissionState={permissionState}
+          trackerStatus={trackerStatus}
+        />
       ) : (
         <AgentHistory orders={orders} />
       )}
