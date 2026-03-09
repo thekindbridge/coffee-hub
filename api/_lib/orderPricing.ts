@@ -1,10 +1,23 @@
 import type { Firestore } from 'firebase-admin/firestore';
-import type { CheckoutOrderDraft, CheckoutOrderItemPayload } from '../../src/types';
-import { ApiError } from './errors';
+
+import { ApiError } from './errors.js';
 
 export const DELIVERY_CHARGE = 50;
 
 type DiscountType = 'percentage' | 'flat';
+
+export interface CheckoutOrderCustomerPayload {
+  name: string;
+  phone: string;
+  address: string;
+}
+
+export interface CheckoutOrderItemPayload {
+  id: string;
+  name: string;
+  quantity: number;
+  price: number;
+}
 
 interface OfferRecord {
   couponCode: string;
@@ -17,7 +30,7 @@ interface OfferRecord {
 
 export interface SanitizedOrderDraft {
   orderId: string;
-  customer: CheckoutOrderDraft['customer'];
+  customer: CheckoutOrderCustomerPayload;
   items: CheckoutOrderItemPayload[];
   couponCode: string;
   subtotal: number;
@@ -35,12 +48,42 @@ export interface ValidatedPricing {
   couponCode: string;
 }
 
+const parseObjectPayload = (value: unknown, invalidMessage: string) => {
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value) as unknown;
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return parsed as Record<string, unknown>;
+      }
+    } catch (error) {
+      console.warn('Failed to parse JSON payload', error);
+    }
+
+    throw new ApiError(400, invalidMessage);
+  }
+
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+
+  throw new ApiError(400, invalidMessage);
+};
+
 const ensureString = (value: unknown, fieldName: string) => {
   if (typeof value !== 'string' || !value.trim()) {
     throw new ApiError(400, `${fieldName} is required.`);
   }
 
   return value.trim();
+};
+
+const ensureOrderId = (value: unknown) => {
+  const orderId = ensureString(value, 'Order ID').toUpperCase();
+  if (orderId.length > 40) {
+    throw new ApiError(400, 'Order ID must be 40 characters or fewer.');
+  }
+
+  return orderId;
 };
 
 const ensureNonNegativeMoney = (value: unknown, fieldName: string) => {
@@ -70,11 +113,8 @@ const normalizeCouponCode = (value: unknown) => {
 };
 
 const parseItem = (value: unknown): CheckoutOrderItemPayload => {
-  if (!value || typeof value !== 'object') {
-    throw new ApiError(400, 'Order item payload is invalid.');
-  }
+  const item = parseObjectPayload(value, 'Order item payload is invalid.');
 
-  const item = value as Record<string, unknown>;
   return {
     id: ensureString(item.id, 'Order item id'),
     name: typeof item.name === 'string' ? item.name.trim() : 'Item',
@@ -84,35 +124,27 @@ const parseItem = (value: unknown): CheckoutOrderItemPayload => {
 };
 
 export const parseOrderDraft = (value: unknown): SanitizedOrderDraft => {
-  if (!value || typeof value !== 'object') {
-    throw new ApiError(400, 'Order payload is invalid.');
-  }
-
-  const payload = value as Record<string, unknown>;
-  const customerValue = payload.customer;
-  if (!customerValue || typeof customerValue !== 'object') {
-    throw new ApiError(400, 'Customer details are required.');
-  }
-
-  const customer = customerValue as Record<string, unknown>;
+  const payload = parseObjectPayload(value, 'Order payload is invalid.');
+  const customer = parseObjectPayload(payload.customer, 'Customer details are required.');
   const itemsValue = Array.isArray(payload.items) ? payload.items : [];
+
   if (itemsValue.length === 0) {
     throw new ApiError(400, 'Your cart is empty.');
   }
 
   return {
-    orderId: ensureString(payload.orderId, 'Order ID').toUpperCase(),
+    orderId: ensureOrderId(payload.orderId),
     customer: {
       name: ensureString(customer.name, 'Customer name'),
       phone: ensureString(customer.phone, 'Phone number'),
       address: ensureString(customer.address, 'Delivery address'),
     },
     items: itemsValue.map(parseItem),
-    couponCode: normalizeCouponCode(payload.couponCode),
+    couponCode: normalizeCouponCode(payload.couponCode ?? payload.coupon_code),
     subtotal: ensureNonNegativeMoney(payload.subtotal, 'Subtotal'),
     discount: ensureNonNegativeMoney(payload.discount, 'Discount'),
-    deliveryFee: ensureNonNegativeMoney(payload.deliveryFee, 'Delivery fee'),
-    finalTotal: ensureNonNegativeMoney(payload.finalTotal, 'Final total'),
+    deliveryFee: ensureNonNegativeMoney(payload.deliveryFee ?? payload.delivery_fee, 'Delivery fee'),
+    finalTotal: ensureNonNegativeMoney(payload.finalTotal ?? payload.final_total, 'Final total'),
   };
 };
 
@@ -126,7 +158,11 @@ const calculateDiscount = (subtotal: number, offer: OfferRecord) => {
     discount = Number(normalizedDiscountValue.toFixed(2));
   }
 
-  if (typeof offer.maxDiscountAmount === 'number' && Number.isFinite(offer.maxDiscountAmount) && offer.maxDiscountAmount >= 0) {
+  if (
+    typeof offer.maxDiscountAmount === 'number' &&
+    Number.isFinite(offer.maxDiscountAmount) &&
+    offer.maxDiscountAmount >= 0
+  ) {
     discount = Math.min(discount, offer.maxDiscountAmount);
   }
 
@@ -151,7 +187,7 @@ export const recalculatePricing = async (
 
     const data = snapshot.data() as Record<string, unknown>;
     menuItemMap.set(snapshot.id, {
-      name: (data.name as string) || 'Item',
+      name: typeof data.name === 'string' ? data.name : 'Item',
       price: ensureNonNegativeMoney(data.price, `Menu price for ${snapshot.id}`),
       isAvailable: data.isAvailable !== false,
     });
@@ -175,7 +211,9 @@ export const recalculatePricing = async (
     };
   });
 
-  const subtotal = Number(validatedItems.reduce((sum, item) => sum + (item.price * item.quantity), 0).toFixed(2));
+  const subtotal = Number(
+    validatedItems.reduce((sum, item) => sum + (item.price * item.quantity), 0).toFixed(2),
+  );
   let couponCode = '';
   let discount = 0;
 
@@ -196,7 +234,7 @@ export const recalculatePricing = async (
     }
 
     if (subtotal < Number(couponData.minOrderAmount || 0)) {
-      throw new ApiError(409, `Coupon requires a minimum order of ₹${couponData.minOrderAmount}.`);
+      throw new ApiError(409, `Coupon requires a minimum order of Rs.${couponData.minOrderAmount}.`);
     }
 
     discount = calculateDiscount(subtotal, couponData);
@@ -218,7 +256,8 @@ export const assertPricingMatches = (orderDraft: SanitizedOrderDraft, pricing: V
     isMoneyEqual(orderDraft.subtotal, pricing.subtotal) &&
     isMoneyEqual(orderDraft.discount, pricing.discount) &&
     isMoneyEqual(orderDraft.deliveryFee, pricing.deliveryFee) &&
-    isMoneyEqual(orderDraft.finalTotal, pricing.finalTotal);
+    isMoneyEqual(orderDraft.finalTotal, pricing.finalTotal) &&
+    orderDraft.couponCode === pricing.couponCode;
 
   if (!matches) {
     throw new ApiError(409, 'Order total mismatch. Please review your cart and try again.');
@@ -226,26 +265,26 @@ export const assertPricingMatches = (orderDraft: SanitizedOrderDraft, pricing: V
 };
 
 export const parseCreateOrderBody = (body: unknown) => {
-  if (!body || typeof body !== 'object') {
-    throw new ApiError(400, 'Request payload is invalid.');
-  }
+  const payload = parseObjectPayload(body, 'Request payload is invalid.');
 
-  const payload = body as Record<string, unknown>;
   return {
-    userId: ensureString(payload.userId, 'User ID'),
+    userId: ensureString(payload.userId ?? payload.user_id, 'User ID'),
     orderDraft: parseOrderDraft(payload.orderDraft),
   };
 };
 
 export const parseVerifyPaymentBody = (body: unknown) => {
-  if (!body || typeof body !== 'object') {
-    throw new ApiError(400, 'Verification payload is invalid.');
-  }
+  const payload = parseObjectPayload(body, 'Verification payload is invalid.');
 
-  const payload = body as Record<string, unknown>;
   return {
-    razorpayOrderId: ensureString(payload.razorpay_order_id, 'Razorpay order ID'),
-    razorpayPaymentId: ensureString(payload.razorpay_payment_id, 'Razorpay payment ID'),
-    razorpaySignature: ensureString(payload.razorpay_signature, 'Razorpay signature'),
+    razorpayOrderId: ensureString(payload.razorpay_order_id ?? payload.razorpayOrderId, 'Razorpay order ID'),
+    razorpayPaymentId: ensureString(
+      payload.razorpay_payment_id ?? payload.razorpayPaymentId,
+      'Razorpay payment ID',
+    ),
+    razorpaySignature: ensureString(
+      payload.razorpay_signature ?? payload.razorpaySignature,
+      'Razorpay signature',
+    ),
   };
 };
