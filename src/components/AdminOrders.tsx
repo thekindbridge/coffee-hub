@@ -11,10 +11,10 @@ interface AdminOrdersProps {
 }
 
 const STATUS_BADGE_CLASS: Record<Order['status'], string> = {
-  Pending: 'border border-amber-300/30 bg-amber-400/20 text-amber-300',
-  Preparing: 'border border-sky-300/30 bg-sky-400/20 text-sky-300',
-  'Out for Delivery': 'border border-orange-300/30 bg-orange-400/20 text-orange-300',
-  Delivered: 'border border-emerald-300/30 bg-emerald-400/20 text-emerald-300',
+  Pending: 'border border-amber-300/30 bg-amber-400/18 text-amber-300',
+  Preparing: 'border border-sky-300/30 bg-sky-400/18 text-sky-300',
+  'Out for Delivery': 'border border-orange-300/30 bg-orange-400/18 text-orange-300',
+  Delivered: 'border border-emerald-300/30 bg-emerald-400/18 text-emerald-300',
 };
 
 export default function AdminOrders({
@@ -29,50 +29,53 @@ export default function AdminOrders({
 
   if (sortedOrders.length === 0) {
     return (
-      <div className="rounded-3xl border border-white/10 bg-white/5 p-6 text-center text-sm text-ink-muted">
+      <div className="coffee-surface-soft rounded-[24px] p-6 text-center text-sm text-ink-muted">
         No orders yet.
       </div>
     );
   }
 
   return (
-    <section className="space-y-3">
-      <h2 className="text-2xl font-black">Orders</h2>
+    <section className="space-y-4">
+      <div>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-secondary">Orders queue</p>
+        <h2 className="mt-1 text-[1.45rem] font-semibold text-accent">Manage live orders</h2>
+      </div>
 
       {sortedOrders.map(order => (
         <article
           key={order.doc_id}
-          className="rounded-3xl border border-white/10 bg-white/5 p-4"
+          className="coffee-surface-soft rounded-[24px] p-4"
         >
-          <div className="grid grid-cols-2 gap-3 text-sm">
+          <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <p className="text-[11px] font-bold uppercase tracking-wide text-ink-muted">Order ID</p>
-              <p className="font-black">#{order.id}</p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-ink-muted">Order ID</p>
+              <p className="mt-1 text-lg font-semibold text-accent">#{order.id}</p>
+            </div>
+            <span className={`inline-flex rounded-full px-3 py-1 text-[11px] font-semibold ${STATUS_BADGE_CLASS[order.status]}`}>
+              {order.status}
+            </span>
+          </div>
+
+          <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-muted">Customer</p>
+              <p className="mt-1 font-semibold text-accent">{order.customer_name}</p>
             </div>
             <div>
-              <p className="text-[11px] font-bold uppercase tracking-wide text-ink-muted">Customer</p>
-              <p className="font-black">{order.customer_name}</p>
-            </div>
-            <div>
-              <p className="text-[11px] font-bold uppercase tracking-wide text-ink-muted">Total Amount</p>
-              <p className="font-black text-primary">{CURRENCY_SYMBOL}{order.total_amount}</p>
-            </div>
-            <div>
-              <p className="text-[11px] font-bold uppercase tracking-wide text-ink-muted">Current Status</p>
-              <span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-black ${STATUS_BADGE_CLASS[order.status]}`}>
-                {order.status}
-              </span>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-muted">Total</p>
+              <p className="mt-1 font-semibold text-highlight">{CURRENCY_SYMBOL}{order.total_amount}</p>
             </div>
           </div>
 
           <div className="mt-4">
-            <label className="mb-2 block text-[11px] font-bold uppercase tracking-wide text-ink-muted">
+            <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-muted">
               Change Status
             </label>
             <select
               value={order.status}
               onChange={event => onUpdateStatus(order.doc_id, event.target.value as Order['status'])}
-              className="min-h-12 w-full rounded-2xl border border-white/10 bg-black/20 px-4 text-sm font-bold focus:border-primary focus:outline-none"
+              className="coffee-input"
             >
               {orderStatuses.map(status => (
                 <option key={status} value={status}>

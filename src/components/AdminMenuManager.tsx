@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { addDoc, collection, deleteDoc, doc, onSnapshot, orderBy, query, updateDoc } from 'firebase/firestore';
+import { Plus, Pencil, Trash2 } from 'lucide-react';
+
 import { db } from '../firebase';
 
 interface AdminMenuItem {
@@ -178,34 +180,35 @@ export default function AdminMenuManager() {
 
   return (
     <section className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-black">Products</h2>
-        <button
-          onClick={handleOpenCreate}
-          className="min-h-12 rounded-2xl bg-primary px-5 text-sm font-black text-white"
-        >
-          Add Product
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-secondary">Menu editor</p>
+          <h2 className="mt-1 text-[1.45rem] font-semibold text-accent">Products</h2>
+        </div>
+        <button onClick={handleOpenCreate} className="coffee-btn-primary">
+          <Plus size={16} />
+          Add
         </button>
       </div>
 
       {isEditorOpen && (
-        <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
-          <h3 className="mb-3 text-lg font-black">{editingId ? 'Edit Product' : 'New Product'}</h3>
+        <div className="coffee-surface-soft rounded-[24px] p-4">
+          <h3 className="text-base font-semibold text-accent">{editingId ? 'Edit product' : 'New product'}</h3>
 
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
             <input
               type="text"
               value={menuForm.name}
               onChange={event => setMenuForm(prev => ({ ...prev, name: event.target.value }))}
               placeholder="Product name"
-              className="min-h-12 rounded-2xl border border-white/10 bg-black/20 px-4 text-sm focus:border-primary focus:outline-none"
+              className="coffee-input"
             />
             <input
               type="text"
               value={menuForm.category}
               onChange={event => setMenuForm(prev => ({ ...prev, category: event.target.value }))}
               placeholder="Category"
-              className="min-h-12 rounded-2xl border border-white/10 bg-black/20 px-4 text-sm focus:border-primary focus:outline-none"
+              className="coffee-input"
             />
             <input
               type="number"
@@ -213,7 +216,7 @@ export default function AdminMenuManager() {
               value={menuForm.price}
               onChange={event => setMenuForm(prev => ({ ...prev, price: event.target.value }))}
               placeholder="Price"
-              className="min-h-12 rounded-2xl border border-white/10 bg-black/20 px-4 text-sm focus:border-primary focus:outline-none"
+              className="coffee-input"
             />
             <input
               type="number"
@@ -222,14 +225,14 @@ export default function AdminMenuManager() {
               value={menuForm.spiceLevel}
               onChange={event => setMenuForm(prev => ({ ...prev, spiceLevel: event.target.value }))}
               placeholder="Spice level"
-              className="min-h-12 rounded-2xl border border-white/10 bg-black/20 px-4 text-sm focus:border-primary focus:outline-none"
+              className="coffee-input"
             />
             <input
               type="url"
               value={menuForm.image}
               onChange={event => setMenuForm(prev => ({ ...prev, image: event.target.value }))}
               placeholder="Image URL"
-              className="min-h-12 rounded-2xl border border-white/10 bg-black/20 px-4 text-sm focus:border-primary focus:outline-none sm:col-span-2"
+              className="coffee-input sm:col-span-2"
             />
           </div>
 
@@ -243,28 +246,22 @@ export default function AdminMenuManager() {
           </label>
 
           <div className="mt-4 flex flex-wrap gap-2">
-            <button
-              onClick={() => void handleSave()}
-              disabled={isSaving}
-              className="min-h-12 rounded-2xl bg-primary px-5 text-sm font-black text-white disabled:opacity-60"
-            >
-              {isSaving ? 'Saving...' : editingId ? 'Update Product' : 'Create Product'}
+            <button onClick={() => void handleSave()} disabled={isSaving} className="coffee-btn-primary disabled:opacity-60">
+              {isSaving ? 'Saving...' : editingId ? 'Update' : 'Create'}
             </button>
             <button
               onClick={() => {
                 setIsEditorOpen(false);
                 resetForm();
               }}
-              className="min-h-12 rounded-2xl border border-white/10 bg-white/5 px-5 text-sm font-bold text-ink-muted"
+              className="coffee-btn-secondary"
             >
               Cancel
             </button>
             {editingId && (
-              <button
-                onClick={() => void handleDeleteItem(editingId)}
-                className="min-h-12 rounded-2xl border border-red-400/20 bg-red-500/10 px-5 text-sm font-bold text-red-300"
-              >
-                Delete Product
+              <button onClick={() => void handleDeleteItem(editingId)} className="coffee-btn-secondary border-red-400/20 bg-red-500/10 text-red-300">
+                <Trash2 size={15} />
+                Delete
               </button>
             )}
           </div>
@@ -272,7 +269,7 @@ export default function AdminMenuManager() {
       )}
 
       {managerError && (
-        <div className="rounded-2xl border border-red-400/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+        <div className="rounded-[22px] border border-red-400/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
           {managerError}
         </div>
       )}
@@ -281,33 +278,36 @@ export default function AdminMenuManager() {
         {menuItems.map(item => (
           <article
             key={item.id}
-            className="rounded-3xl border border-white/10 bg-white/5 p-4"
+            className="coffee-surface-soft flex items-center justify-between gap-3 rounded-[24px] p-4"
           >
-            <div className="flex items-center justify-between gap-3">
-              <button
-                onClick={() => handleEdit(item)}
-                className="text-left"
-              >
-                <p className="text-lg font-black">{item.name}</p>
-                <p className="text-sm text-ink-muted">{CURRENCY_SYMBOL}{item.price}</p>
-              </button>
+            <button onClick={() => handleEdit(item)} className="min-w-0 flex-1 text-left">
+              <div className="flex items-center gap-2">
+                <p className="truncate text-sm font-semibold text-accent">{item.name}</p>
+                <span className="coffee-badge">{item.category}</span>
+              </div>
+              <p className="mt-2 text-sm text-ink-muted">{CURRENCY_SYMBOL}{item.price}</p>
+            </button>
 
+            <div className="flex items-center gap-2">
+              <button onClick={() => handleEdit(item)} className="coffee-icon-btn">
+                <Pencil size={16} />
+              </button>
               <button
                 onClick={() => void handleToggleAvailability(item.id, item.isAvailable)}
-                className={`min-h-12 min-w-20 rounded-2xl px-4 text-sm font-black ${
+                className={`rounded-full px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] ${
                   item.isAvailable
-                    ? 'bg-emerald-500/20 text-emerald-300'
-                    : 'bg-white/10 text-ink-muted'
+                    ? 'border border-emerald-300/20 bg-emerald-500/10 text-emerald-300'
+                    : 'border border-white/10 bg-white/6 text-ink-muted'
                 }`}
               >
-                {item.isAvailable ? 'ON' : 'OFF'}
+                {item.isAvailable ? 'Live' : 'Off'}
               </button>
             </div>
           </article>
         ))}
 
         {menuItems.length === 0 && (
-          <div className="rounded-3xl border border-white/10 bg-white/5 p-5 text-sm text-ink-muted">
+          <div className="coffee-surface-soft rounded-[24px] p-5 text-sm text-ink-muted">
             No products found.
           </div>
         )}

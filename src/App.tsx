@@ -23,7 +23,15 @@ import {
   User,
   ArrowRight,
   CheckCircle2,
-  Search
+  Search,
+  CreditCard,
+  Wallet,
+  LoaderCircle,
+  Sparkles,
+  LogOut,
+  BadgePercent,
+  Leaf,
+  ShieldCheck
 } from 'lucide-react';
 import { FirebaseError } from 'firebase/app';
 import {
@@ -369,6 +377,150 @@ const FoodCard: React.FC<FoodCardProps> = ({ item, onAdd, cartQuantity }) => {
   );
 };
 
+const CoffeeFoodCard: React.FC<FoodCardProps> = ({ item, onAdd, cartQuantity }) => {
+  return (
+    <motion.article
+      layout
+      whileHover={{ y: -4, scale: 1.01 }}
+      whileTap={{ scale: 0.99 }}
+      className="coffee-surface group flex h-full flex-col overflow-hidden rounded-[26px]"
+    >
+      <div className="relative aspect-[1.06] overflow-hidden">
+        <img
+          src={item.image_url}
+          alt={item.name}
+          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+          referrerPolicy="no-referrer"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#0d0907]/92 via-[#0d0907]/10 to-transparent" />
+        <div className="absolute left-3 top-3 flex items-center gap-1.5 rounded-full border border-white/10 bg-[#120d0b]/82 px-2.5 py-1 text-[11px] font-semibold text-accent shadow-lg backdrop-blur-md">
+          {item.is_veg ? <Leaf size={12} className="text-emerald-400" /> : <Flame size={12} className="text-rose-300" />}
+          <span>{item.is_veg ? 'Veg' : 'Non-veg'}</span>
+        </div>
+        <div className="absolute bottom-3 right-3 flex items-center gap-1 rounded-full border border-white/10 bg-[#201612]/82 px-2.5 py-1 text-[11px] font-semibold text-accent backdrop-blur-md">
+          <Star size={12} className="fill-current text-highlight" />
+          <span>{item.rating.toFixed(1)}</span>
+        </div>
+      </div>
+
+      <div className="flex flex-1 flex-col gap-3 p-3.5">
+        <div className="space-y-1">
+          <div className="flex items-start justify-between gap-3">
+            <h3 className="font-display text-[15px] font-semibold leading-snug tracking-[0.01em] text-accent">
+              {item.name}
+            </h3>
+            <div className="coffee-badge shrink-0">
+              <Flame size={12} className="text-highlight" />
+              <span>{Math.max(0, item.spice_level)}/5</span>
+            </div>
+          </div>
+          <p className="line-clamp-2 text-[12px] leading-5 text-ink-muted/88">{item.description}</p>
+        </div>
+
+        <div className="mt-auto flex items-end justify-between gap-3">
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-2 text-[15px] font-semibold text-[#fffaf6]">
+              <Coffee size={14} className="text-secondary" />
+              <span>{CURRENCY_SYMBOL}{item.price}</span>
+            </div>
+            <SpiceMeter level={item.spice_level} />
+          </div>
+
+          {cartQuantity > 0 ? (
+            <div className="flex items-center gap-2 rounded-full border border-white/10 bg-[#120d0b]/92 p-1.5 shadow-[0_14px_30px_rgba(0,0,0,0.22)]">
+              <button
+                onClick={() => onAdd(item, -1)}
+                className="coffee-icon-btn h-9 w-9 rounded-full border-none bg-white/6"
+              >
+                <Minus size={16} />
+              </button>
+              <span className="min-w-5 text-center text-sm font-semibold text-accent">{cartQuantity}</span>
+              <button
+                onClick={() => onAdd(item, 1)}
+                className="coffee-icon-btn h-9 w-9 rounded-full border-none bg-primary text-white hover:text-white"
+              >
+                <Plus size={16} />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => onAdd(item, 1)}
+              className="coffee-btn-primary min-w-[108px] px-3.5"
+            >
+              <Plus size={16} />
+              <span>Add</span>
+            </button>
+          )}
+        </div>
+      </div>
+    </motion.article>
+  );
+};
+
+const MenuSkeletonCard = () => (
+  <div className="coffee-surface overflow-hidden rounded-[26px]">
+    <div className="coffee-skeleton aspect-[1.06]" />
+    <div className="space-y-3 p-3.5">
+      <div className="coffee-skeleton h-4 w-2/3 rounded-full" />
+      <div className="coffee-skeleton h-3 w-full rounded-full" />
+      <div className="coffee-skeleton h-3 w-4/5 rounded-full" />
+      <div className="flex items-center justify-between pt-2">
+        <div className="coffee-skeleton h-4 w-16 rounded-full" />
+        <div className="coffee-skeleton h-10 w-24 rounded-full" />
+      </div>
+    </div>
+  </div>
+);
+
+const BrewingOverlay = ({ visible }: { visible: boolean }) => (
+  <AnimatePresence>
+    {visible && (
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 z-[95] flex items-center justify-center bg-[#0a0705]/82 px-6 backdrop-blur-md"
+      >
+        <motion.div
+          initial={{ opacity: 0, y: 24, scale: 0.96 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: 16, scale: 0.96 }}
+          transition={{ duration: 0.3, ease: 'easeOut' }}
+          className="coffee-surface w-full max-w-[320px] rounded-[30px] p-6 text-center"
+        >
+          <div className="relative mx-auto flex h-20 w-20 items-center justify-center rounded-full border border-white/10 bg-[radial-gradient(circle,rgba(255,179,71,0.15),rgba(111,78,55,0.12))]">
+            <LoaderCircle size={44} className="coffee-loader-ring absolute text-secondary/80" strokeWidth={1.5} />
+            <Coffee size={28} className="relative z-10 text-accent" strokeWidth={1.9} />
+          </div>
+          <div className="mt-5 flex items-center justify-center gap-1.5 text-highlight">
+            {[0, 1, 2, 3].map(bean => (
+              <span key={bean} className="coffee-bean block h-2.5 w-2.5 rounded-full bg-current" />
+            ))}
+          </div>
+          <div className="mt-4 flex items-center justify-center gap-2 text-[11px] font-semibold uppercase tracking-[0.28em] text-secondary">
+            <Sparkles size={14} />
+            Brewing your order
+          </div>
+          <h3 className="mt-3 font-display text-[1.35rem] font-semibold text-accent">
+            Warming up checkout
+          </h3>
+          <p className="mt-2 text-sm leading-6 text-ink-muted">
+            Preparing your cart, payment flow, and confirmation in one smooth pour.
+          </p>
+          <div className="mt-5 overflow-hidden rounded-full border border-white/10 bg-white/6 p-1">
+            <motion.div
+              initial={{ x: '-55%' }}
+              animate={{ x: '140%' }}
+              transition={{ duration: 1.4, repeat: Infinity, ease: 'easeInOut' }}
+              className="h-2 w-24 rounded-full bg-[linear-gradient(90deg,#ffb347,#f5e6d3)]"
+            />
+          </div>
+        </motion.div>
+      </motion.div>
+    )}
+  </AnimatePresence>
+);
+
 // --- Main App ---
 
 export default function App() {
@@ -384,6 +536,7 @@ export default function App() {
   const [userOrders, setUserOrders] = useState<Order[]>([]);
   const [isUserOrdersLoading, setIsUserOrdersLoading] = useState(false);
   const [menu, setMenu] = useState<MenuItem[]>([]);
+  const [isMenuLoading, setIsMenuLoading] = useState(true);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [orderStatus, setOrderStatus] = useState<Order | null>(null);
@@ -456,18 +609,22 @@ export default function App() {
   useEffect(() => {
     if (!isLoggedIn) {
       setMenu([]);
+      setIsMenuLoading(false);
       return;
     }
 
+    setIsMenuLoading(true);
     const menuQuery = collection(db, 'menu_items');
     const unsubscribe = onSnapshot(
       menuQuery,
       snapshot => {
         const firestoreMenuItems = snapshot.docs.map(mapMenuDocToMenuItem).filter(item => item.is_available);
         setMenu(firestoreMenuItems);
+        setIsMenuLoading(false);
       },
       error => {
         console.error('Failed to subscribe to menu items', error);
+        setIsMenuLoading(false);
       },
     );
 
@@ -820,8 +977,8 @@ export default function App() {
   );
   const isPayOnlineSelected = customerDetails.payment === 'Pay Online';
   const checkoutPrimaryActionLabel = isPlacingOrder
-    ? (isPayOnlineSelected ? 'OPENING PAYMENT...' : 'PLACING ORDER...')
-    : (isPayOnlineSelected ? 'PAY ONLINE' : 'CONFIRM ORDER');
+    ? (isPayOnlineSelected ? 'Opening payment...' : 'Placing order...')
+    : (isPayOnlineSelected ? 'Pay online' : 'Confirm order');
 
   useEffect(() => {
     if (!appliedCouponCode) {
@@ -1148,7 +1305,7 @@ export default function App() {
     setCheckoutError('');
 
     try {
-      const idToken = await auth.currentUser?.getIdToken();
+      const idToken = await auth.currentUser?.getIdToken(true);
       if (!idToken) {
         setCheckoutError('Please sign in again before starting payment.');
         setIsPlacingOrder(false);
@@ -1194,7 +1351,7 @@ export default function App() {
           setIsPlacingOrder(true);
 
           try {
-            const verificationToken = await auth.currentUser?.getIdToken();
+            const verificationToken = await auth.currentUser?.getIdToken(true);
             if (!verificationToken) {
               throw new Error('Please sign in again before verifying payment.');
             }
@@ -1259,100 +1416,151 @@ export default function App() {
   };
 
   const renderHome = () => (
-    <div className="pb-24">
-      {/* Hero Section */}
-      <section className="relative h-[60vh] flex items-center px-6 overflow-hidden">
-        <div className="absolute inset-0 z-0">
-          <img 
-            src="https://images.unsplash.com/photo-1512058560366-cd242d4235cd?auto=format&fit=crop&w=1920&q=80" 
-            alt="Hero" 
-            className="w-full h-full object-cover opacity-40"
-            referrerPolicy="no-referrer"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-background via-background/60 to-transparent" />
-        </div>
-        
-        <div className="relative z-10 max-w-xl">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-          >
-            <span className="text-primary font-bold tracking-widest uppercase text-sm mb-2 block">COFFEE HUB - INKOLLU</span>
-            <h1 className="text-5xl md:text-7xl font-display font-black leading-[0.9] mb-6">HOT WOK.<br />
-              <span className="text-primary">FRESH FLAVORS.</span><br />
-              DELIVERED FAST.
-            </h1>
-            <button 
-              onClick={() => setActiveTab('menu')}
-              className="bg-primary hover:bg-red-600 text-white px-8 py-4 rounded-2xl font-black text-lg flex items-center gap-3 transition-all active:scale-95 shadow-lg shadow-primary/20"
-            >
-              ORDER NOW <ArrowRight size={20} />
-            </button>
-          </motion.div>
-        </div>
+    <div className="pb-28">
+      <section className="relative overflow-hidden px-4 pt-20 sm:px-6">
+        <motion.div
+          initial={{ opacity: 0, y: 18 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45 }}
+          className="coffee-surface relative mx-auto overflow-hidden rounded-[30px] px-5 pb-6 pt-5 sm:max-w-screen-md sm:px-6"
+        >
+          <div className="absolute inset-0">
+            <img
+              src="https://images.unsplash.com/photo-1512058560366-cd242d4235cd?auto=format&fit=crop&w=1200&q=80"
+              alt="Coffee HUB hero"
+              className="h-full w-full object-cover opacity-30"
+              referrerPolicy="no-referrer"
+            />
+            <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(12,9,8,0.18),rgba(12,9,8,0.92)_72%)]" />
+          </div>
+
+          <div className="relative z-10 flex flex-col gap-5">
+            <div className="flex items-center justify-between gap-3">
+              <span className="coffee-badge text-accent">
+                <Coffee size={12} className="text-secondary" />
+                Inkollu coffee kitchen
+              </span>
+              <span className="coffee-badge">
+                <MapPin size={12} />
+                Fast local delivery
+              </span>
+            </div>
+
+            <div className="max-w-[18rem] space-y-3">
+              <div className="space-y-2">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.34em] text-secondary">
+                  Brewed for mobile ordering
+                </p>
+                <h1 className="font-display text-[2.25rem] font-semibold leading-[0.95] text-accent sm:text-[2.7rem]">
+                  Hot bowls, rich bites, fast pours.
+                </h1>
+              </div>
+              <p className="text-sm leading-6 text-ink-muted">
+                Compact ordering for hungry evenings, quick reorders, and warm coffee-house vibes.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                onClick={() => setActiveTab('menu')}
+                className="coffee-btn-primary"
+              >
+                <ShoppingBag size={16} />
+                <span>Order now</span>
+              </button>
+              <button
+                onClick={() => setActiveTab('offers')}
+                className="coffee-btn-secondary"
+              >
+                <BadgePercent size={16} />
+                <span>Offers</span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2.5 text-center">
+              {[
+                { label: 'Delivery', value: '20-30m' },
+                { label: 'Fresh picks', value: `${menu.length}+` },
+                { label: 'Rewards', value: activeOffers.length > 0 ? `${activeOffers.length}` : '0' },
+              ].map(metric => (
+                <div key={metric.label} className="coffee-surface-soft rounded-[20px] px-3 py-3">
+                  <p className="text-[15px] font-semibold text-accent">{metric.value}</p>
+                  <p className="mt-1 text-[11px] uppercase tracking-[0.18em] text-ink-muted">{metric.label}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </motion.div>
       </section>
 
       {activeOffers[0] && (
-        <div className="relative z-20 -mt-10 px-6">
+        <section className="px-4 pt-4 sm:px-6">
           <motion.div
-            whileHover={{ scale: 1.02 }}
-            className="relative flex items-center justify-between overflow-hidden rounded-3xl bg-accent p-6 text-black"
+            whileHover={{ y: -2 }}
+            className="mx-auto flex max-w-screen-md items-center gap-3 rounded-[24px] border border-secondary/20 bg-[linear-gradient(135deg,rgba(192,138,93,0.18),rgba(61,41,31,0.96))] px-4 py-4 shadow-[0_16px_36px_rgba(0,0,0,0.22)]"
           >
-            <div className="relative z-10">
-              <h3 className="text-2xl font-black">{activeOffers[0].title}</h3>
-              <p className="font-bold opacity-80">{activeOffers[0].description}</p>
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#ffcc8a,#ffb347)] text-[#3c2518]">
+              <Tag size={18} />
             </div>
-            <div className="relative z-10 rounded-xl bg-black px-4 py-2 text-sm font-black text-white">
-              USE: {activeOffers[0].couponCode}
+            <div className="min-w-0 flex-1">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-secondary">Today&apos;s pour</p>
+              <p className="mt-1 truncate text-sm font-semibold text-accent">{activeOffers[0].title}</p>
+              <p className="mt-0.5 line-clamp-1 text-xs text-ink-muted">{activeOffers[0].description}</p>
             </div>
-            <motion.div
-              className="absolute -bottom-4 -right-4 opacity-20"
-              animate={{ rotate: [0, 8, 0], scale: [1, 1.04, 1] }}
-              transition={{ duration: 2.6, repeat: Infinity }}
-            >
-              <Tag size={120} />
-            </motion.div>
+            <div className="rounded-full border border-white/10 bg-[#130e0c]/85 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-accent">
+              {activeOffers[0].couponCode}
+            </div>
           </motion.div>
-        </div>
+        </section>
       )}
-      {/* Popular Items */}
-      <section className="mt-12 px-6">
-        <div className="flex justify-between items-end mb-6">
-          <h2 className="text-2xl font-black">Popular Items</h2>
-          <button onClick={() => setActiveTab('menu')} className="text-primary font-bold flex items-center gap-1">
-            View All <ChevronRight size={16} />
-          </button>
-        </div>
-        
-        <div className="flex gap-4 overflow-x-auto no-scrollbar pb-4 -mx-6 px-6">
-          {menu.slice(0, 5).map(item => (
-            <div key={item.id} className="min-w-[240px]">
-              <FoodCard 
-                item={item} 
-                onAdd={handleAddToCart} 
-                cartQuantity={cartQuantityById.get(item.id) || 0} 
-              />
-            </div>
-          ))}
-        </div>
-      </section>
 
-      {/* Features */}
-      <section className="mt-12 px-6 grid grid-cols-2 gap-4">
-        <div className="bg-white/5 p-6 rounded-3xl border border-white/10 flex flex-col items-center text-center">
-          <div className="w-12 h-12 bg-primary/20 rounded-2xl flex items-center justify-center text-primary mb-4">
-            <Clock size={24} />
+      <section className="px-4 pt-6 sm:px-6">
+        <div className="mx-auto max-w-screen-md space-y-4">
+          <div className="flex items-end justify-between gap-3">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-secondary">Popular right now</p>
+              <h2 className="mt-1 text-[1.45rem] font-semibold text-accent">Quick picks</h2>
+            </div>
+            <button onClick={() => setActiveTab('menu')} className="coffee-btn-secondary min-h-10 px-3">
+              <span>Menu</span>
+              <ChevronRight size={16} />
+            </button>
           </div>
-          <h4 className="font-bold mb-1">Fast Delivery</h4>
-          <p className="text-xs text-ink-muted">Under 30 mins</p>
-        </div>
-        <div className="bg-white/5 p-6 rounded-3xl border border-white/10 flex flex-col items-center text-center">
-          <div className="w-12 h-12 bg-accent/20 rounded-2xl flex items-center justify-center text-accent mb-4">
-            <CheckCircle2 size={24} />
+
+          <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-2 no-scrollbar sm:mx-0 sm:px-0">
+            {isMenuLoading
+              ? [...Array(4)].map((_, index) => (
+                  <div key={index} className="min-w-[228px] max-w-[228px]">
+                    <MenuSkeletonCard />
+                  </div>
+                ))
+              : menu.slice(0, 6).map(item => (
+                  <div key={item.id} className="min-w-[228px] max-w-[228px]">
+                    <CoffeeFoodCard
+                      item={item}
+                      onAdd={handleAddToCart}
+                      cartQuantity={cartQuantityById.get(item.id) || 0}
+                    />
+                  </div>
+                ))}
           </div>
-          <h4 className="font-bold mb-1">Hygiene First</h4>
-          <p className="text-xs text-ink-muted">Safety certified</p>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="coffee-surface-soft rounded-[24px] px-4 py-4">
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/25 text-secondary">
+                <Clock size={20} />
+              </div>
+              <h3 className="mt-4 text-sm font-semibold text-accent">Fast lanes</h3>
+              <p className="mt-1 text-xs leading-5 text-ink-muted">Compact checkout built for quick repeat orders on mobile.</p>
+            </div>
+            <div className="coffee-surface-soft rounded-[24px] px-4 py-4">
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-highlight/12 text-highlight">
+                <ShieldCheck size={20} />
+              </div>
+              <h3 className="mt-4 text-sm font-semibold text-accent">Fresh & safe</h3>
+              <p className="mt-1 text-xs leading-5 text-ink-muted">Secure payments, clean prep, and order tracking from one drawer.</p>
+            </div>
+          </div>
         </div>
       </section>
     </div>
@@ -1403,53 +1611,67 @@ export default function App() {
     </div>
   );
   const renderMenu = () => (
-    <div id="menu-section" className="pt-20 pb-24 px-6">
-      <div className="sticky top-20 z-30 bg-background/80 backdrop-blur-xl -mx-6 px-6 py-4 border-b border-white/5">
-        <div className="relative mb-4">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-ink-muted" size={18} />
-          <input 
-            type="text" 
-            placeholder="Search for noodles, rice..." 
-            className="w-full bg-white/5 border border-white/10 rounded-2xl py-3 pl-12 pr-4 focus:outline-none focus:border-primary transition-colors"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-        </div>
-        
-        <div className="flex gap-2 overflow-x-auto no-scrollbar">
-          {categories.map(cat => (
-            <button
-              key={cat}
-              onClick={() => setSelectedCategory(cat)}
-              className={`px-4 py-2 rounded-xl text-sm font-bold whitespace-nowrap transition-all ${
-                selectedCategory === cat 
-                ? "bg-primary text-white" 
-                : "bg-white/5 text-ink-muted hover:bg-white/10"
-              }`}
-            >
-              {cat}
-            </button>
-          ))}
-        </div>
-      </div>
+    <div id="menu-section" className="px-4 pb-28 pt-20 sm:px-6">
+      <div className="mx-auto max-w-screen-md">
+        <div className="sticky top-[72px] z-30 rounded-[28px] border border-white/8 bg-[#0f0b09]/88 px-3 py-3 backdrop-blur-xl">
+          <div className="relative mb-3">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-ink-muted" size={18} />
+            <input
+              type="text"
+              placeholder="Search noodles, rice, drinks..."
+              className="coffee-input pl-11"
+              value={searchQuery}
+              onChange={event => setSearchQuery(event.target.value)}
+            />
+          </div>
 
-      <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-6">
-        {filteredMenu.map(item => (
-          <FoodCard 
-            key={item.id} 
-            item={item} 
-            onAdd={handleAddToCart} 
-            cartQuantity={cartQuantityById.get(item.id) || 0} 
-          />
-        ))}
-      </div>
-      
-      {filteredMenu.length === 0 && (
-        <div className="py-20 text-center">
-          <Search size={48} className="mx-auto text-ink-muted mb-4 opacity-20" />
-          <p className="text-ink-muted">No items found matching your search.</p>
+          <div className="flex gap-2 overflow-x-auto no-scrollbar">
+            {categories.map(cat => (
+              <button
+                key={cat}
+                onClick={() => setSelectedCategory(cat)}
+                className={`coffee-tab whitespace-nowrap ${
+                  selectedCategory === cat ? 'coffee-tab-active' : 'bg-white/5 text-ink-muted hover:bg-white/8'
+                }`}
+              >
+                <Coffee size={13} className={selectedCategory === cat ? 'text-highlight' : 'text-secondary'} />
+                <span>{cat}</span>
+              </button>
+            ))}
+          </div>
         </div>
-      )}
+
+        <div className="mt-5 flex items-end justify-between gap-3">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-secondary">Menu board</p>
+            <h2 className="mt-1 text-[1.35rem] font-semibold text-accent">
+              {selectedCategory === 'All' ? 'Everything fresh today' : selectedCategory}
+            </h2>
+          </div>
+          <span className="coffee-badge">{isMenuLoading ? 'Loading...' : `${filteredMenu.length} items`}</span>
+        </div>
+
+        <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {isMenuLoading
+            ? [...Array(6)].map((_, index) => <MenuSkeletonCard key={index} />)
+            : filteredMenu.map(item => (
+                <CoffeeFoodCard
+                  key={item.id}
+                  item={item}
+                  onAdd={handleAddToCart}
+                  cartQuantity={cartQuantityById.get(item.id) || 0}
+                />
+              ))}
+        </div>
+
+        {!isMenuLoading && filteredMenu.length === 0 && (
+          <div className="coffee-surface-soft mt-6 rounded-[26px] px-5 py-10 text-center">
+            <Search size={42} className="mx-auto text-ink-muted/40" />
+            <p className="mt-4 text-sm font-semibold text-accent">No items match your search</p>
+            <p className="mt-2 text-xs leading-5 text-ink-muted">Try a different keyword or switch the category chip above.</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 
@@ -1732,28 +1954,30 @@ export default function App() {
 
   if (isAdmin) {
     return (
-      <div className="min-h-screen bg-background text-ink selection:bg-primary/30">
-        <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-xl border-b border-white/5 px-6 py-4 flex justify-between items-center">
-          <div className="flex items-center gap-2">
-            <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center shadow-lg shadow-primary/20">
-              <User className="text-white" />
+      <div className="app-shell">
+        <header className="fixed left-0 right-0 top-0 z-50 border-b border-white/6 bg-[#120d0b]/78 px-4 py-3 backdrop-blur-xl sm:px-6">
+          <div className="mx-auto flex max-w-screen-md items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-[18px] bg-[linear-gradient(135deg,#8b6145,#4e3427)] shadow-[0_14px_30px_rgba(62,39,35,0.32)]">
+                <User className="text-accent" size={18} />
+              </div>
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.26em] text-secondary">Admin console</p>
+                <p className="mt-1 text-sm font-semibold text-accent">Coffee HUB operations</p>
+              </div>
             </div>
-            <span className="font-display font-black text-xl tracking-tighter">ADMIN <span className="text-primary">CONSOLE</span></span>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="hidden text-xs font-bold text-ink-muted sm:block">{currentUserEmail}</span>
             <button
               onClick={() => {
                 void handleLogout();
               }}
-              className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-ink-muted hover:bg-white/10"
+              className="coffee-icon-btn"
             >
-              Logout
+              <LogOut size={18} />
             </button>
           </div>
         </header>
 
-        <main className="max-w-5xl mx-auto">
+        <main className="mx-auto max-w-screen-md">
           <AdminDashboard
             orders={adminOrders}
             offers={offers}
@@ -1776,28 +2000,30 @@ export default function App() {
 
   if (isDeliveryAgent) {
     return (
-      <div className="min-h-screen bg-background text-ink selection:bg-primary/30">
-        <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-xl border-b border-white/5 px-6 py-4 flex justify-between items-center">
-          <div className="flex items-center gap-2">
-            <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center shadow-lg shadow-primary/20">
-              <MapPin className="text-white" />
+      <div className="app-shell">
+        <header className="fixed left-0 right-0 top-0 z-50 border-b border-white/6 bg-[#120d0b]/78 px-4 py-3 backdrop-blur-xl sm:px-6">
+          <div className="mx-auto flex max-w-screen-md items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-[18px] bg-[linear-gradient(135deg,#8b6145,#4e3427)] shadow-[0_14px_30px_rgba(62,39,35,0.32)]">
+                <MapPin className="text-accent" size={18} />
+              </div>
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.26em] text-secondary">Delivery panel</p>
+                <p className="mt-1 text-sm font-semibold text-accent">Orders on the move</p>
+              </div>
             </div>
-            <span className="font-display font-black text-xl tracking-tighter">DELIVERY <span className="text-primary">PANEL</span></span>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="hidden text-xs font-bold text-ink-muted sm:block">{currentUserEmail}</span>
             <button
               onClick={() => {
                 void handleLogout();
               }}
-              className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-ink-muted hover:bg-white/10"
+              className="coffee-icon-btn"
             >
-              Logout
+              <LogOut size={18} />
             </button>
           </div>
         </header>
 
-        <main className="max-w-4xl mx-auto">
+        <main className="mx-auto max-w-screen-md">
           <AgentDashboard
             isAuthorized={currentUserEmail.toLowerCase() === DELIVERY_AGENT_EMAIL}
             orders={adminOrders}
@@ -1811,31 +2037,41 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-background text-ink selection:bg-primary/30">
-      {/* Header */}
-      <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-xl border-b border-white/5 px-6 py-4 flex justify-between items-center">
-        <div className="flex items-center gap-2 cursor-pointer" onClick={() => setActiveTab('home')}>
-          <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center shadow-lg shadow-primary/20">
-            <Flame className="text-white" fill="white" />
-          </div>
-          <span className="font-display font-black text-xl tracking-tighter">COFFE <span className="text-primary">HUB</span></span>
-        </div>
-        
-        <div className="flex items-center gap-3">
-          <span className="hidden text-xs font-bold text-ink-muted sm:block">{currentUserEmail}</span>
+    <div className="app-shell">
+      <header className="fixed left-0 right-0 top-0 z-50 border-b border-white/6 bg-[#120d0b]/78 px-4 py-3 backdrop-blur-xl sm:px-6">
+        <div className="mx-auto flex max-w-screen-md items-center justify-between gap-3">
           <button
-            onClick={() => {
-              void handleLogout();
-            }}
-            className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-ink-muted hover:bg-white/10"
+            onClick={() => setActiveTab('home')}
+            className="flex items-center gap-3 text-left"
           >
-            Logout
+            <div className="flex h-11 w-11 items-center justify-center rounded-[18px] bg-[linear-gradient(135deg,#8b6145,#4e3427)] shadow-[0_14px_30px_rgba(62,39,35,0.32)]">
+              <Coffee className="text-accent" size={20} />
+            </div>
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.26em] text-secondary">Coffee HUB</p>
+              <p className="mt-1 text-sm font-semibold text-accent">Fresh food, brewed fast</p>
+            </div>
           </button>
+
+          <div className="flex items-center gap-2">
+            <div className="hidden rounded-full border border-white/10 bg-white/5 px-3 py-2 text-[11px] font-medium text-ink-muted sm:block">
+              {currentUserEmail}
+            </div>
+            <button
+              onClick={() => {
+                void handleLogout();
+              }}
+              className="coffee-icon-btn"
+              aria-label="Logout"
+            >
+              <LogOut size={18} />
+            </button>
+          </div>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="max-w-4xl mx-auto">
+      <main className="mx-auto max-w-screen-md">
         {activeTab === 'home' && renderHome()}
         {activeTab === 'menu' && renderMenu()}
         {activeTab === 'offers' && renderOffers()}
@@ -1883,22 +2119,27 @@ export default function App() {
           initial={{ y: 100 }}
           animate={{ y: 0 }}
           onClick={() => setIsCartOpen(true)}
-          className="fixed bottom-24 left-6 right-6 z-40 bg-primary text-white p-4 rounded-2xl flex items-center justify-between shadow-2xl shadow-primary/40 font-black active:scale-95 transition-transform"
+          className="fixed bottom-24 left-4 right-4 z-40 mx-auto flex max-w-screen-md items-center justify-between rounded-[24px] border border-white/10 bg-[linear-gradient(135deg,rgba(111,78,55,0.96),rgba(62,39,35,0.96))] px-4 py-3 text-white shadow-[0_22px_40px_rgba(40,22,16,0.45)] active:scale-[0.98] sm:left-6 sm:right-6"
         >
           <div className="flex items-center gap-3">
-            <div className="bg-white/20 px-2 py-1 rounded-lg text-xs">{cartCount} ITEMS</div>
-            <span>VIEW CART</span>
+            <div className="rounded-full bg-white/18 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em]">
+              {cartCount} item{cartCount === 1 ? '' : 's'}
+            </div>
+            <div className="text-left">
+              <p className="text-[11px] uppercase tracking-[0.2em] text-white/70">Cart ready</p>
+              <p className="text-sm font-semibold text-accent">View bag</p>
+            </div>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-2 text-[15px] font-semibold">
             <span>₹{payableCartTotal}</span>
-            <ChevronRight size={20} />
+            <ChevronRight size={18} />
           </div>
         </motion.button>
       )}
 
       {/* Bottom Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-background/90 backdrop-blur-2xl border-t border-white/5 px-6 py-3">
-        <div className="max-w-md mx-auto flex justify-between items-center">
+      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/8 bg-[#0f0b09]/92 px-4 py-3 backdrop-blur-2xl sm:px-6">
+        <div className="mx-auto grid max-w-screen-md grid-cols-5 gap-2 rounded-[24px] border border-white/8 bg-[#120d0b]/88 p-2 shadow-[0_-10px_36px_rgba(0,0,0,0.16)]">
           {[
             {
               id: 'home',
@@ -1939,12 +2180,12 @@ export default function App() {
             <button
               key={item.id}
               onClick={item.onClick}
-              className={`flex flex-col items-center gap-1 transition-all ${
-                item.active ? "text-primary" : "text-ink-muted hover:text-ink"
+              className={`coffee-nav-pill ${
+                item.active ? 'coffee-nav-pill-active' : 'hover:bg-white/5 hover:text-accent'
               }`}
             >
-              <item.icon size={22} strokeWidth={item.active ? 2.5 : 2} />
-              <span className="text-[10px] font-bold uppercase tracking-wider">{item.label}</span>
+              <item.icon size={20} strokeWidth={item.active ? 2.4 : 2} />
+              <span>{item.label}</span>
             </button>
           ))}
         </div>
@@ -1954,81 +2195,97 @@ export default function App() {
       <AnimatePresence>
         {isCartOpen && (
           <>
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsCartOpen(false)}
-              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60]"
+              className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm"
             />
             <motion.div
               initial={{ y: "100%" }}
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
               transition={{ type: "spring", damping: 25, stiffness: 200 }}
-              className="fixed bottom-0 left-0 right-0 z-[70] bg-background rounded-t-[40px] border-t border-white/10 max-h-[90vh] flex flex-col"
+              className="fixed bottom-0 left-0 right-0 z-[70] mx-auto flex max-h-[90vh] max-w-screen-md flex-col rounded-t-[32px] border border-white/8 bg-[linear-gradient(180deg,rgba(23,16,14,0.98),rgba(11,8,7,0.98))] shadow-[0_-24px_60px_rgba(0,0,0,0.42)]"
             >
-              <div className="p-6 flex justify-between items-center border-b border-white/5">
-                <h2 className="text-2xl font-black">Your Cart</h2>
-                <button onClick={() => setIsCartOpen(false)} className="w-10 h-10 bg-white/5 rounded-full flex items-center justify-center">
-                  <X size={20} />
-                </button>
+              <div className="border-b border-white/6 px-5 pb-4 pt-3">
+                <div className="mx-auto mb-4 h-1.5 w-14 rounded-full bg-white/10" />
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-secondary">Cart drawer</p>
+                    <h2 className="mt-1 text-[1.55rem] font-semibold text-accent">
+                      {checkoutStep === 'cart' ? 'Your cart' : checkoutStep === 'details' ? 'Checkout details' : 'Order ready'}
+                    </h2>
+                  </div>
+                  <button onClick={() => setIsCartOpen(false)} className="coffee-icon-btn">
+                    <X size={18} />
+                  </button>
+                </div>
               </div>
 
-              <div className="flex-grow overflow-y-auto p-6 space-y-6">
+              <div className="flex-grow space-y-5 overflow-y-auto px-5 pb-5 pt-4">
                 {checkoutStep === 'cart' && (
                   <>
                     {!hasCartItems ? (
                       <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="flex min-h-[320px] flex-col items-center justify-center text-center"
+                        className="coffee-surface-soft flex min-h-[320px] flex-col items-center justify-center rounded-[28px] px-6 text-center"
                       >
-                        <p className="text-3xl font-black">{'\uD83D\uDED2'} Cart is Empty</p>
-                        <p className="mt-2 text-ink-muted">
+                        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/16 text-secondary">
+                          <ShoppingBag size={28} />
+                        </div>
+                        <p className="mt-5 text-[1.4rem] font-semibold text-accent">Your cart is empty</p>
+                        <p className="mt-2 text-sm leading-6 text-ink-muted">
                           Add items from menu to start your order.
                         </p>
                         <button
                           onClick={handleBrowseMenu}
-                          className="mt-6 rounded-2xl bg-primary px-6 py-3 text-sm font-black text-white"
+                          className="coffee-btn-primary mt-6"
                         >
+                          <ArrowRight size={16} />
                           Browse Menu
                         </button>
                       </motion.div>
                     ) : (
                       <>
                         {cart.map(item => (
-                          <div key={item.id} className="flex gap-4">
-                            <div className="w-20 h-20 rounded-2xl overflow-hidden flex-shrink-0">
+                          <div key={item.id} className="coffee-surface-soft flex gap-3 rounded-[24px] p-3">
+                            <div className="h-[78px] w-[78px] overflow-hidden rounded-[20px] flex-shrink-0">
                               <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" />
                             </div>
-                            <div className="flex-grow">
-                              <h4 className="font-bold">{item.name}</h4>
-                              <p className="text-primary font-bold">{CURRENCY_SYMBOL}{item.price}</p>
-                              <div className="mt-2 flex items-center gap-4">
-                                <div className="flex items-center bg-white/5 rounded-xl p-1 gap-3">
-                                  <button onClick={() => handleAddToCart(item, -1)} className="p-1 hover:bg-white/10 rounded-lg">
+                            <div className="min-w-0 flex-grow">
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <h4 className="truncate text-sm font-semibold text-accent">{item.name}</h4>
+                                  <p className="mt-1 text-sm font-semibold text-secondary">{CURRENCY_SYMBOL}{item.price}</p>
+                                </div>
+                                <div className="text-sm font-semibold text-accent">{CURRENCY_SYMBOL}{item.price * item.quantity}</div>
+                              </div>
+                              <div className="mt-3 flex items-center justify-between gap-3">
+                                <div className="flex items-center gap-2 rounded-full border border-white/10 bg-[#120d0b]/92 p-1.5">
+                                  <button onClick={() => handleAddToCart(item, -1)} className="coffee-icon-btn h-8 w-8 rounded-full border-none bg-white/6">
                                     <Minus size={14} />
                                   </button>
-                                  <span className="font-bold text-sm">{item.quantity}</span>
-                                  <button onClick={() => handleAddToCart(item, 1)} className="p-1 hover:bg-white/10 rounded-lg">
+                                  <span className="min-w-5 text-center text-sm font-semibold text-accent">{item.quantity}</span>
+                                  <button onClick={() => handleAddToCart(item, 1)} className="coffee-icon-btn h-8 w-8 rounded-full border-none bg-primary text-white hover:text-white">
                                     <Plus size={14} />
                                   </button>
                                 </div>
                                 <button
                                   onClick={() => handleRemoveFromCart(item.id)}
-                                  className="text-xs font-bold uppercase tracking-wide text-ink-muted hover:text-white"
+                                  className="text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-muted hover:text-accent"
                                 >
                                   Remove
                                 </button>
                               </div>
                             </div>
-                            <div className="font-black">{CURRENCY_SYMBOL}{item.price * item.quantity}</div>
                           </div>
                         ))}
 
-                        <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                          <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-ink-muted">
+                        <div className="coffee-surface-soft rounded-[24px] p-4">
+                          <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.24em] text-ink-muted">
                             Enter Coupon Code
                           </label>
                           <div className="flex gap-2">
@@ -2037,12 +2294,12 @@ export default function App() {
                               value={couponInput}
                               onChange={e => setCouponInput(e.target.value.toUpperCase())}
                               placeholder="e.g. SAVE20"
-                              className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm uppercase focus:border-primary focus:outline-none"
+                              className="coffee-input min-h-11 uppercase"
                             />
                             <button
                               onClick={() => void handleApplyCoupon()}
                               disabled={isApplyingCoupon || !hasCartItems}
-                              className="rounded-xl bg-primary px-4 py-2 text-xs font-black text-white disabled:opacity-60"
+                              className="coffee-btn-primary min-h-11 px-4 text-[11px] uppercase tracking-[0.16em] disabled:opacity-60"
                             >
                               {isApplyingCoupon ? 'APPLYING...' : 'APPLY'}
                             </button>
@@ -2050,12 +2307,12 @@ export default function App() {
                           {appliedCouponCode && (
                             <button
                               onClick={handleRemoveCoupon}
-                              className="mt-2 text-xs font-bold uppercase tracking-wide text-ink-muted hover:text-white"
+                              className="mt-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-muted hover:text-accent"
                             >
                               Remove Coupon
                             </button>
                           )}
-                          {couponError && <p className="mt-2 text-xs font-bold text-primary">{couponError}</p>}
+                          {couponError && <p className="mt-2 text-xs font-semibold text-primary">{couponError}</p>}
                           <AnimatePresence mode="wait">
                             {couponSuccess && (
                               <motion.p
@@ -2063,7 +2320,7 @@ export default function App() {
                                 initial={{ opacity: 0, y: 6 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 exit={{ opacity: 0, y: -6 }}
-                                className="mt-2 text-xs font-bold text-emerald-400"
+                                className="mt-2 text-xs font-semibold text-emerald-400"
                               >
                                 {couponSuccess}
                               </motion.p>
@@ -2071,8 +2328,8 @@ export default function App() {
                           </AnimatePresence>
                         </div>
 
-                        <div className="space-y-2 border-t border-white/5 pt-6">
-                          <div className="flex justify-between text-ink-muted">
+                        <div className="coffee-surface-soft space-y-2 rounded-[24px] p-4">
+                          <div className="flex justify-between text-sm text-ink-muted">
                             <span>Subtotal</span>
                             <span>{CURRENCY_SYMBOL}{cartTotal}</span>
                           </div>
@@ -2083,21 +2340,21 @@ export default function App() {
                                 initial={{ opacity: 0, y: 6 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 exit={{ opacity: 0, y: -6 }}
-                                className="flex justify-between text-emerald-400"
+                                className="flex justify-between text-sm text-emerald-400"
                               >
                                 <span>Discount</span>
                                 <span>-{CURRENCY_SYMBOL}{discountAmount}</span>
                               </motion.div>
                             )}
                           </AnimatePresence>
-                          <div className="flex justify-between text-ink-muted">
+                          <div className="flex justify-between text-sm text-ink-muted">
                             <span>Delivery Fee</span>
                             <span>{CURRENCY_SYMBOL}{deliveryFee}</span>
                           </div>
                           {appliedCouponCode && (
-                            <div className="flex justify-between text-ink-muted">
+                            <div className="flex justify-between text-sm text-ink-muted">
                               <span>Coupon Applied</span>
-                              <span className="font-bold text-accent">{appliedCouponCode}</span>
+                              <span className="font-semibold text-accent">{appliedCouponCode}</span>
                             </div>
                           )}
                           <motion.div
@@ -2108,10 +2365,10 @@ export default function App() {
                               scale: isCouponAppliedPulseVisible ? [1, 1.03, 1] : 1,
                             }}
                             transition={{ duration: 0.35 }}
-                            className="flex justify-between pt-2 text-xl font-black"
+                            className="flex justify-between border-t border-white/6 pt-3 text-[1.05rem] font-semibold"
                           >
                             <span>Final Total</span>
-                            <span className="text-primary">{CURRENCY_SYMBOL}{payableCartTotal}</span>
+                            <span className="text-highlight">{CURRENCY_SYMBOL}{payableCartTotal}</span>
                           </motion.div>
                         </div>
                       </>
@@ -2120,22 +2377,22 @@ export default function App() {
                 )}
                 {checkoutStep === 'details' && (
                   <div className="space-y-5">
-                    <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
+                    <div className="coffee-surface-soft rounded-[26px] p-4">
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-xs font-bold uppercase tracking-wide text-ink-muted">Order Summary</p>
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-ink-muted">Order Summary</p>
                           <p className="mt-1 text-sm text-ink-muted">{cartCount} item{cartCount === 1 ? '' : 's'} in this order</p>
                         </div>
-                        <p className="text-lg font-black text-primary">{CURRENCY_SYMBOL}{payableCartTotal}</p>
+                        <p className="text-lg font-semibold text-highlight">{CURRENCY_SYMBOL}{payableCartTotal}</p>
                       </div>
                       <div className="mt-4 space-y-3">
                         {cart.map(item => (
                           <div key={`summary-${item.id}`} className="flex items-start justify-between gap-4 text-sm">
                             <div>
-                              <p className="font-bold">{item.name}</p>
+                              <p className="font-semibold text-accent">{item.name}</p>
                               <p className="text-xs text-ink-muted">Qty {item.quantity}</p>
                             </div>
-                            <span className="font-bold text-ink-muted">{CURRENCY_SYMBOL}{item.price * item.quantity}</span>
+                            <span className="font-semibold text-ink-muted">{CURRENCY_SYMBOL}{item.price * item.quantity}</span>
                           </div>
                         ))}
                       </div>
@@ -2154,18 +2411,18 @@ export default function App() {
                           <span>Delivery Charge</span>
                           <span>{CURRENCY_SYMBOL}{deliveryFee}</span>
                         </div>
-                        <div className="flex justify-between pt-2 text-base font-black">
+                        <div className="flex justify-between pt-2 text-base font-semibold">
                           <span>Total Amount</span>
-                          <span className="text-primary">{CURRENCY_SYMBOL}{payableCartTotal}</span>
+                          <span className="text-highlight">{CURRENCY_SYMBOL}{payableCartTotal}</span>
                         </div>
                       </div>
                     </div>
 
                     <div>
-                      <label className="mb-2 block text-xs font-bold uppercase text-ink-muted">Full Name</label>
+                      <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.22em] text-ink-muted">Full Name</label>
                       <input
                         type="text"
-                        className="w-full rounded-2xl border border-white/10 bg-white/5 p-4 focus:border-primary focus:outline-none"
+                        className="coffee-input"
                         value={customerDetails.name}
                         onChange={event => {
                           setCheckoutError('');
@@ -2174,10 +2431,10 @@ export default function App() {
                       />
                     </div>
                     <div>
-                      <label className="mb-2 block text-xs font-bold uppercase text-ink-muted">Phone Number</label>
+                      <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.22em] text-ink-muted">Phone Number</label>
                       <input
                         type="tel"
-                        className="w-full rounded-2xl border border-white/10 bg-white/5 p-4 focus:border-primary focus:outline-none"
+                        className="coffee-input"
                         value={customerDetails.phone}
                         onChange={event => {
                           setCheckoutError('');
@@ -2186,9 +2443,9 @@ export default function App() {
                       />
                     </div>
                     <div>
-                      <label className="mb-2 block text-xs font-bold uppercase text-ink-muted">Delivery Address</label>
+                      <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.22em] text-ink-muted">Delivery Address</label>
                       <textarea
-                        className="h-24 w-full rounded-2xl border border-white/10 bg-white/5 p-4 focus:border-primary focus:outline-none"
+                        className="coffee-textarea"
                         value={customerDetails.address}
                         onChange={event => {
                           setCheckoutError('');
@@ -2197,7 +2454,7 @@ export default function App() {
                       />
                     </div>
                     <div>
-                      <label className="mb-2 block text-xs font-bold uppercase text-ink-muted">Payment Method</label>
+                      <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.22em] text-ink-muted">Payment Method</label>
                       <div className="grid grid-cols-2 gap-3">
                         {CHECKOUT_PAYMENT_OPTIONS.map(method => (
                           <button
@@ -2206,14 +2463,17 @@ export default function App() {
                               setCheckoutError('');
                               setCustomerDetails(prev => ({ ...prev, payment: method }));
                             }}
-                            className={`rounded-2xl border p-4 text-left transition-all ${
+                            className={`rounded-[24px] border px-4 py-4 text-left transition-all ${
                               customerDetails.payment === method
-                                ? 'border-primary bg-primary/15 text-white shadow-lg shadow-primary/10'
+                                ? 'border-secondary/40 bg-[linear-gradient(135deg,rgba(111,78,55,0.52),rgba(62,39,35,0.96))] text-white shadow-[0_16px_32px_rgba(62,39,35,0.24)]'
                                 : 'border-white/10 bg-white/5 text-ink-muted'
                             }`}
                           >
-                            <p className="font-bold">{method}</p>
-                            <p className="mt-1 text-xs">
+                            <div className="flex items-center gap-2">
+                              {method === 'Pay Online' ? <CreditCard size={17} className="text-highlight" /> : <Wallet size={17} className="text-secondary" />}
+                              <p className="text-sm font-semibold">{method}</p>
+                            </div>
+                            <p className="mt-2 text-xs leading-5">
                               {method === 'Pay Online' ? 'UPI, cards, and netbanking via Razorpay' : 'Pay at delivery after the order arrives'}
                             </p>
                           </button>
@@ -2221,7 +2481,7 @@ export default function App() {
                       </div>
                     </div>
                     {checkoutError && (
-                      <div className="rounded-2xl border border-primary/25 bg-primary/10 px-4 py-3 text-sm font-bold text-primary">
+                      <div className="rounded-[22px] border border-primary/25 bg-primary/10 px-4 py-3 text-sm font-semibold text-primary">
                         {checkoutError}
                       </div>
                     )}
@@ -2229,60 +2489,71 @@ export default function App() {
                 )}
 
                 {checkoutStep === 'success' && (
-                  <div className="text-center py-12">
-                    <div className="w-20 h-20 bg-emerald-500/20 text-emerald-500 rounded-full flex items-center justify-center mx-auto mb-6">
-                      <CheckCircle2 size={40} />
+                  <div className="py-10 text-center">
+                    <motion.div
+                      initial={{ scale: 0.85, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      className="relative mx-auto mb-6 flex h-24 w-24 items-center justify-center rounded-full border border-emerald-300/20 bg-emerald-500/14 text-emerald-400"
+                    >
+                      <Coffee size={28} className="absolute text-accent/70" />
+                      <CheckCircle2 size={42} className="relative z-10" />
+                    </motion.div>
+                    <div className="mx-auto flex w-fit items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-300">
+                      <Sparkles size={13} />
+                      Freshly confirmed
                     </div>
-                    <h2 className="text-3xl font-black mb-2">Order Confirmed!</h2>
-                    <p className="text-ink-muted mb-2">Your order #{orderStatus?.id} is being prepared.</p>
-                    <p className="text-sm font-bold text-accent mb-8">
+                    <h2 className="mt-5 text-[1.75rem] font-semibold text-accent">Order confirmed</h2>
+                    <p className="mt-2 text-sm leading-6 text-ink-muted">Your order #{orderStatus?.id} is being prepared.</p>
+                    <p className="mt-2 text-sm font-semibold text-secondary">
                       {orderStatus?.payment_method === 'razorpay' ? 'Payment received successfully.' : 'Cash on delivery selected.'}
                     </p>
-                    <button 
+                    <button
                       onClick={() => {
                         setIsCartOpen(false);
                         setCheckoutStep('cart');
                         setActiveTab('tracking');
                         setDraftOrderId('');
                       }}
-                      className="bg-primary text-white px-8 py-4 rounded-2xl font-black w-full"
+                      className="coffee-btn-primary mt-8 w-full"
                     >
-                      TRACK ORDER
+                      <Clock size={16} />
+                      Track order
                     </button>
                   </div>
                 )}
               </div>
 
               {checkoutStep !== 'success' && (
-                <div className="p-6 border-t border-white/5">
+                <div className="border-t border-white/6 bg-[#0f0b09]/94 px-5 py-4">
                   {checkoutStep === 'cart' ? (
                     hasCartItems ? (
-                      <button 
+                      <button
                         onClick={() => {
                           setCheckoutError('');
                           setCheckoutStep('details');
                         }}
                         disabled={!hasCartItems}
-                        className="w-full bg-primary text-white py-4 rounded-2xl font-black text-lg flex items-center justify-center gap-2 disabled:opacity-70"
+                        className="coffee-btn-primary w-full justify-center disabled:opacity-70"
                       >
-                        PROCEED TO CHECKOUT <ArrowRight size={20} />
+                        <ArrowRight size={16} />
+                        Proceed to checkout
                       </button>
                     ) : null
                   ) : (
                     <div className="flex gap-4">
-                      <button 
+                      <button
                         onClick={() => {
                           setCheckoutError('');
                           setCheckoutStep('cart');
                         }}
-                        className="w-1/3 bg-white/5 text-ink-muted py-4 rounded-2xl font-black"
+                        className="coffee-btn-secondary w-[36%] justify-center"
                       >
-                        BACK
+                        Back
                       </button>
-                      <button 
+                      <button
                         onClick={() => void handlePlaceOrder()}
                         disabled={isPlacingOrder || !hasCartItems}
-                        className="flex-grow bg-primary text-white py-4 rounded-2xl font-black text-lg disabled:opacity-70"
+                        className="coffee-btn-primary flex-grow justify-center disabled:opacity-70"
                       >
                         {checkoutPrimaryActionLabel}
                       </button>
@@ -2294,6 +2565,7 @@ export default function App() {
           </>
         )}
       </AnimatePresence>
+      <BrewingOverlay visible={isPlacingOrder && checkoutStep !== 'success'} />
     </div>
   );
 }
