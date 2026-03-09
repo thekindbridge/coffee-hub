@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { addDoc, collection, doc, onSnapshot, orderBy, query, updateDoc } from 'firebase/firestore';
+import { addDoc, collection, deleteDoc, doc, onSnapshot, orderBy, query, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 
 interface AdminMenuItem {
@@ -31,12 +31,15 @@ const initialFormState: MenuFormState = {
   veg: true,
 };
 
+const CURRENCY_SYMBOL = '\u20B9';
+
 export default function AdminMenuManager() {
   const [menuItems, setMenuItems] = useState<AdminMenuItem[]>([]);
   const [menuForm, setMenuForm] = useState<MenuFormState>(initialFormState);
   const [editingId, setEditingId] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [managerError, setManagerError] = useState('');
+  const [isEditorOpen, setIsEditorOpen] = useState(false);
 
   useEffect(() => {
     const menuQuery = query(collection(db, 'menu_items'), orderBy('name'));
@@ -88,6 +91,11 @@ export default function AdminMenuManager() {
     setEditingId('');
   };
 
+  const handleOpenCreate = () => {
+    resetForm();
+    setIsEditorOpen(true);
+  };
+
   const handleEdit = (item: AdminMenuItem) => {
     setEditingId(item.id);
     setMenuForm({
@@ -98,6 +106,7 @@ export default function AdminMenuManager() {
       spiceLevel: String(item.spiceLevel),
       veg: item.veg,
     });
+    setIsEditorOpen(true);
   };
 
   const handleSave = async () => {
@@ -132,12 +141,29 @@ export default function AdminMenuManager() {
         });
       }
 
+      setIsEditorOpen(false);
       resetForm();
     } catch (error) {
       console.error('Failed to save menu item', error);
       setManagerError('Unable to save menu item right now.');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleDeleteItem = async (id: string) => {
+    const shouldDelete = window.confirm('Delete this product permanently?');
+    if (!shouldDelete) {
+      return;
+    }
+
+    try {
+      await deleteDoc(doc(db, 'menu_items', id));
+      setIsEditorOpen(false);
+      resetForm();
+    } catch (error) {
+      console.error('Failed to delete menu item', error);
+      setManagerError('Unable to delete product right now.');
     }
   };
 
@@ -151,119 +177,141 @@ export default function AdminMenuManager() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
-        <h3 className="mb-4 text-xl font-black">{editingId ? 'Edit Item' : 'Add Item'}</h3>
+    <section className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-black">Products</h2>
+        <button
+          onClick={handleOpenCreate}
+          className="min-h-12 rounded-2xl bg-primary px-5 text-sm font-black text-white"
+        >
+          Add Product
+        </button>
+      </div>
 
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <input
-            type="text"
-            value={menuForm.name}
-            onChange={e => setMenuForm(prev => ({ ...prev, name: e.target.value }))}
-            placeholder="Item name"
-            className="rounded-2xl border border-white/10 bg-white/5 p-3 text-sm focus:border-primary focus:outline-none"
-          />
-          <input
-            type="text"
-            value={menuForm.category}
-            onChange={e => setMenuForm(prev => ({ ...prev, category: e.target.value }))}
-            placeholder="Category"
-            className="rounded-2xl border border-white/10 bg-white/5 p-3 text-sm focus:border-primary focus:outline-none"
-          />
-          <input
-            type="number"
-            min="1"
-            value={menuForm.price}
-            onChange={e => setMenuForm(prev => ({ ...prev, price: e.target.value }))}
-            placeholder="Price"
-            className="rounded-2xl border border-white/10 bg-white/5 p-3 text-sm focus:border-primary focus:outline-none"
-          />
-          <input
-            type="number"
-            min="0"
-            max="5"
-            value={menuForm.spiceLevel}
-            onChange={e => setMenuForm(prev => ({ ...prev, spiceLevel: e.target.value }))}
-            placeholder="Spice level (0-5)"
-            className="rounded-2xl border border-white/10 bg-white/5 p-3 text-sm focus:border-primary focus:outline-none"
-          />
-          <input
-            type="url"
-            value={menuForm.image}
-            onChange={e => setMenuForm(prev => ({ ...prev, image: e.target.value }))}
-            placeholder="Image URL"
-            className="rounded-2xl border border-white/10 bg-white/5 p-3 text-sm focus:border-primary focus:outline-none md:col-span-2"
-          />
-        </div>
+      {isEditorOpen && (
+        <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
+          <h3 className="mb-3 text-lg font-black">{editingId ? 'Edit Product' : 'New Product'}</h3>
 
-        <label className="mt-4 flex cursor-pointer items-center gap-2 text-sm text-ink-muted">
-          <input
-            type="checkbox"
-            checked={menuForm.veg}
-            onChange={e => setMenuForm(prev => ({ ...prev, veg: e.target.checked }))}
-          />
-          Vegetarian item
-        </label>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <input
+              type="text"
+              value={menuForm.name}
+              onChange={event => setMenuForm(prev => ({ ...prev, name: event.target.value }))}
+              placeholder="Product name"
+              className="min-h-12 rounded-2xl border border-white/10 bg-black/20 px-4 text-sm focus:border-primary focus:outline-none"
+            />
+            <input
+              type="text"
+              value={menuForm.category}
+              onChange={event => setMenuForm(prev => ({ ...prev, category: event.target.value }))}
+              placeholder="Category"
+              className="min-h-12 rounded-2xl border border-white/10 bg-black/20 px-4 text-sm focus:border-primary focus:outline-none"
+            />
+            <input
+              type="number"
+              min="1"
+              value={menuForm.price}
+              onChange={event => setMenuForm(prev => ({ ...prev, price: event.target.value }))}
+              placeholder="Price"
+              className="min-h-12 rounded-2xl border border-white/10 bg-black/20 px-4 text-sm focus:border-primary focus:outline-none"
+            />
+            <input
+              type="number"
+              min="0"
+              max="5"
+              value={menuForm.spiceLevel}
+              onChange={event => setMenuForm(prev => ({ ...prev, spiceLevel: event.target.value }))}
+              placeholder="Spice level"
+              className="min-h-12 rounded-2xl border border-white/10 bg-black/20 px-4 text-sm focus:border-primary focus:outline-none"
+            />
+            <input
+              type="url"
+              value={menuForm.image}
+              onChange={event => setMenuForm(prev => ({ ...prev, image: event.target.value }))}
+              placeholder="Image URL"
+              className="min-h-12 rounded-2xl border border-white/10 bg-black/20 px-4 text-sm focus:border-primary focus:outline-none sm:col-span-2"
+            />
+          </div>
 
-        {managerError && <p className="mt-3 text-sm text-primary">{managerError}</p>}
+          <label className="mt-3 flex items-center gap-2 text-sm text-ink-muted">
+            <input
+              type="checkbox"
+              checked={menuForm.veg}
+              onChange={event => setMenuForm(prev => ({ ...prev, veg: event.target.checked }))}
+            />
+            Vegetarian
+          </label>
 
-        <div className="mt-4 flex gap-3">
-          <button
-            onClick={() => void handleSave()}
-            disabled={isSaving}
-            className="rounded-2xl bg-primary px-6 py-3 text-sm font-black text-white disabled:opacity-60"
-          >
-            {isSaving ? 'SAVING...' : editingId ? 'UPDATE ITEM' : 'ADD ITEM'}
-          </button>
-
-          {editingId && (
+          <div className="mt-4 flex flex-wrap gap-2">
             <button
-              onClick={resetForm}
-              className="rounded-2xl border border-white/10 bg-white/5 px-6 py-3 text-sm font-bold text-ink-muted"
+              onClick={() => void handleSave()}
+              disabled={isSaving}
+              className="min-h-12 rounded-2xl bg-primary px-5 text-sm font-black text-white disabled:opacity-60"
             >
-              CANCEL EDIT
+              {isSaving ? 'Saving...' : editingId ? 'Update Product' : 'Create Product'}
             </button>
-          )}
-        </div>
-      </div>
-
-      <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
-        <h3 className="mb-4 text-xl font-black">Menu Items</h3>
-        <div className="space-y-3">
-          {menuItems.map(item => (
-            <div
-              key={item.id}
-              className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-black/20 p-4"
+            <button
+              onClick={() => {
+                setIsEditorOpen(false);
+                resetForm();
+              }}
+              className="min-h-12 rounded-2xl border border-white/10 bg-white/5 px-5 text-sm font-bold text-ink-muted"
             >
-              <div>
-                <p className="font-bold">{item.name}</p>
-                <p className="text-xs text-ink-muted">
-                  {item.category} • ₹{item.price} • Spice {item.spiceLevel}
-                </p>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => handleEdit(item)}
-                  className="rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-xs font-bold"
-                >
-                  EDIT
-                </button>
-                <button
-                  onClick={() => void handleToggleAvailability(item.id, item.isAvailable)}
-                  className={`rounded-xl px-3 py-2 text-xs font-bold ${
-                    item.isAvailable ? 'bg-primary text-white' : 'bg-white/10 text-ink-muted'
-                  }`}
-                >
-                  {item.isAvailable ? 'DISABLE' : 'ENABLE'}
-                </button>
-              </div>
-            </div>
-          ))}
-          {menuItems.length === 0 && (
-            <p className="text-sm text-ink-muted">No menu items found.</p>
-          )}
+              Cancel
+            </button>
+            {editingId && (
+              <button
+                onClick={() => void handleDeleteItem(editingId)}
+                className="min-h-12 rounded-2xl border border-red-400/20 bg-red-500/10 px-5 text-sm font-bold text-red-300"
+              >
+                Delete Product
+              </button>
+            )}
+          </div>
         </div>
+      )}
+
+      {managerError && (
+        <div className="rounded-2xl border border-red-400/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+          {managerError}
+        </div>
+      )}
+
+      <div className="space-y-3">
+        {menuItems.map(item => (
+          <article
+            key={item.id}
+            className="rounded-3xl border border-white/10 bg-white/5 p-4"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <button
+                onClick={() => handleEdit(item)}
+                className="text-left"
+              >
+                <p className="text-lg font-black">{item.name}</p>
+                <p className="text-sm text-ink-muted">{CURRENCY_SYMBOL}{item.price}</p>
+              </button>
+
+              <button
+                onClick={() => void handleToggleAvailability(item.id, item.isAvailable)}
+                className={`min-h-12 min-w-20 rounded-2xl px-4 text-sm font-black ${
+                  item.isAvailable
+                    ? 'bg-emerald-500/20 text-emerald-300'
+                    : 'bg-white/10 text-ink-muted'
+                }`}
+              >
+                {item.isAvailable ? 'ON' : 'OFF'}
+              </button>
+            </div>
+          </article>
+        ))}
+
+        {menuItems.length === 0 && (
+          <div className="rounded-3xl border border-white/10 bg-white/5 p-5 text-sm text-ink-muted">
+            No products found.
+          </div>
+        )}
       </div>
-    </div>
+    </section>
   );
 }

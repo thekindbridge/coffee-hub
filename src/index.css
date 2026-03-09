@@ -1,8 +1,9 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Poppins:wght@500;600;700;800&display=swap");
 @import "tailwindcss";
 
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Outfit", sans-serif;
+  --font-display: "Poppins", "Inter", ui-sans-serif, system-ui, sans-serif;
   
   --color-background: #1B1B1B;
   --color-primary: #E53935;
@@ -30,6 +31,88 @@
 
 .steam-particle {
   animation: steam 2s infinite ease-out;
+}
+
+@keyframes auth-steam {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 2px, 0) scale(0.82);
+  }
+
+  18% {
+    opacity: 0.78;
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate3d(var(--steam-drift, 0px), -58px, 0) scale(1.58);
+  }
+}
+
+.auth-steam-particle {
+  animation: auth-steam 2.6s infinite ease-in-out;
+  transform-origin: bottom center;
+  will-change: transform, opacity;
+}
+
+@keyframes auth-sheen {
+  0% {
+    transform: translateX(0) rotate(18deg);
+    opacity: 0;
+  }
+
+  20% {
+    opacity: 0.35;
+  }
+
+  100% {
+    transform: translateX(340px) rotate(18deg);
+    opacity: 0;
+  }
+}
+
+.auth-card-sheen {
+  animation: auth-sheen 5.5s infinite ease-out;
+}
+
+@keyframes coffee-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+.coffee-icon-float {
+  animation: coffee-float 3s ease-in-out infinite;
+  will-change: transform;
+}
+
+@keyframes auth-bg-zoom {
+  0% {
+    transform: scale(1.05);
+  }
+
+  100% {
+    transform: scale(1.12);
+  }
+}
+
+.auth-bg-image {
+  animation: auth-bg-zoom 20s ease-in-out infinite alternate;
+  transform-origin: center;
+  will-change: transform;
+}
+
+.google-btn {
+  will-change: transform, box-shadow;
+}
+
+.google-btn:hover {
+  box-shadow: 0 10px 25px rgba(255, 180, 100, 0.4);
 }
 
 /* Hide scrollbar for horizontal scroll */

@@ -8,6 +8,7 @@ import {
   Home, 
   Menu as MenuIcon, 
   ShoppingBag, 
+  Coffee,
   Tag, 
   Plus, 
   Minus, 
@@ -33,6 +34,7 @@ import {
 } from 'firebase/auth';
 import {
   collection,
+  deleteField,
   doc,
   getDocs,
   onSnapshot,
@@ -51,13 +53,35 @@ import { MenuItem, CartItem, Order, OrderItem } from './types';
 import { useOffers } from './hooks/useOffers';
 import { calculateDiscount } from './utils/calculateDiscount';
 import AdminDashboard from './components/AdminDashboard';
+import AgentDashboard from './components/AgentDashboard';
 import MyOrders from './components/MyOrders';
 
 // --- Components ---
 
-const ORDER_STATUSES: Order['status'][] = ['Placed', 'Preparing', 'Out for Delivery', 'Delivered'];
+const ORDER_STATUSES: Order['status'][] = ['Pending', 'Preparing', 'Out for Delivery', 'Delivered'];
 const ORDER_ITEMS_IN_QUERY_LIMIT = 10;
 const ADMIN_EMAIL = 'thekindbridge@gmail.com';
+const DELIVERY_AGENT_EMAIL = 'pavankumarnaidu343@gmail.com';
+const CURRENCY_SYMBOL = '\u20B9';
+const STANDARD_DELIVERY_FEE = 30;
+const FREE_DELIVERY_THRESHOLD = 499;
+const AUTH_BACKGROUND_IMAGE = 'url(https://res.cloudinary.com/ddfhaqeme/image/upload/v1772713816/5f272fcd-02a1-4f33-b91c-9ff009e08610_z4faz2.jpg)';
+const DEFAULT_DELIVERY_AGENT = {
+  id: 'INKOLLU_AGENT_01',
+  name: 'Inkollu Delivery Agent',
+};
+
+const normalizeOrderStatus = (status: unknown): Order['status'] => {
+  if (status === 'Placed' || status === 'Pending') {
+    return 'Pending';
+  }
+
+  if (status === 'Preparing' || status === 'Out for Delivery' || status === 'Delivered') {
+    return status;
+  }
+
+  return 'Pending';
+};
 
 const mapMenuDocToMenuItem = (snapshot: QueryDocumentSnapshot): MenuItem => {
   const data = snapshot.data() as Record<string, unknown>;
@@ -94,10 +118,13 @@ const mapOrderDocToOrder = (snapshot: QueryDocumentSnapshot): Order => {
     discount,
     coupon_code: ((data.couponCode as string) || '').toUpperCase(),
     final_total: finalTotal,
-    status: (data.status as Order['status']) || 'Placed',
+    status: normalizeOrderStatus(data.status),
     payment_method: (data.paymentMethod as string) || 'UPI',
     created_at: createdAtValue?.toDate()?.toISOString() || new Date().toISOString(),
     user_id: (data.userId as string) || '',
+    delivery_agent_id: (data.deliveryAgentId as string) || '',
+    delivery_agent_name: (data.deliveryAgentName as string) || '',
+    delivery_assigned_at: ((data.deliveryAssignedAt as Timestamp | undefined)?.toDate()?.toISOString()) || '',
   };
 };
 
@@ -172,15 +199,38 @@ const SpiceMeter = ({ level }: { level: number }) => {
   );
 };
 
-const SteamEffect = () => (
-  <div className="absolute -top-4 left-1/2 -translate-x-1/2 pointer-events-none">
-    {[...Array(3)].map((_, i) => (
-      <motion.div
+const SteamEffect = ({ className = '' }: { className?: string }) => (
+  <div className={`pointer-events-none absolute left-1/2 z-10 flex -translate-x-1/2 items-end gap-2 ${className}`}>
+    {[...Array(5)].map((_, i) => (
+      <span
         key={i}
-        className="w-1 h-4 bg-white/20 rounded-full blur-sm steam-particle"
-        style={{ left: `${(i - 1) * 10}px`, animationDelay: `${i * 0.5}s` }}
+        className="auth-steam-particle block rounded-full bg-[linear-gradient(180deg,rgba(255,247,240,0.88),rgba(255,255,255,0.08))] blur-[1.5px]"
+        style={{
+          width: `${4 + (i % 3)}px`,
+          height: `${28 + i * 7}px`,
+          animationDelay: `${i * 0.28}s`,
+          animationDuration: `${2.35 + i * 0.18}s`,
+          ['--steam-drift' as any]: `${(i - 2) * 9}px`,
+        }}
       />
     ))}
+  </div>
+);
+
+const AuthShell = ({ children }: { children: React.ReactNode }) => (
+  <div className="relative isolate min-h-screen overflow-hidden bg-[#120c08] text-[#fffaf5]">
+    <div
+      className="auth-bg-image absolute inset-0 bg-cover bg-center bg-no-repeat"
+      style={{ backgroundImage: AUTH_BACKGROUND_IMAGE }}
+    />
+    <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,214,168,0.2),transparent_26%),radial-gradient(circle_at_bottom_right,rgba(131,76,42,0.32),transparent_34%),linear-gradient(180deg,rgba(17,11,8,0.2),rgba(17,10,7,0.46)_42%,rgba(8,5,4,0.74)_100%)]" />
+    <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(12,8,6,0.46),rgba(12,8,6,0.08)_34%,rgba(12,8,6,0.18)_68%,rgba(12,8,6,0.6)_100%)]" />
+    <div className="absolute inset-0 opacity-[0.05] [background-image:radial-gradient(circle_at_1px_1px,rgba(255,244,229,0.9)_1px,transparent_0)] [background-size:22px_22px]" />
+    <div className="pointer-events-none absolute -left-20 top-16 h-64 w-64 rounded-full bg-[#b96a2b]/16 blur-[120px]" />
+    <div className="pointer-events-none absolute -right-24 bottom-10 h-72 w-72 rounded-full bg-[#ffb366]/10 blur-[140px]" />
+    <div className="relative mx-auto flex min-h-screen w-full max-w-6xl items-center justify-center px-4 py-8 sm:px-6 lg:px-8">
+      {children}
+    </div>
   </div>
 );
 
@@ -243,7 +293,7 @@ const FoodCard: React.FC<FoodCardProps> = ({ item, onAdd, cartQuantity }) => {
               onClick={() => onAdd(item, 1)}
               className="bg-primary hover:bg-red-600 text-white px-4 py-2 rounded-xl font-bold transition-all flex items-center gap-2 active:scale-95"
             >
-              <Plus size={18} /> Add
+              <Plus size={18} /> Add to Cart
             </button>
           )}
         </div>
@@ -255,12 +305,13 @@ const FoodCard: React.FC<FoodCardProps> = ({ item, onAdd, cartQuantity }) => {
 // --- Main App ---
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'home' | 'menu' | 'offers' | 'orders' | 'cart' | 'tracking' | 'about' | 'contact' | 'admin'>('home');
+  const [activeTab, setActiveTab] = useState<'home' | 'menu' | 'offers' | 'orders' | 'tracking' | 'about' | 'contact'>('home');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [currentUserId, setCurrentUserId] = useState('');
   const [currentUserEmail, setCurrentUserEmail] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isDeliveryAgent, setIsDeliveryAgent] = useState(false);
   const [adminOrders, setAdminOrders] = useState<Order[]>([]);
   const [newOrderDocIds, setNewOrderDocIds] = useState<string[]>([]);
   const [userOrders, setUserOrders] = useState<Order[]>([]);
@@ -310,16 +361,19 @@ export default function App() {
     const unsubscribe = onAuthStateChanged(auth, user => {
       if (user) {
         const email = user.email || '';
+        const normalizedEmail = email.toLowerCase();
         setIsLoggedIn(true);
         setCurrentUserId(user.uid);
         setCurrentUserEmail(email);
-        setIsAdmin(email.toLowerCase() === ADMIN_EMAIL);
+        setIsAdmin(normalizedEmail === ADMIN_EMAIL);
+        setIsDeliveryAgent(normalizedEmail === DELIVERY_AGENT_EMAIL);
       } else {
         setIsLoggedIn(false);
         setCurrentUserId('');
         setCurrentUserEmail('');
         setIsAdmin(false);
-        setActiveTab(prev => (prev === 'admin' ? 'home' : prev));
+        setIsDeliveryAgent(false);
+        setActiveTab('home');
       }
 
       setIsAuthReady(true);
@@ -433,7 +487,8 @@ export default function App() {
   }, [currentUserId]);
 
   useEffect(() => {
-    if (!isAdmin) {
+    const canAccessStaffOrders = isAdmin || isDeliveryAgent;
+    if (!canAccessStaffOrders) {
       setAdminOrders([]);
       setNewOrderDocIds([]);
       previousAdminOrderCountRef.current = 0;
@@ -442,12 +497,17 @@ export default function App() {
       return;
     }
 
-    if (!orderAlertAudioRef.current) {
+    if (isAdmin && !orderAlertAudioRef.current) {
       orderAlertAudioRef.current = new Audio('/order-alert.mp3');
       orderAlertAudioRef.current.preload = 'auto';
     }
 
-    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+    if (
+      isAdmin &&
+      typeof window !== 'undefined' &&
+      'Notification' in window &&
+      Notification.permission === 'default'
+    ) {
       void Notification.requestPermission().catch(error => {
         console.error('Notification permission request failed', error);
       });
@@ -492,7 +552,7 @@ export default function App() {
             .filter(change => change.type === 'added')
             .map(change => change.doc.id);
 
-          if (addedOrderDocIds.length > 0) {
+          if (isAdmin && addedOrderDocIds.length > 0) {
             setNewOrderDocIds(prev => Array.from(new Set([...addedOrderDocIds, ...prev])));
 
             const timeoutId = window.setTimeout(() => {
@@ -527,7 +587,7 @@ export default function App() {
       unsubscribe();
       highlightTimeoutIds.forEach(timeoutId => window.clearTimeout(timeoutId));
     };
-  }, [isAdmin]);
+  }, [isAdmin, isDeliveryAgent]);
 
   const handleTrackOrderLookup = () => {
     const orderId = trackingOrderId.trim().toUpperCase();
@@ -588,14 +648,41 @@ export default function App() {
   }, [orderStatus?.id, userOrders]);
 
   const updateOrderStatus = async (orderDocId: string, status: Order['status']) => {
+    const normalizedStatus = normalizeOrderStatus(status);
+    const shouldAssignDeliveryAgent = normalizedStatus === 'Out for Delivery';
+    const isDeliveredStatus = normalizedStatus === 'Delivered';
+
+    const statusPayload: Record<string, unknown> = {
+      status: normalizedStatus,
+      deliveryAgentId: shouldAssignDeliveryAgent ? DEFAULT_DELIVERY_AGENT.id : deleteField(),
+      deliveryAgentName: shouldAssignDeliveryAgent ? DEFAULT_DELIVERY_AGENT.name : deleteField(),
+      deliveryAssignedAt: shouldAssignDeliveryAgent || isDeliveredStatus ? serverTimestamp() : deleteField(),
+    };
+
     try {
-      await updateDoc(doc(db, 'orders', orderDocId), { status });
+      await updateDoc(doc(db, 'orders', orderDocId), statusPayload);
       setAdminOrders(prev => prev.map(order => (
-        order.doc_id === orderDocId ? { ...order, status } : order
+        order.doc_id === orderDocId
+          ? {
+            ...order,
+            status: normalizedStatus,
+            delivery_agent_id: shouldAssignDeliveryAgent ? DEFAULT_DELIVERY_AGENT.id : '',
+            delivery_agent_name: shouldAssignDeliveryAgent ? DEFAULT_DELIVERY_AGENT.name : '',
+            delivery_assigned_at: shouldAssignDeliveryAgent || isDeliveredStatus ? new Date().toISOString() : '',
+          }
+          : order
       )));
       setNewOrderDocIds(prev => prev.filter(id => id !== orderDocId));
       setOrderStatus(prev => (
-        prev && prev.doc_id === orderDocId ? { ...prev, status } : prev
+        prev && prev.doc_id === orderDocId
+          ? {
+            ...prev,
+            status: normalizedStatus,
+            delivery_agent_id: shouldAssignDeliveryAgent ? DEFAULT_DELIVERY_AGENT.id : '',
+            delivery_agent_name: shouldAssignDeliveryAgent ? DEFAULT_DELIVERY_AGENT.name : '',
+            delivery_assigned_at: shouldAssignDeliveryAgent || isDeliveredStatus ? new Date().toISOString() : '',
+          }
+          : prev
       ));
     } catch (error) {
       console.error('Failed to update order status', error);
@@ -635,6 +722,11 @@ export default function App() {
 
   const cartTotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+  const hasCartItems = cart.length > 0;
+  const cartQuantityById = useMemo(
+    () => new Map(cart.map(item => [item.id, item.quantity])),
+    [cart],
+  );
   const appliedOffer = useMemo(
     () => activeOffers.find(offer => offer.couponCode === appliedCouponCode) || null,
     [activeOffers, appliedCouponCode],
@@ -646,6 +738,17 @@ export default function App() {
 
     return calculateDiscount(cartTotal, appliedOffer);
   }, [appliedOffer, cartTotal]);
+  const deliveryFee = useMemo(() => {
+    if (!hasCartItems) {
+      return 0;
+    }
+
+    return cartTotal >= FREE_DELIVERY_THRESHOLD ? 0 : STANDARD_DELIVERY_FEE;
+  }, [cartTotal, hasCartItems]);
+  const payableCartTotal = useMemo(
+    () => Number((finalCartTotal + deliveryFee).toFixed(2)),
+    [deliveryFee, finalCartTotal],
+  );
 
   useEffect(() => {
     if (!appliedCouponCode) {
@@ -678,6 +781,14 @@ export default function App() {
   }, [cart.length]);
 
   useEffect(() => {
+    if (cart.length > 0 || checkoutStep === 'success') {
+      return;
+    }
+
+    setCheckoutStep('cart');
+  }, [cart.length, checkoutStep]);
+
+  useEffect(() => {
     if (!isCouponAppliedPulseVisible) {
       return;
     }
@@ -702,6 +813,25 @@ export default function App() {
       if (delta > 0) return [...prev, { ...item, quantity: 1 }];
       return prev;
     });
+  };
+  const handleRemoveFromCart = (itemId: string) => {
+    setCart(prev => prev.filter(item => item.id !== itemId));
+  };
+
+  const handleBrowseMenu = () => {
+    setActiveTab('menu');
+    setIsCartOpen(false);
+    setCheckoutStep('cart');
+
+    window.setTimeout(() => {
+      const menuSection = document.getElementById('menu-section');
+      if (menuSection) {
+        menuSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        return;
+      }
+
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }, 50);
   };
 
   const handleApplyCoupon = async () => {
@@ -789,8 +919,9 @@ export default function App() {
 
     try {
       const subtotalValue = cartTotal;
+      const deliveryFeeValue = subtotalValue >= FREE_DELIVERY_THRESHOLD ? 0 : STANDARD_DELIVERY_FEE;
       let discountValue = 0;
-      let finalTotalValue = subtotalValue;
+      let discountedSubtotalValue = subtotalValue;
       let couponCodeValue = '';
 
       if (appliedCouponCode) {
@@ -798,7 +929,7 @@ export default function App() {
         if (matchingOffer && subtotalValue >= matchingOffer.minOrderAmount) {
           const recalculated = calculateDiscount(subtotalValue, matchingOffer);
           discountValue = recalculated.discount;
-          finalTotalValue = recalculated.finalTotal;
+          discountedSubtotalValue = recalculated.finalTotal;
           couponCodeValue = matchingOffer.couponCode;
         } else {
           setAppliedCouponCode('');
@@ -806,6 +937,7 @@ export default function App() {
           setCouponError('Coupon was removed because it is no longer valid.');
         }
       }
+      const finalTotalValue = Number((discountedSubtotalValue + deliveryFeeValue).toFixed(2));
 
       const orderId = await getNextOrderId();
       const orderRef = doc(collection(db, 'orders'));
@@ -818,9 +950,10 @@ export default function App() {
         phone: customerDetails.phone,
         address: customerDetails.address,
         paymentMethod: customerDetails.payment,
-        status: 'Placed',
+        status: 'Pending',
         subtotal: subtotalValue,
         discount: discountValue,
+        deliveryFee: deliveryFeeValue,
         couponCode: couponCodeValue,
         finalTotal: finalTotalValue,
         total: finalTotalValue,
@@ -851,7 +984,7 @@ export default function App() {
         discount: discountValue,
         coupon_code: couponCodeValue,
         final_total: finalTotalValue,
-        status: 'Placed',
+        status: 'Pending',
         payment_method: customerDetails.payment,
         created_at: new Date().toISOString(),
         user_id: currentUserId,
@@ -953,7 +1086,7 @@ export default function App() {
               <FoodCard 
                 item={item} 
                 onAdd={handleAddToCart} 
-                cartQuantity={cart.find(i => i.id === item.id)?.quantity || 0} 
+                cartQuantity={cartQuantityById.get(item.id) || 0} 
               />
             </div>
           ))}
@@ -1025,7 +1158,7 @@ export default function App() {
     </div>
   );
   const renderMenu = () => (
-    <div className="pt-20 pb-24 px-6">
+    <div id="menu-section" className="pt-20 pb-24 px-6">
       <div className="sticky top-20 z-30 bg-background/80 backdrop-blur-xl -mx-6 px-6 py-4 border-b border-white/5">
         <div className="relative mb-4">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-ink-muted" size={18} />
@@ -1061,7 +1194,7 @@ export default function App() {
             key={item.id} 
             item={item} 
             onAdd={handleAddToCart} 
-            cartQuantity={cart.find(i => i.id === item.id)?.quantity || 0} 
+            cartQuantity={cartQuantityById.get(item.id) || 0} 
           />
         ))}
       </div>
@@ -1126,7 +1259,7 @@ export default function App() {
               <div className="absolute left-3 top-2 bottom-2 w-0.5 bg-white/10" />
               
               {[
-                { label: 'Order Placed', status: 'Placed', icon: CheckCircle2 },
+                { label: 'Pending', status: 'Pending', icon: CheckCircle2 },
                 { label: 'Preparing', status: 'Preparing', icon: Flame },
                 { label: 'Out for Delivery', status: 'Out for Delivery', icon: MapPin },
                 { label: 'Delivered', status: 'Delivered', icon: ShoppingBag },
@@ -1266,62 +1399,170 @@ export default function App() {
   );
 
   const renderLogin = () => (
-    <div
-      className="relative min-h-screen bg-cover bg-center bg-no-repeat px-5 text-ink"
-      style={{
-        backgroundImage: 'url(https://res.cloudinary.com/ddfhaqeme/image/upload/v1772713816/5f272fcd-02a1-4f33-b91c-9ff009e08610_z4faz2.jpg)',
-      }}
-    >
-      <div className="absolute inset-0 bg-black/60" />
-      <div className="relative mx-auto flex min-h-screen w-full max-w-md items-center justify-center">
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.45, ease: 'easeOut' }}
-          className="w-full rounded-[30px] border border-white/25 bg-white/15 p-7 text-center shadow-2xl shadow-black/30 backdrop-blur-xl"
-        >
-          <h1 className="font-display text-4xl font-black tracking-tight text-white sm:text-5xl">
+    <AuthShell>
+      <motion.section
+        initial={{ opacity: 0, y: 28, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.65, ease: [0.22, 1, 0.36, 1] }}
+        className="relative w-full max-w-[350px] overflow-hidden rounded-[30px] border border-white/12 bg-[linear-gradient(180deg,rgba(255,250,244,0.1),rgba(88,50,28,0.1))] px-5 py-6 shadow-[0_20px_70px_rgba(0,0,0,0.42)] backdrop-blur-[12px] sm:max-w-[380px] sm:px-7 sm:py-7"
+      >
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,224,190,0.14),transparent_44%),linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02))]" />
+        <div className="absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-white/45 to-transparent" />
+        <div className="relative flex flex-col items-center text-center">
+          <div className="relative mx-auto mb-6 mt-1 flex h-36 w-36 items-center justify-center rounded-[38px] border border-white/12 bg-[radial-gradient(circle_at_top,rgba(255,235,212,0.16),rgba(90,51,29,0.08)_72%)] shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_22px_55px_rgba(13,7,4,0.38)] sm:h-40 sm:w-40">
+            <SteamEffect className="-top-14 scale-110 sm:-top-16 sm:scale-125" />
+            <div className="absolute inset-3 rounded-[30px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02))]" />
+            <Coffee className="coffee-icon-float relative text-[#ffc58b]" size={68} strokeWidth={1.65} />
+          </div>
+
+          <h1 className="font-display text-[2.1rem] font-semibold tracking-[0.08em] text-[#fff8f1] sm:text-[2.45rem]">
             COFFEE HUB
           </h1>
-          <p className="mt-2 text-xs font-bold uppercase tracking-[0.45em] text-white/80">
-            INKOLLU
+          <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.45em] text-[#f0cfad] sm:text-xs">
+            Inkollu
           </p>
-          <button
+          <p className="mt-3 text-sm font-medium text-[#f8e9d8] sm:text-[15px]">
+            Fresh Food <span aria-hidden="true">&bull;</span> Fast Delivery
+          </p>
+
+          <motion.button
             onClick={() => {
               void handleGoogleLogin();
             }}
-            className="mt-8 flex w-full items-center justify-center gap-3 rounded-full bg-white px-6 py-3.5 text-sm font-black text-black shadow-xl transition-transform duration-200 hover:scale-[1.02] active:scale-[0.99]"
+            whileHover={{ y: -2, scale: 1.03 }}
+            whileTap={{ scale: 0.985 }}
+            className="google-btn group relative mt-7 flex w-full items-center justify-center gap-3 overflow-hidden rounded-[20px] border border-white/12 bg-[linear-gradient(135deg,rgba(255,250,244,0.94),rgba(244,229,211,0.86))] px-4 py-3.5 text-[15px] font-semibold text-[#24140b] shadow-[0_14px_34px_rgba(24,12,6,0.3)] transition-shadow duration-300 hover:shadow-[0_20px_44px_rgba(18,8,4,0.34)]"
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
-              <path fill="#EA4335" d="M12 10.2v3.9h5.4c-.2 1.3-1.6 3.9-5.4 3.9-3.2 0-5.9-2.7-5.9-6s2.6-6 5.9-6c1.8 0 3 .8 3.7 1.4l2.5-2.4C16.7 3.6 14.5 2.8 12 2.8 6.9 2.8 2.8 6.9 2.8 12s4.1 9.2 9.2 9.2c5.3 0 8.9-3.7 8.9-8.9 0-.6-.1-1.1-.2-1.6H12z" />
-            </svg>
-            Sign in with Google
-          </button>
-        </motion.div>
-      </div>
-    </div>
+            <span className="pointer-events-none absolute inset-y-0 left-[-35%] w-20 rotate-[18deg] bg-white/30 blur-2xl auth-card-sheen" />
+            <span className="relative flex h-10 w-10 items-center justify-center rounded-2xl bg-white shadow-[0_10px_22px_rgba(255,255,255,0.16)]">
+              <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+                <path fill="#EA4335" d="M12 10.2v3.9h5.4c-.2 1.3-1.6 3.9-5.4 3.9-3.2 0-5.9-2.7-5.9-6s2.6-6 5.9-6c1.8 0 3 .8 3.7 1.4l2.5-2.4C16.7 3.6 14.5 2.8 12 2.8 6.9 2.8 2.8 6.9 2.8 12s4.1 9.2 9.2 9.2c5.3 0 8.9-3.7 8.9-8.9 0-.6-.1-1.1-.2-1.6H12z" />
+              </svg>
+            </span>
+            <span className="relative">Sign in with Google</span>
+            <ArrowRight size={17} className="relative text-[#8e5327] transition-transform duration-300 group-hover:translate-x-1" />
+          </motion.button>
+        </div>
+      </motion.section>
+    </AuthShell>
   );
 
   if (!isAuthReady) {
     return (
-      <div
-        className="relative min-h-screen bg-cover bg-center bg-no-repeat px-5 text-ink"
-        style={{
-          backgroundImage: 'url(https://res.cloudinary.com/ddfhaqeme/image/upload/v1772713816/5f272fcd-02a1-4f33-b91c-9ff009e08610_z4faz2.jpg)',
-        }}
-      >
-        <div className="absolute inset-0 bg-black/60" />
-        <div className="relative mx-auto flex min-h-screen w-full max-w-md items-center justify-center">
-          <div className="w-full rounded-[30px] border border-white/25 bg-white/15 p-7 text-center backdrop-blur-xl">
-            <p className="text-sm font-bold uppercase tracking-[0.2em] text-white/90">Loading authentication...</p>
+      <AuthShell>
+        <motion.section
+          initial={{ opacity: 0, y: 18 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45, ease: 'easeOut' }}
+          className="relative w-full max-w-[430px] overflow-hidden rounded-[32px] border border-white/14 bg-[linear-gradient(180deg,rgba(255,251,247,0.14),rgba(89,50,29,0.14))] px-6 py-8 text-center shadow-[0_24px_90px_rgba(0,0,0,0.46)] backdrop-blur-[22px] sm:px-8"
+        >
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,224,190,0.16),transparent_50%),linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02))]" />
+          <div className="relative">
+            <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-[26px] border border-white/14 bg-[linear-gradient(180deg,rgba(255,255,255,0.14),rgba(255,255,255,0.04))]">
+              <SteamEffect className="-top-9" />
+              <Coffee className="coffee-icon-float text-[#ffbf80]" size={26} strokeWidth={1.8} />
+            </div>
+            <p className="mt-8 text-[11px] font-semibold uppercase tracking-[0.38em] text-[#efcfb3]">
+              COFFEE HUB
+            </p>
+            <h2 className="mt-3 font-display text-3xl font-semibold text-[#fff7ee]">
+              Preparing your sign-in
+            </h2>
+            <p className="mx-auto mt-3 max-w-xs text-sm leading-6 text-[#f3ddc5]/72">
+              Connecting Firebase authentication and warming up your premium ordering experience.
+            </p>
+            <div className="mx-auto mt-6 flex w-fit items-center gap-2 rounded-full border border-white/10 bg-black/10 px-4 py-2 text-xs font-medium text-[#f8e9d8]/85">
+              <span className="h-2 w-2 rounded-full bg-[#ffb15d] animate-pulse" />
+              Loading authentication...
+            </div>
           </div>
-        </div>
-      </div>
+        </motion.section>
+      </AuthShell>
     );
   }
 
   if (!isLoggedIn) {
     return renderLogin();
+  }
+
+  if (isAdmin) {
+    return (
+      <div className="min-h-screen bg-background text-ink selection:bg-primary/30">
+        <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-xl border-b border-white/5 px-6 py-4 flex justify-between items-center">
+          <div className="flex items-center gap-2">
+            <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center shadow-lg shadow-primary/20">
+              <User className="text-white" />
+            </div>
+            <span className="font-display font-black text-xl tracking-tighter">ADMIN <span className="text-primary">CONSOLE</span></span>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="hidden text-xs font-bold text-ink-muted sm:block">{currentUserEmail}</span>
+            <button
+              onClick={() => {
+                void handleLogout();
+              }}
+              className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-ink-muted hover:bg-white/10"
+            >
+              Logout
+            </button>
+          </div>
+        </header>
+
+        <main className="max-w-5xl mx-auto">
+          <AdminDashboard
+            orders={adminOrders}
+            offers={offers}
+            isOffersLoading={isOffersLoading}
+            offersError={offersError}
+            newOrderDocIds={newOrderDocIds}
+            orderStatuses={ORDER_STATUSES}
+            onUpdateStatus={(orderDocId, status) => {
+              void updateOrderStatus(orderDocId, status);
+            }}
+            onCreateOffer={createOffer}
+            onUpdateOffer={updateOffer}
+            onDeleteOffer={deleteOffer}
+            onToggleOfferStatus={toggleOfferStatus}
+          />
+        </main>
+      </div>
+    );
+  }
+
+  if (isDeliveryAgent) {
+    return (
+      <div className="min-h-screen bg-background text-ink selection:bg-primary/30">
+        <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-xl border-b border-white/5 px-6 py-4 flex justify-between items-center">
+          <div className="flex items-center gap-2">
+            <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center shadow-lg shadow-primary/20">
+              <MapPin className="text-white" />
+            </div>
+            <span className="font-display font-black text-xl tracking-tighter">DELIVERY <span className="text-primary">PANEL</span></span>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="hidden text-xs font-bold text-ink-muted sm:block">{currentUserEmail}</span>
+            <button
+              onClick={() => {
+                void handleLogout();
+              }}
+              className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-ink-muted hover:bg-white/10"
+            >
+              Logout
+            </button>
+          </div>
+        </header>
+
+        <main className="max-w-4xl mx-auto">
+          <AgentDashboard
+            isAuthorized={currentUserEmail.toLowerCase() === DELIVERY_AGENT_EMAIL}
+            orders={adminOrders}
+            onMarkDelivered={orderDocId => {
+              void updateOrderStatus(orderDocId, 'Delivered');
+            }}
+          />
+        </main>
+      </div>
+    );
   }
 
   return (
@@ -1337,15 +1578,6 @@ export default function App() {
         
         <div className="flex items-center gap-3">
           <span className="hidden text-xs font-bold text-ink-muted sm:block">{currentUserEmail}</span>
-          {isAdmin && (
-            <button 
-              onClick={() => setActiveTab('admin')}
-              title="Open Admin Dashboard"
-              className="w-10 h-10 rounded-full flex items-center justify-center border transition-colors bg-accent/20 border-accent text-accent"
-            >
-              <User size={20} />
-            </button>
-          )}
           <button
             onClick={() => {
               void handleLogout();
@@ -1372,27 +1604,6 @@ export default function App() {
         {activeTab === 'tracking' && renderTracking()}
         {activeTab === 'about' && renderAbout()}
         {activeTab === 'contact' && renderContact()}
-        {activeTab === 'admin' && isAdmin && (
-          <AdminDashboard
-            isAdmin={isAdmin}
-            orders={adminOrders}
-            offers={offers}
-            isOffersLoading={isOffersLoading}
-            offersError={offersError}
-            newOrderDocIds={newOrderDocIds}
-            orderStatuses={ORDER_STATUSES}
-            onUpdateStatus={(orderDocId, status) => {
-              void updateOrderStatus(orderDocId, status);
-            }}
-            onCreateOffer={createOffer}
-            onUpdateOffer={updateOffer}
-            onDeleteOffer={deleteOffer}
-            onToggleOfferStatus={toggleOfferStatus}
-            onLogout={() => {
-              void handleLogout();
-            }}
-          />
-        )}
       </main>
 
       {/* Footer Links */}
@@ -1434,7 +1645,7 @@ export default function App() {
             <span>VIEW CART</span>
           </div>
           <div className="flex items-center gap-1">
-            <span>₹{finalCartTotal}</span>
+            <span>₹{payableCartTotal}</span>
             <ChevronRight size={20} />
           </div>
         </motion.button>
@@ -1479,15 +1690,6 @@ export default function App() {
               active: isCartOpen,
               onClick: () => setIsCartOpen(true),
             },
-            ...(isAdmin
-              ? [{
-                  id: 'admin',
-                  icon: User,
-                  label: 'Admin',
-                  active: activeTab === 'admin',
-                  onClick: () => setActiveTab('admin'),
-                }]
-              : []),
           ].map(item => (
             <button
               key={item.id}
@@ -1531,116 +1733,150 @@ export default function App() {
               <div className="flex-grow overflow-y-auto p-6 space-y-6">
                 {checkoutStep === 'cart' && (
                   <>
-                    {cart.map(item => (
-                      <div key={item.id} className="flex gap-4">
-                        <div className="w-20 h-20 rounded-2xl overflow-hidden flex-shrink-0">
-                          <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" />
-                        </div>
-                        <div className="flex-grow">
-                          <h4 className="font-bold">{item.name}</h4>
-                          <p className="text-primary font-bold">₹{item.price}</p>
-                          <div className="flex items-center gap-4 mt-2">
-                            <div className="flex items-center bg-white/5 rounded-xl p-1 gap-3">
-                              <button onClick={() => handleAddToCart(item, -1)} className="p-1 hover:bg-white/10 rounded-lg">
-                                <Minus size={14} />
-                              </button>
-                              <span className="font-bold text-sm">{item.quantity}</span>
-                              <button onClick={() => handleAddToCart(item, 1)} className="p-1 hover:bg-white/10 rounded-lg">
-                                <Plus size={14} />
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="font-black">₹{item.price * item.quantity}</div>
-                      </div>
-                    ))}
-                    
-                    <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                      <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-ink-muted">
-                        Enter Coupon Code
-                      </label>
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          value={couponInput}
-                          onChange={e => setCouponInput(e.target.value.toUpperCase())}
-                          placeholder="e.g. SAVE20"
-                          className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm uppercase focus:border-primary focus:outline-none"
-                        />
-                        <button
-                          onClick={() => void handleApplyCoupon()}
-                          disabled={isApplyingCoupon || cart.length === 0}
-                          className="rounded-xl bg-primary px-4 py-2 text-xs font-black text-white disabled:opacity-60"
-                        >
-                          {isApplyingCoupon ? 'APPLYING...' : 'APPLY'}
-                        </button>
-                      </div>
-                      {appliedCouponCode && (
-                        <button
-                          onClick={handleRemoveCoupon}
-                          className="mt-2 text-xs font-bold uppercase tracking-wide text-ink-muted hover:text-white"
-                        >
-                          Remove Coupon
-                        </button>
-                      )}
-                      {couponError && <p className="mt-2 text-xs font-bold text-primary">{couponError}</p>}
-                      <AnimatePresence mode="wait">
-                        {couponSuccess && (
-                          <motion.p
-                            key={couponSuccess}
-                            initial={{ opacity: 0, y: 6 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -6 }}
-                            className="mt-2 text-xs font-bold text-emerald-400"
-                          >
-                            {couponSuccess}
-                          </motion.p>
-                        )}
-                      </AnimatePresence>
-                    </div>
-
-                    <div className="space-y-2 border-t border-white/5 pt-6">
-                      <div className="flex justify-between text-ink-muted">
-                        <span>Subtotal</span>
-                        <span>₹{cartTotal}</span>
-                      </div>
-                      <AnimatePresence initial={false}>
-                        {discountAmount > 0 && (
-                          <motion.div
-                            key={`discount-${discountAmount}`}
-                            initial={{ opacity: 0, y: 6 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -6 }}
-                            className="flex justify-between text-emerald-400"
-                          >
-                            <span>Discount</span>
-                            <span>-₹{discountAmount}</span>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                      {appliedCouponCode && (
-                        <div className="flex justify-between text-ink-muted">
-                          <span>Coupon Applied</span>
-                          <span className="font-bold text-accent">{appliedCouponCode}</span>
-                        </div>
-                      )}
+                    {!hasCartItems ? (
                       <motion.div
-                        key={`final-total-${finalCartTotal}-${discountAmount}`}
-                        initial={{ opacity: 0.75, scale: 0.98 }}
-                        animate={{
-                          opacity: 1,
-                          scale: isCouponAppliedPulseVisible ? [1, 1.03, 1] : 1,
-                        }}
-                        transition={{ duration: 0.35 }}
-                        className="flex justify-between pt-2 text-xl font-black"
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="flex min-h-[320px] flex-col items-center justify-center text-center"
                       >
-                        <span>Final Total</span>
-                        <span className="text-primary">₹{finalCartTotal}</span>
+                        <p className="text-3xl font-black">{'\uD83D\uDED2'} Cart is Empty</p>
+                        <p className="mt-2 text-ink-muted">
+                          Add items from menu to start your order.
+                        </p>
+                        <button
+                          onClick={handleBrowseMenu}
+                          className="mt-6 rounded-2xl bg-primary px-6 py-3 text-sm font-black text-white"
+                        >
+                          Browse Menu
+                        </button>
                       </motion.div>
-                    </div>
+                    ) : (
+                      <>
+                        {cart.map(item => (
+                          <div key={item.id} className="flex gap-4">
+                            <div className="w-20 h-20 rounded-2xl overflow-hidden flex-shrink-0">
+                              <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" />
+                            </div>
+                            <div className="flex-grow">
+                              <h4 className="font-bold">{item.name}</h4>
+                              <p className="text-primary font-bold">{CURRENCY_SYMBOL}{item.price}</p>
+                              <div className="mt-2 flex items-center gap-4">
+                                <div className="flex items-center bg-white/5 rounded-xl p-1 gap-3">
+                                  <button onClick={() => handleAddToCart(item, -1)} className="p-1 hover:bg-white/10 rounded-lg">
+                                    <Minus size={14} />
+                                  </button>
+                                  <span className="font-bold text-sm">{item.quantity}</span>
+                                  <button onClick={() => handleAddToCart(item, 1)} className="p-1 hover:bg-white/10 rounded-lg">
+                                    <Plus size={14} />
+                                  </button>
+                                </div>
+                                <button
+                                  onClick={() => handleRemoveFromCart(item.id)}
+                                  className="text-xs font-bold uppercase tracking-wide text-ink-muted hover:text-white"
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            </div>
+                            <div className="font-black">{CURRENCY_SYMBOL}{item.price * item.quantity}</div>
+                          </div>
+                        ))}
+
+                        <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                          <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-ink-muted">
+                            Enter Coupon Code
+                          </label>
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              value={couponInput}
+                              onChange={e => setCouponInput(e.target.value.toUpperCase())}
+                              placeholder="e.g. SAVE20"
+                              className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm uppercase focus:border-primary focus:outline-none"
+                            />
+                            <button
+                              onClick={() => void handleApplyCoupon()}
+                              disabled={isApplyingCoupon || !hasCartItems}
+                              className="rounded-xl bg-primary px-4 py-2 text-xs font-black text-white disabled:opacity-60"
+                            >
+                              {isApplyingCoupon ? 'APPLYING...' : 'APPLY'}
+                            </button>
+                          </div>
+                          {appliedCouponCode && (
+                            <button
+                              onClick={handleRemoveCoupon}
+                              className="mt-2 text-xs font-bold uppercase tracking-wide text-ink-muted hover:text-white"
+                            >
+                              Remove Coupon
+                            </button>
+                          )}
+                          {couponError && <p className="mt-2 text-xs font-bold text-primary">{couponError}</p>}
+                          <AnimatePresence mode="wait">
+                            {couponSuccess && (
+                              <motion.p
+                                key={couponSuccess}
+                                initial={{ opacity: 0, y: 6 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -6 }}
+                                className="mt-2 text-xs font-bold text-emerald-400"
+                              >
+                                {couponSuccess}
+                              </motion.p>
+                            )}
+                          </AnimatePresence>
+                        </div>
+
+                        <div className="space-y-2 border-t border-white/5 pt-6">
+                          <div className="flex justify-between text-ink-muted">
+                            <span>Subtotal</span>
+                            <span>{CURRENCY_SYMBOL}{cartTotal}</span>
+                          </div>
+                          <AnimatePresence initial={false}>
+                            {discountAmount > 0 && (
+                              <motion.div
+                                key={`discount-${discountAmount}`}
+                                initial={{ opacity: 0, y: 6 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -6 }}
+                                className="flex justify-between text-emerald-400"
+                              >
+                                <span>Discount</span>
+                                <span>-{CURRENCY_SYMBOL}{discountAmount}</span>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                          <div className="flex justify-between text-ink-muted">
+                            <span>Delivery Fee</span>
+                            {deliveryFee > 0 ? (
+                              <span>{CURRENCY_SYMBOL}{deliveryFee}</span>
+                            ) : (
+                              <span className="font-bold text-emerald-400">FREE</span>
+                            )}
+                          </div>
+                          {appliedCouponCode && (
+                            <div className="flex justify-between text-ink-muted">
+                              <span>Coupon Applied</span>
+                              <span className="font-bold text-accent">{appliedCouponCode}</span>
+                            </div>
+                          )}
+                          <motion.div
+                            key={`final-total-${payableCartTotal}-${discountAmount}-${deliveryFee}`}
+                            initial={{ opacity: 0.75, scale: 0.98 }}
+                            animate={{
+                              opacity: 1,
+                              scale: isCouponAppliedPulseVisible ? [1, 1.03, 1] : 1,
+                            }}
+                            transition={{ duration: 0.35 }}
+                            className="flex justify-between pt-2 text-xl font-black"
+                          >
+                            <span>Final Total</span>
+                            <span className="text-primary">{CURRENCY_SYMBOL}{payableCartTotal}</span>
+                          </motion.div>
+                        </div>
+                      </>
+                    )}
                   </>
                 )}
-
                 {checkoutStep === 'details' && (
                   <div className="space-y-4">
                     <div>
@@ -1714,12 +1950,15 @@ export default function App() {
               {checkoutStep !== 'success' && (
                 <div className="p-6 border-t border-white/5">
                   {checkoutStep === 'cart' ? (
-                    <button 
-                      onClick={() => setCheckoutStep('details')}
-                      className="w-full bg-primary text-white py-4 rounded-2xl font-black text-lg flex items-center justify-center gap-2"
-                    >
-                      PROCEED TO CHECKOUT <ArrowRight size={20} />
-                    </button>
+                    hasCartItems ? (
+                      <button 
+                        onClick={() => setCheckoutStep('details')}
+                        disabled={!hasCartItems}
+                        className="w-full bg-primary text-white py-4 rounded-2xl font-black text-lg flex items-center justify-center gap-2 disabled:opacity-70"
+                      >
+                        PROCEED TO CHECKOUT <ArrowRight size={20} />
+                      </button>
+                    ) : null
                   ) : (
                     <div className="flex gap-4">
                       <button 
@@ -1730,7 +1969,7 @@ export default function App() {
                       </button>
                       <button 
                         onClick={() => void handlePlaceOrder()}
-                        disabled={isPlacingOrder}
+                        disabled={isPlacingOrder || !hasCartItems}
                         className="flex-grow bg-primary text-white py-4 rounded-2xl font-black text-lg disabled:opacity-70"
                       >
                         {isPlacingOrder ? 'PLACING ORDER...' : 'CONFIRM ORDER'}
@@ -1746,8 +1985,3 @@ export default function App() {
     </div>
   );
 }
-
-
-
-
-

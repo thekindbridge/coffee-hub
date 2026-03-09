@@ -35,10 +35,13 @@ export interface Order {
   discount?: number;
   coupon_code?: string;
   final_total?: number;
-  status: 'Placed' | 'Preparing' | 'Out for Delivery' | 'Delivered';
+  status: 'Pending' | 'Preparing' | 'Out for Delivery' | 'Delivered';
   payment_method: string;
   created_at: string;
   user_id: string;
+  delivery_agent_id?: string;
+  delivery_agent_name?: string;
+  delivery_assigned_at?: string;
   items?: OrderItem[];
 }
 

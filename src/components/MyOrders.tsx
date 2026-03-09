@@ -8,10 +8,10 @@ interface MyOrdersProps {
   onBrowseMenu: () => void;
 }
 
-const ORDER_FLOW: Order['status'][] = ['Placed', 'Preparing', 'Out for Delivery', 'Delivered'];
+const ORDER_FLOW: Order['status'][] = ['Pending', 'Preparing', 'Out for Delivery', 'Delivered'];
 
 const STATUS_BADGE_CLASS: Record<Order['status'], string> = {
-  Placed: 'border border-white/20 bg-white/10 text-ink-muted',
+  Pending: 'border border-white/20 bg-white/10 text-ink-muted',
   Preparing: 'border border-amber-400/30 bg-amber-400/15 text-amber-300',
   'Out for Delivery': 'border border-sky-400/30 bg-sky-400/15 text-sky-300',
   Delivered: 'border border-emerald-400/30 bg-emerald-400/15 text-emerald-300',
