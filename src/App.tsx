@@ -1162,7 +1162,7 @@ export default function App() {
     );
   });
 
-  const handleCaptureCustomerLocation = async () => {
+  const captureCustomerLocation = async () => {
     setIsLocatingCustomer(true);
     setCustomerLocationError('');
     setCheckoutError('');
@@ -1173,6 +1173,7 @@ export default function App() {
         ...prev,
         location: nextLocation,
       }));
+      return nextLocation;
     } catch (error) {
       console.error('Failed to capture customer location', error);
       setCustomerLocationError(
@@ -1180,9 +1181,14 @@ export default function App() {
           ? error.message
           : 'Unable to capture your location right now.',
       );
+      return null;
     } finally {
       setIsLocatingCustomer(false);
     }
+  };
+
+  const handleCaptureCustomerLocation = async () => {
+    await captureCustomerLocation();
   };
 
   const toFirestoreLocation = (location: DeliveryLocation) => ({
@@ -1664,7 +1670,7 @@ export default function App() {
     const name = customerDetails.name.trim();
     const phone = customerDetails.phone.trim();
     const address = customerDetails.address.trim();
-    const customerLocation = customerDetails.location;
+    let customerLocation = customerDetails.location;
 
     if (!name || !phone || !address) {
       setCheckoutError('Please fill in your name, phone number, and delivery address.');
@@ -1672,8 +1678,12 @@ export default function App() {
     }
 
     if (!customerLocation) {
-      setCheckoutError('Share your live delivery location to enable rider tracking and ETA updates.');
-      return null;
+      const capturedLocation = await captureCustomerLocation();
+      if (!capturedLocation) {
+        setCheckoutError('Share your live delivery location to enable rider tracking and ETA updates.');
+        return null;
+      }
+      customerLocation = capturedLocation;
     }
 
     if (cart.length === 0) {

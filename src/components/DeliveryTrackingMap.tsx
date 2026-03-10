@@ -338,7 +338,7 @@ export default function DeliveryTrackingMap({
   }, [agentLocation]);
 
   useEffect(() => {
-    if (!isLoaded || !agentLocation || !normalizedCustomerLocation) {
+    if (!isLoaded || !normalizedCustomerLocation) {
       setDirections(null);
       setRouteError('');
       onRouteMetricsChange?.(null);
@@ -347,10 +347,11 @@ export default function DeliveryTrackingMap({
 
     let isCancelled = false;
     const directionsService = new google.maps.DirectionsService();
+    const routeOrigin = agentLocation ?? resolvedCoffeeShopLocation;
 
     directionsService.route(
       {
-        origin: agentLocation,
+        origin: routeOrigin,
         destination: normalizedCustomerLocation,
         travelMode: google.maps.TravelMode.DRIVING,
       },
@@ -376,7 +377,7 @@ export default function DeliveryTrackingMap({
     return () => {
       isCancelled = true;
     };
-  }, [agentLocation, normalizedCustomerLocation, isLoaded, onRouteMetricsChange]);
+  }, [agentLocation, normalizedCustomerLocation, resolvedCoffeeShopLocation, isLoaded, onRouteMetricsChange]);
 
   useEffect(() => {
     if (!isLoaded || !mapRef.current || !normalizedCustomerLocation) {
