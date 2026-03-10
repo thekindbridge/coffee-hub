@@ -2225,7 +2225,7 @@ export default function App() {
           <span className="coffee-badge">{isMenuLoading ? 'Loading...' : `${filteredMenu.length} items`}</span>
         </div>
 
-        <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-5 grid grid-cols-1 gap-4 pb-28 sm:pb-32 sm:grid-cols-2 lg:grid-cols-3">
           {isMenuLoading
             ? [...Array(6)].map((_, index) => <MenuSkeletonCard key={index} />)
             : filteredMenu.map(item => (
@@ -2951,21 +2951,13 @@ export default function App() {
                               className="coffee-input min-h-11 uppercase"
                             />
                             <button
-                              onClick={() => void handleApplyCoupon()}
+                              onClick={() => (appliedCouponCode ? handleRemoveCoupon() : void handleApplyCoupon())}
                               disabled={isApplyingCoupon || !hasCartItems}
                               className="coffee-btn-primary min-h-11 px-4 text-[11px] uppercase tracking-[0.16em] disabled:opacity-60"
                             >
-                              {isApplyingCoupon ? 'APPLYING...' : 'APPLY'}
+                              {appliedCouponCode ? 'REMOVE' : (isApplyingCoupon ? 'APPLYING...' : 'APPLY')}
                             </button>
                           </div>
-                          {appliedCouponCode && (
-                            <button
-                              onClick={handleRemoveCoupon}
-                              className="mt-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-muted hover:text-accent"
-                            >
-                              Remove Coupon
-                            </button>
-                          )}
                           {couponError && <p className="mt-2 text-xs font-semibold text-primary">{couponError}</p>}
                           <AnimatePresence mode="wait">
                             {couponSuccess && (
