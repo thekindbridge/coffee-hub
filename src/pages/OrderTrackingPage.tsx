@@ -158,6 +158,35 @@ export default function OrderTrackingPage({
     return order.status === 'Preparing' ? 'Dispatching soon' : 'Awaiting kitchen';
   }, [order.status, routeMetrics?.eta_minutes]);
 
+  const trafficLabel = useMemo(() => {
+    if (!routeMetrics?.traffic_level) {
+      return 'Traffic';
+    }
+
+    if (routeMetrics.traffic_level === 'low') {
+      return 'Light traffic';
+    }
+
+    if (routeMetrics.traffic_level === 'moderate') {
+      return 'Moderate traffic';
+    }
+
+    return 'Heavy traffic';
+  }, [routeMetrics?.traffic_level]);
+
+  const trafficToneClass = useMemo(() => {
+    if (routeMetrics?.traffic_level === 'low') {
+      return 'text-emerald-200';
+    }
+    if (routeMetrics?.traffic_level === 'moderate') {
+      return 'text-amber-200';
+    }
+    if (routeMetrics?.traffic_level === 'heavy') {
+      return 'text-red-200';
+    }
+    return 'text-[#c9aa8b]';
+  }, [routeMetrics?.traffic_level]);
+
   if (!order.customer_location) {
     return (
       <div className="px-4 pb-24 pt-24 sm:px-6">
@@ -237,6 +266,9 @@ export default function OrderTrackingPage({
                   </p>
                   <p className="mt-2 text-lg font-semibold text-[#fff8f2]">
                     {routeMetrics?.duration_in_traffic_text || '--'}
+                  </p>
+                  <p className={`mt-1 text-xs font-semibold ${trafficToneClass}`}>
+                    {trafficLabel}
                   </p>
                 </div>
               </div>

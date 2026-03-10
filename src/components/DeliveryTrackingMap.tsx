@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  DirectionsRenderer,
   GoogleMap,
   MarkerF,
+  PolylineF,
   useJsApiLoader,
 } from '@react-google-maps/api';
 import { doc, onSnapshot } from 'firebase/firestore';
@@ -20,8 +20,10 @@ const MAP_CONTAINER_STYLE = {
   width: '100%',
   height: '100%',
 };
-const ROUTE_COLOR = '#f97316';
-const ANIMATION_DURATION_MS = 1200;
+const ROUTE_COLOR = '#ff7a18';
+const ROUTE_ANIMATION_DURATION_MS = 1200;
+const AGENT_ANIMATION_DURATION_MS = 1000;
+const ROUTE_THROTTLE_MS = 8000;
 const DARK_MAP_STYLES: google.maps.MapTypeStyle[] = [
   { elementType: 'geometry', stylers: [{ color: '#15110f' }] },
   { elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
@@ -48,16 +50,6 @@ const MAP_OPTIONS: google.maps.MapOptions = {
   streetViewControl: false,
   styles: DARK_MAP_STYLES,
   zoomControl: true,
-};
-
-const ROUTE_RENDERER_OPTIONS: google.maps.DirectionsRendererOptions = {
-  preserveViewport: true,
-  suppressMarkers: true,
-  polylineOptions: {
-    strokeColor: ROUTE_COLOR,
-    strokeOpacity: 0.94,
-    strokeWeight: 5,
-  },
 };
 
 export interface DeliveryTrackingMapProps {
@@ -105,6 +97,40 @@ const normalizeLocationRecord = (value: unknown): DeliveryLocation | null => {
 
 const easeOutCubic = (value: number) => 1 - ((1 - value) ** 3);
 
+const getTrafficStatus = (directions: google.maps.DirectionsResult) => {
+  const leg = directions.routes[0]?.legs[0];
+  const durationSeconds = leg?.duration?.value;
+  const durationInTrafficSeconds = leg?.duration_in_traffic?.value;
+
+  if (
+    typeof durationSeconds !== 'number' ||
+    typeof durationInTrafficSeconds !== 'number' ||
+    durationSeconds <= 0
+  ) {
+    return {
+      level: null,
+      ratio: null,
+      color: ROUTE_COLOR,
+    };
+  }
+
+  const ratio = durationInTrafficSeconds / durationSeconds;
+  if (ratio <= 1.15) {
+    return { level: 'low' as const, ratio, color: '#22c55e' };
+  }
+
+  if (ratio <= 1.35) {
+    return { level: 'moderate' as const, ratio, color: ROUTE_COLOR };
+  }
+
+  return { level: 'heavy' as const, ratio, color: '#ef4444' };
+};
+
+const buildLatLngLiteral = (point: google.maps.LatLng) => ({
+  lat: point.lat(),
+  lng: point.lng(),
+});
+
 const buildStaticMarkerIcon = (
   fillColor: string,
 ): google.maps.Symbol => ({
@@ -141,6 +167,7 @@ const formatMetricsFromDirections = (
   const etaMinutes = typeof durationInTrafficSeconds === 'number'
     ? Math.max(1, Math.round(durationInTrafficSeconds / 60))
     : null;
+  const trafficStatus = getTrafficStatus(directions);
 
   return {
     distance_meters: primaryLeg.distance?.value ?? null,
@@ -148,6 +175,8 @@ const formatMetricsFromDirections = (
     duration_text: primaryLeg.duration?.text || '--',
     duration_in_traffic_text: primaryLeg.duration_in_traffic?.text || primaryLeg.duration?.text || '--',
     eta_minutes: etaMinutes,
+    traffic_level: trafficStatus.level,
+    traffic_ratio: trafficStatus.ratio,
   };
 };
 
@@ -193,9 +222,13 @@ export default function DeliveryTrackingMap({
   const hasInitializedViewportRef = useRef(false);
   const [agentLocation, setAgentLocation] = useState<DeliveryLocation | null>(null);
   const [animatedAgentLocation, setAnimatedAgentLocation] = useState<DeliveryLocation | null>(null);
-  const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null);
+  const [animatedRoutePath, setAnimatedRoutePath] = useState<google.maps.LatLngLiteral[]>([]);
+  const [routeStrokeColor, setRouteStrokeColor] = useState(ROUTE_COLOR);
   const [trackingLabel, setTrackingLabel] = useState('Connecting to the rider...');
   const [routeError, setRouteError] = useState('');
+  const lastRouteRequestRef = useRef<number>(0);
+  const lastRouteOriginTypeRef = useRef<'agent' | 'shop' | ''>('');
+  const routeAnimationFrameRef = useRef<number | null>(null);
   const normalizedCustomerLocation = useMemo(
     () => normalizeLocationRecord(customerLocation),
     [customerLocation],
@@ -230,7 +263,7 @@ export default function DeliveryTrackingMap({
 
   useEffect(() => {
     if (!normalizedCustomerLocation) {
-      setDirections(null);
+      setAnimatedRoutePath([]);
       setRouteError('');
       onRouteMetricsChange?.(null);
     }
@@ -240,7 +273,7 @@ export default function DeliveryTrackingMap({
     if (!normalizedOrderId) {
       setAgentLocation(null);
       setAnimatedAgentLocation(null);
-      setDirections(null);
+      setAnimatedRoutePath([]);
       setTrackingLabel('Enter an order to load live tracking.');
       onRouteMetricsChange?.(null);
       return undefined;
@@ -252,7 +285,7 @@ export default function DeliveryTrackingMap({
         if (!snapshot.exists()) {
           setAgentLocation(null);
           setAnimatedAgentLocation(null);
-          setDirections(null);
+          setAnimatedRoutePath([]);
           setTrackingLabel('Waiting for the delivery partner to start sharing location.');
           onRouteMetricsChange?.(null);
           return;
@@ -262,7 +295,7 @@ export default function DeliveryTrackingMap({
         if (!nextLocation) {
           setAgentLocation(null);
           setAnimatedAgentLocation(null);
-          setDirections(null);
+          setAnimatedRoutePath([]);
           setTrackingLabel('Waiting for a live GPS ping from the rider.');
           onRouteMetricsChange?.(null);
           return;
@@ -275,7 +308,7 @@ export default function DeliveryTrackingMap({
         console.error('Failed to subscribe to delivery location', error);
         setAgentLocation(null);
         setAnimatedAgentLocation(null);
-        setDirections(null);
+        setAnimatedRoutePath([]);
         setTrackingLabel('Unable to load the rider location right now.');
         onRouteMetricsChange?.(null);
       },
@@ -311,7 +344,7 @@ export default function DeliveryTrackingMap({
     const animationStart = performance.now();
 
     const animate = (frameTime: number) => {
-      const progress = Math.min(1, (frameTime - animationStart) / ANIMATION_DURATION_MS);
+      const progress = Math.min(1, (frameTime - animationStart) / AGENT_ANIMATION_DURATION_MS);
       const easedProgress = easeOutCubic(progress);
       const nextAnimatedLocation = {
         lat: startLocation.lat + ((agentLocation.lat - startLocation.lat) * easedProgress),
@@ -338,12 +371,62 @@ export default function DeliveryTrackingMap({
   }, [agentLocation]);
 
   useEffect(() => {
+    return () => {
+      if (routeAnimationFrameRef.current !== null) {
+        window.cancelAnimationFrame(routeAnimationFrameRef.current);
+      }
+    };
+  }, []);
+
+  const animateRoutePath = (path: google.maps.LatLngLiteral[]) => {
+    if (routeAnimationFrameRef.current !== null) {
+      window.cancelAnimationFrame(routeAnimationFrameRef.current);
+      routeAnimationFrameRef.current = null;
+    }
+
+    if (path.length <= 2) {
+      setAnimatedRoutePath(path);
+      return;
+    }
+
+    const animationStart = performance.now();
+    const totalPoints = path.length;
+
+    const animate = (frameTime: number) => {
+      const progress = Math.min(1, (frameTime - animationStart) / ROUTE_ANIMATION_DURATION_MS);
+      const easedProgress = easeOutCubic(progress);
+      const pointCount = Math.max(2, Math.ceil(totalPoints * easedProgress));
+
+      setAnimatedRoutePath(path.slice(0, pointCount));
+
+      if (progress < 1) {
+        routeAnimationFrameRef.current = window.requestAnimationFrame(animate);
+      }
+    };
+
+    routeAnimationFrameRef.current = window.requestAnimationFrame(animate);
+  };
+
+  useEffect(() => {
     if (!isLoaded || !normalizedCustomerLocation) {
-      setDirections(null);
+      setAnimatedRoutePath([]);
       setRouteError('');
       onRouteMetricsChange?.(null);
       return;
     }
+
+    const now = Date.now();
+    const originType: 'agent' | 'shop' = agentLocation ? 'agent' : 'shop';
+    const originTypeChanged =
+      lastRouteOriginTypeRef.current !== '' && lastRouteOriginTypeRef.current !== originType;
+    const isThrottled = now - lastRouteRequestRef.current < ROUTE_THROTTLE_MS;
+
+    if (isThrottled && !originTypeChanged) {
+      return;
+    }
+
+    lastRouteRequestRef.current = now;
+    lastRouteOriginTypeRef.current = originType;
 
     let isCancelled = false;
     const directionsService = new google.maps.DirectionsService();
@@ -354,6 +437,10 @@ export default function DeliveryTrackingMap({
         origin: routeOrigin,
         destination: normalizedCustomerLocation,
         travelMode: google.maps.TravelMode.DRIVING,
+        drivingOptions: {
+          departureTime: new Date(),
+          trafficModel: google.maps.TrafficModel.BEST_GUESS,
+        },
       },
       (result, status) => {
         if (isCancelled) {
@@ -361,14 +448,23 @@ export default function DeliveryTrackingMap({
         }
 
         if (status === 'OK' && result) {
-          setDirections(result);
           setRouteError('');
-          onRouteMetricsChange?.(formatMetricsFromDirections(result));
+          const metrics = formatMetricsFromDirections(result);
+          onRouteMetricsChange?.(metrics);
+          const trafficStatus = getTrafficStatus(result);
+          setRouteStrokeColor(trafficStatus.color);
+
+          const overviewPath = result.routes[0]?.overview_path;
+          if (overviewPath && overviewPath.length > 0) {
+            animateRoutePath(overviewPath.map(buildLatLngLiteral));
+          } else {
+            setAnimatedRoutePath([]);
+          }
           return;
         }
 
         console.error('Directions failed', status);
-        setDirections(null);
+        setAnimatedRoutePath([]);
         setRouteError('Route preview is temporarily unavailable.');
         onRouteMetricsChange?.(null);
       },
@@ -488,10 +584,14 @@ export default function DeliveryTrackingMap({
                 title="Delivery partner"
               />
             )}
-            {directions && (
-              <DirectionsRenderer
-                directions={directions}
-                options={ROUTE_RENDERER_OPTIONS}
+            {animatedRoutePath.length > 1 && (
+              <PolylineF
+                path={animatedRoutePath}
+                options={{
+                  strokeColor: routeStrokeColor,
+                  strokeOpacity: 0.9,
+                  strokeWeight: 5,
+                }}
               />
             )}
           </GoogleMap>

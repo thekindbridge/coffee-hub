@@ -51,6 +51,8 @@ export interface DeliveryRouteMetrics {
   duration_text: string;
   duration_in_traffic_text: string;
   eta_minutes: number | null;
+  traffic_level?: 'low' | 'moderate' | 'heavy' | null;
+  traffic_ratio?: number | null;
 }
 
 export interface OrderItem {
