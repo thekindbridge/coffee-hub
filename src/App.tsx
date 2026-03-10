@@ -3105,9 +3105,6 @@ export default function App() {
                           <label className="block text-[11px] font-semibold uppercase tracking-[0.22em] text-ink-muted">
                             Live Delivery Location
                           </label>
-                          <p className="mt-2 text-sm leading-6 text-ink-muted">
-                            Share your current location once so Coffee Hub can show the rider on a live map and auto-complete delivery near your doorstep.
-                          </p>
                         </div>
                         <button
                           onClick={() => {
@@ -3116,16 +3113,14 @@ export default function App() {
                           disabled={isLocatingCustomer}
                           className="coffee-btn-primary min-h-11 px-4 text-[11px] uppercase tracking-[0.18em] disabled:opacity-60"
                         >
-                          {isLocatingCustomer ? 'Locating...' : 'Use Current Location'}
+                          {isLocatingCustomer ? 'Locating...' : 'Location'}
                         </button>
                       </div>
                       <div className="mt-4 rounded-[18px] border border-white/10 bg-[#120d0b]/80 px-4 py-3 text-sm">
                         {customerDetails.location ? (
-                          <p className="font-semibold text-accent">
-                            Location ready: {customerDetails.location.lat.toFixed(5)}, {customerDetails.location.lng.toFixed(5)}
-                          </p>
+                          <p className="font-semibold text-accent">Location captured successfully.</p>
                         ) : (
-                          <p className="text-ink-muted">Location not captured yet.</p>
+                          <p className="text-ink-muted">Location not added yet.</p>
                         )}
                       </div>
                       {customerLocationError && (
@@ -3152,9 +3147,6 @@ export default function App() {
                               {method === 'Pay Online' ? <CreditCard size={17} className="text-highlight" /> : <Wallet size={17} className="text-secondary" />}
                               <p className="text-sm font-semibold">{method}</p>
                             </div>
-                            <p className="mt-2 text-xs leading-5">
-                              {method === 'Pay Online' ? 'UPI, cards, and netbanking via Razorpay' : 'Pay at delivery after the order arrives'}
-                            </p>
                           </button>
                         ))}
                       </div>
