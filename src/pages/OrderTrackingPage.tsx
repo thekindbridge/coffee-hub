@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
+  ArrowLeft,
   Bike,
   CheckCircle2,
   Clock3,
@@ -25,6 +26,7 @@ export interface OrderTrackingPageProps {
   order: Order;
   coffeeShopLocation: DeliveryLocation;
   onClearTracking?: () => void;
+  onBackToOrders?: () => void;
 }
 
 const normalizePhoneForTel = (phone: string) => phone.replace(/[^\d+]/g, '');
@@ -75,6 +77,7 @@ export default function OrderTrackingPage({
   order,
   coffeeShopLocation,
   onClearTracking,
+  onBackToOrders,
 }: OrderTrackingPageProps) {
   const [routeMetrics, setRouteMetrics] = useState<DeliveryRouteMetrics | null>(null);
   const [deliveryAgent, setDeliveryAgent] = useState<DeliveryAgent | null>(null);
@@ -98,6 +101,17 @@ export default function OrderTrackingPage({
   const stepProgressWidth = stepProgressPercent === 0
     ? '0%'
     : `calc(${stepProgressPercent}% - 8px)`;
+  const backButton = onBackToOrders ? (
+    <button
+      type="button"
+      onClick={onBackToOrders}
+      className="inline-flex min-h-10 items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 text-[11px] font-semibold text-[#f5ede3] transition hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f1b375]/60"
+      aria-label="Back to orders"
+    >
+      <ArrowLeft size={14} className="text-[#f1b375]" />
+      Back
+    </button>
+  ) : null;
 
   useEffect(() => {
     const unsubscribe = onSnapshot(
@@ -168,6 +182,7 @@ export default function OrderTrackingPage({
     return (
       <div className="px-4 pb-20 pt-6 sm:px-6">
         <div className="mx-auto max-w-screen-lg">
+          {backButton && <div className="mb-4 flex items-center">{backButton}</div>}
           <div className="rounded-[32px] border border-white/10 bg-[linear-gradient(180deg,#18110d,#0e0907)] px-6 py-10 text-center text-[#fff8f2]">
             <p className="text-[11px] font-semibold uppercase tracking-[0.32em] text-[#f1b375]">
               Live Tracking Unavailable
@@ -200,6 +215,7 @@ export default function OrderTrackingPage({
           className="w-full overflow-hidden rounded-[28px] border border-white/10 bg-[linear-gradient(135deg,rgba(36,24,18,0.96),rgba(15,10,8,0.98))] text-[#fff8f2] shadow-[0_20px_60px_rgba(8,5,4,0.28)]"
         >
           <div className="w-full space-y-3 px-5 py-4 sm:px-6">
+            {backButton && <div className="flex items-center">{backButton}</div>}
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.34em] text-[#f1b375]">

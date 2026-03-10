@@ -2650,6 +2650,7 @@ export default function App() {
       ) : (
         <OrderTrackingPage
           coffeeShopLocation={COFFEE_SHOP_LOCATION}
+          onBackToOrders={() => setActiveTab('orders')}
           onClearTracking={() => {
             setOrderStatus(null);
             setTrackingError('');
