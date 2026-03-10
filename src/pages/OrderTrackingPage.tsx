@@ -3,7 +3,6 @@ import {
   Bike,
   CheckCircle2,
   Clock3,
-  Flame,
   MapPin,
   Phone,
   Sparkles,
@@ -82,14 +81,19 @@ export default function OrderTrackingPage({
   const [deliverySession, setDeliverySession] = useState<DeliverySession | null>(null);
 
   const currentStepIndex = ORDER_FLOW.indexOf(order.status);
+  const activeStepIndex = currentStepIndex >= 0 ? currentStepIndex : 0;
   const agentId = deliverySession?.agent_id || order.delivery_agent_id || '';
   const agentPhone = deliveryAgent?.phone || order.delivery_agent_phone || '';
   const agentName = deliveryAgent?.name || deliverySession?.agent_name || order.delivery_agent_name || 'Delivery Partner';
-  const liveFlowLabel = ORDER_FLOW[currentStepIndex] || order.status;
   const partnerStatus = deliverySession?.status || (order.status === 'Out for Delivery' ? 'assigned' : order.status.toLowerCase());
   const paymentLabel = order.payment_method === 'razorpay' || order.payment_method === 'Pay Online'
     ? 'Pay Online'
     : order.payment_method;
+  const defaultAgentPhone = '+91 7893504891';
+  const isAgentAssigned = Boolean(agentId);
+  const displayAgentPhone = agentPhone || (isAgentAssigned ? defaultAgentPhone : '');
+  const phoneLabel = displayAgentPhone ? `Agent Number : ${displayAgentPhone}` : 'Will appear once assigned';
+  const phoneHref = displayAgentPhone ? `tel:${normalizePhoneForTel(displayAgentPhone)}` : undefined;
 
   useEffect(() => {
     const unsubscribe = onSnapshot(
@@ -156,38 +160,9 @@ export default function OrderTrackingPage({
     return order.status === 'Preparing' ? 'Dispatching soon' : 'Awaiting kitchen';
   }, [order.status, routeMetrics?.eta_minutes]);
 
-  const trafficLabel = useMemo(() => {
-    if (!routeMetrics?.traffic_level) {
-      return 'Traffic';
-    }
-
-    if (routeMetrics.traffic_level === 'low') {
-      return 'Light traffic';
-    }
-
-    if (routeMetrics.traffic_level === 'moderate') {
-      return 'Moderate traffic';
-    }
-
-    return 'Heavy traffic';
-  }, [routeMetrics?.traffic_level]);
-
-  const trafficToneClass = useMemo(() => {
-    if (routeMetrics?.traffic_level === 'low') {
-      return 'text-emerald-200';
-    }
-    if (routeMetrics?.traffic_level === 'moderate') {
-      return 'text-amber-200';
-    }
-    if (routeMetrics?.traffic_level === 'heavy') {
-      return 'text-red-200';
-    }
-    return 'text-[#c9aa8b]';
-  }, [routeMetrics?.traffic_level]);
-
   if (!order.customer_location) {
     return (
-      <div className="px-4 pb-24 pt-24 sm:px-6">
+      <div className="px-4 pb-20 pt-6 sm:px-6">
         <div className="mx-auto max-w-screen-lg">
           <div className="rounded-[32px] border border-white/10 bg-[linear-gradient(180deg,#18110d,#0e0907)] px-6 py-10 text-center text-[#fff8f2]">
             <p className="text-[11px] font-semibold uppercase tracking-[0.32em] text-[#f1b375]">
@@ -212,15 +187,15 @@ export default function OrderTrackingPage({
   }
 
   return (
-    <div className="px-4 pb-20 pt-24 sm:px-6">
-      <div className="mx-auto flex max-w-screen-xl flex-col gap-4">
+    <div className="px-4 pb-20 pt-6 sm:px-6">
+      <div className="mx-auto flex max-w-screen-xl flex-col gap-3">
         <motion.section
           initial={{ opacity: 0, y: 18 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.35, ease: 'easeOut' }}
           className="rounded-[28px] border border-white/10 bg-[linear-gradient(135deg,rgba(36,24,18,0.96),rgba(15,10,8,0.98))] text-[#fff8f2] shadow-[0_20px_60px_rgba(8,5,4,0.28)]"
         >
-          <div className="space-y-4 px-5 py-4 sm:px-6">
+          <div className="space-y-3 px-5 py-4 sm:px-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.34em] text-[#f1b375]">
@@ -238,7 +213,7 @@ export default function OrderTrackingPage({
               </div>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-3">
               <div className="rounded-[22px] border border-white/10 bg-white/5 p-3">
                 <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#c9aa8b]">
                   <Clock3 size={14} className="text-[#f6c18b]" />
@@ -257,22 +232,44 @@ export default function OrderTrackingPage({
               </div>
               <div className="rounded-[22px] border border-white/10 bg-white/5 p-3">
                 <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#c9aa8b]">
-                  <Flame size={14} className="text-[#f97316]" />
-                  Traffic
-                </div>
-                <p className="mt-2 text-sm font-semibold text-[#fff8f2]">
-                  {routeMetrics?.duration_in_traffic_text || '--'}
-                </p>
-                <p className={`mt-1 text-[11px] font-semibold ${trafficToneClass}`}>
-                  {trafficLabel}
-                </p>
-              </div>
-              <div className="rounded-[22px] border border-white/10 bg-white/5 p-3">
-                <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#c9aa8b]">
                   <Sparkles size={14} className="text-[#f1b375]" />
                   Live Flow
                 </div>
-                <p className="mt-2 text-sm font-semibold text-[#fff8f2]">{liveFlowLabel}</p>
+                <div className="mt-3 flex items-center gap-2 overflow-x-auto pb-1">
+                  {ORDER_FLOW.map((step, index) => {
+                    const isReached = index <= activeStepIndex;
+                    const isCurrent = index === activeStepIndex;
+
+                    return (
+                      <div key={step} className="flex items-center gap-2">
+                        <div
+                          aria-current={isCurrent ? 'step' : undefined}
+                          className={joinClassNames(
+                            'h-2.5 w-2.5 rounded-full border transition-colors',
+                            isReached ? 'border-[#f1b375] bg-[#f1b375]' : 'border-white/20 bg-transparent',
+                            isCurrent ? 'shadow-[0_0_0_4px_rgba(241,179,117,0.15)]' : undefined,
+                          )}
+                        />
+                        <span
+                          className={joinClassNames(
+                            'text-[10px] font-semibold uppercase tracking-[0.14em] whitespace-nowrap',
+                            isCurrent ? 'text-[#fff8f2]' : isReached ? 'text-[#f5ede3]' : 'text-[#8b7565]',
+                          )}
+                        >
+                          {step}
+                        </span>
+                        {index < ORDER_FLOW.length - 1 && (
+                          <div
+                            className={joinClassNames(
+                              'h-[2px] w-6 rounded-full sm:w-10 lg:w-12',
+                              index < activeStepIndex ? 'bg-[#f1b375]' : 'bg-white/15',
+                            )}
+                          />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           </div>
@@ -320,21 +317,14 @@ export default function OrderTrackingPage({
               </div>
             </div>
 
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <div className="rounded-[20px] border border-white/10 bg-white/5 p-3">
-                <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#c9aa8b]">
-                  <Sparkles size={13} className="text-[#f1b375]" />
-                  Status
-                </div>
-                <p className="mt-2 text-sm font-semibold text-[#fff8f2]">{order.status}</p>
-              </div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
               <div className="rounded-[20px] border border-white/10 bg-white/5 p-3">
                 <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#c9aa8b]">
                   <Phone size={13} className="text-[#f97316]" />
                   Phone
                 </div>
                 <p className="mt-2 text-sm font-semibold text-[#fff8f2]">
-                  {agentPhone || 'Not shared yet'}
+                  {phoneLabel}
                 </p>
               </div>
               <div className="rounded-[20px] border border-white/10 bg-white/5 p-3">
@@ -359,9 +349,9 @@ export default function OrderTrackingPage({
 
             <div className="mt-4 flex flex-wrap gap-3">
               <a
-                href={agentPhone ? `tel:${normalizePhoneForTel(agentPhone)}` : undefined}
+                href={phoneHref}
                 className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-full px-4 text-sm font-semibold transition-colors ${
-                  agentPhone
+                  phoneHref
                     ? 'bg-[#f97316] text-white hover:bg-[#ea6a10]'
                     : 'cursor-not-allowed border border-white/10 bg-white/5 text-[#8b7565]'
                 }`}
