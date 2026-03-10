@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   GoogleMap,
-  MarkerF,
   PolylineF,
   useJsApiLoader,
 } from '@react-google-maps/api';
@@ -11,7 +10,9 @@ import { db } from '../firebase';
 import type { DeliveryLocation, DeliveryRouteMetrics } from '../types';
 
 const GOOGLE_MAPS_SCRIPT_ID = 'coffee-hub-premium-delivery-tracking-map';
-const DEFAULT_AGENT_ICON_URL = '/assets/delivery-scooter.png';
+const DEFAULT_AGENT_ICON_URL = '/assets/icons/delivery-scooter.png';
+const SHOP_ICON_URL = '/assets/icons/coffee-shop.png';
+const CUSTOMER_ICON_URL = '/assets/icons/customer-home.png';
 const COFFEE_SHOP_LOCATION: DeliveryLocation = {
   lat: 15.5057,
   lng: 80.0499,
@@ -131,28 +132,10 @@ const buildLatLngLiteral = (point: google.maps.LatLng) => ({
   lng: point.lng(),
 });
 
-const buildStaticMarkerIcon = (
-  fillColor: string,
-): google.maps.Symbol => ({
-  path: google.maps.SymbolPath.CIRCLE,
-  fillColor,
-  fillOpacity: 1,
-  scale: 8.5,
-  strokeColor: '#fff7ed',
-  strokeWeight: 2.2,
-});
-
-const buildLabel = (text: string): google.maps.MarkerLabel => ({
-  color: '#ffffff',
-  fontSize: '11px',
-  fontWeight: '700',
-  text,
-});
-
-const buildAgentIcon = (url: string): google.maps.Icon => ({
+const buildImageMarkerIcon = (url: string, size: number): google.maps.Icon => ({
   url,
-  scaledSize: new google.maps.Size(68, 68),
-  anchor: new google.maps.Point(34, 34),
+  scaledSize: new google.maps.Size(size, size),
+  anchor: new google.maps.Point(size / 2, size / 2),
 });
 
 const formatMetricsFromDirections = (
@@ -220,12 +203,16 @@ export default function DeliveryTrackingMap({
   const animationFrameRef = useRef<number | null>(null);
   const animatedLocationRef = useRef<DeliveryLocation | null>(null);
   const hasInitializedViewportRef = useRef(false);
+  const shopMarkerRef = useRef<google.maps.Marker | null>(null);
+  const customerMarkerRef = useRef<google.maps.Marker | null>(null);
+  const agentMarkerRef = useRef<google.maps.Marker | null>(null);
   const [agentLocation, setAgentLocation] = useState<DeliveryLocation | null>(null);
   const [animatedAgentLocation, setAnimatedAgentLocation] = useState<DeliveryLocation | null>(null);
   const [animatedRoutePath, setAnimatedRoutePath] = useState<google.maps.LatLngLiteral[]>([]);
   const [routeStrokeColor, setRouteStrokeColor] = useState(ROUTE_COLOR);
   const [trackingLabel, setTrackingLabel] = useState('Connecting to the rider...');
   const [routeError, setRouteError] = useState('');
+  const [isMapReady, setIsMapReady] = useState(false);
   const lastRouteRequestRef = useRef<number>(0);
   const lastRouteOriginTypeRef = useRef<'agent' | 'shop' | ''>('');
   const routeAnimationFrameRef = useRef<number | null>(null);
@@ -245,15 +232,15 @@ export default function DeliveryTrackingMap({
   });
 
   const shopMarkerIcon = useMemo(
-    () => (isLoaded ? buildStaticMarkerIcon('#6f4e37') : undefined),
+    () => (isLoaded ? buildImageMarkerIcon(SHOP_ICON_URL, 40) : undefined),
     [isLoaded],
   );
   const customerMarkerIcon = useMemo(
-    () => (isLoaded ? buildStaticMarkerIcon('#16a34a') : undefined),
+    () => (isLoaded ? buildImageMarkerIcon(CUSTOMER_ICON_URL, 40) : undefined),
     [isLoaded],
   );
   const agentMarkerIcon = useMemo(
-    () => (isLoaded ? buildAgentIcon(agentIconUrl) : undefined),
+    () => (isLoaded ? buildImageMarkerIcon(agentIconUrl, 45) : undefined),
     [agentIconUrl, isLoaded],
   );
 
@@ -268,6 +255,83 @@ export default function DeliveryTrackingMap({
       onRouteMetricsChange?.(null);
     }
   }, [normalizedCustomerLocation, onRouteMetricsChange]);
+
+  useEffect(() => {
+    if (
+      !isLoaded ||
+      !isMapReady ||
+      !mapRef.current ||
+      !normalizedCustomerLocation ||
+      !shopMarkerIcon ||
+      !customerMarkerIcon
+    ) {
+      return;
+    }
+
+    const map = mapRef.current;
+
+    if (!shopMarkerRef.current) {
+      shopMarkerRef.current = new google.maps.Marker({
+        map,
+        position: resolvedCoffeeShopLocation,
+        icon: shopMarkerIcon,
+        title: 'Coffee Hub',
+      });
+    } else {
+      shopMarkerRef.current.setMap(map);
+      shopMarkerRef.current.setPosition(resolvedCoffeeShopLocation);
+      shopMarkerRef.current.setIcon(shopMarkerIcon);
+    }
+
+    if (!customerMarkerRef.current) {
+      customerMarkerRef.current = new google.maps.Marker({
+        map,
+        position: normalizedCustomerLocation,
+        icon: customerMarkerIcon,
+        title: 'Customer',
+      });
+    } else {
+      customerMarkerRef.current.setMap(map);
+      customerMarkerRef.current.setPosition(normalizedCustomerLocation);
+      customerMarkerRef.current.setIcon(customerMarkerIcon);
+    }
+  }, [
+    isLoaded,
+    isMapReady,
+    normalizedCustomerLocation,
+    resolvedCoffeeShopLocation,
+    shopMarkerIcon,
+    customerMarkerIcon,
+  ]);
+
+  useEffect(() => {
+    if (!isLoaded || !isMapReady || !mapRef.current || !agentMarkerIcon) {
+      return;
+    }
+
+    const map = mapRef.current;
+
+    if (!animatedAgentLocation) {
+      if (agentMarkerRef.current) {
+        agentMarkerRef.current.setMap(null);
+        agentMarkerRef.current = null;
+      }
+      return;
+    }
+
+    if (!agentMarkerRef.current) {
+      agentMarkerRef.current = new google.maps.Marker({
+        map,
+        position: animatedAgentLocation,
+        icon: agentMarkerIcon,
+        title: 'Delivery partner',
+      });
+    } else {
+      agentMarkerRef.current.setMap(map);
+      agentMarkerRef.current.setPosition(animatedAgentLocation);
+      agentMarkerRef.current.setIcon(agentMarkerIcon);
+    }
+  }, [isLoaded, isMapReady, animatedAgentLocation, agentMarkerIcon]);
 
   useEffect(() => {
     if (!normalizedOrderId) {
@@ -476,7 +540,7 @@ export default function DeliveryTrackingMap({
   }, [agentLocation, normalizedCustomerLocation, resolvedCoffeeShopLocation, isLoaded, onRouteMetricsChange]);
 
   useEffect(() => {
-    if (!isLoaded || !mapRef.current || !normalizedCustomerLocation) {
+    if (!isLoaded || !isMapReady || !mapRef.current || !normalizedCustomerLocation) {
       return;
     }
 
@@ -493,7 +557,7 @@ export default function DeliveryTrackingMap({
 
     mapRef.current.fitBounds(bounds, 96);
     hasInitializedViewportRef.current = true;
-  }, [agentLocation, resolvedCoffeeShopLocation, normalizedCustomerLocation, isLoaded]);
+  }, [agentLocation, resolvedCoffeeShopLocation, normalizedCustomerLocation, isLoaded, isMapReady]);
 
   useEffect(() => {
     return () => {
@@ -558,32 +622,27 @@ export default function DeliveryTrackingMap({
             mapContainerStyle={MAP_CONTAINER_STYLE}
             onLoad={map => {
               mapRef.current = map;
+              setIsMapReady(true);
             }}
             onUnmount={() => {
               mapRef.current = null;
+              setIsMapReady(false);
+              if (shopMarkerRef.current) {
+                shopMarkerRef.current.setMap(null);
+                shopMarkerRef.current = null;
+              }
+              if (customerMarkerRef.current) {
+                customerMarkerRef.current.setMap(null);
+                customerMarkerRef.current = null;
+              }
+              if (agentMarkerRef.current) {
+                agentMarkerRef.current.setMap(null);
+                agentMarkerRef.current = null;
+              }
             }}
             options={MAP_OPTIONS}
             zoom={15}
           >
-            <MarkerF
-              icon={shopMarkerIcon}
-              label={buildLabel('S')}
-              position={resolvedCoffeeShopLocation}
-              title="Coffee Hub"
-            />
-            <MarkerF
-              icon={customerMarkerIcon}
-              label={buildLabel('C')}
-              position={normalizedCustomerLocation}
-              title="Customer"
-            />
-            {animatedAgentLocation && (
-              <MarkerF
-                icon={agentMarkerIcon}
-                position={animatedAgentLocation}
-                title="Delivery partner"
-              />
-            )}
             {animatedRoutePath.length > 1 && (
               <PolylineF
                 path={animatedRoutePath}
