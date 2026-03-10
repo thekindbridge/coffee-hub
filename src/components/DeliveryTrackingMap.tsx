@@ -12,6 +12,10 @@ import type { DeliveryLocation, DeliveryRouteMetrics } from '../types';
 
 const GOOGLE_MAPS_SCRIPT_ID = 'coffee-hub-premium-delivery-tracking-map';
 const DEFAULT_AGENT_ICON_URL = '/assets/delivery-scooter.png';
+const COFFEE_SHOP_LOCATION: DeliveryLocation = {
+  lat: 15.5057,
+  lng: 80.0499,
+};
 const MAP_CONTAINER_STYLE = {
   width: '100%',
   height: '100%',
@@ -98,9 +102,6 @@ const normalizeLocationRecord = (value: unknown): DeliveryLocation | null => {
     accuracy: Number.isFinite(accuracy) ? accuracy : undefined,
   };
 };
-
-const isValidLocation = (location: DeliveryLocation | null | undefined): location is DeliveryLocation =>
-  normalizeLocationRecord(location) !== null;
 
 const easeOutCubic = (value: number) => 1 - ((1 - value) ** 3);
 
@@ -195,6 +196,14 @@ export default function DeliveryTrackingMap({
   const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null);
   const [trackingLabel, setTrackingLabel] = useState('Connecting to the rider...');
   const [routeError, setRouteError] = useState('');
+  const normalizedCustomerLocation = useMemo(
+    () => normalizeLocationRecord(customerLocation),
+    [customerLocation],
+  );
+  const resolvedCoffeeShopLocation = useMemo(
+    () => normalizeLocationRecord(coffeeShopLocation) ?? COFFEE_SHOP_LOCATION,
+    [coffeeShopLocation],
+  );
 
   const { isLoaded, loadError } = useJsApiLoader({
     id: GOOGLE_MAPS_SCRIPT_ID,
@@ -218,6 +227,14 @@ export default function DeliveryTrackingMap({
   useEffect(() => {
     hasInitializedViewportRef.current = false;
   }, [normalizedOrderId]);
+
+  useEffect(() => {
+    if (!normalizedCustomerLocation) {
+      setDirections(null);
+      setRouteError('');
+      onRouteMetricsChange?.(null);
+    }
+  }, [normalizedCustomerLocation, onRouteMetricsChange]);
 
   useEffect(() => {
     if (!normalizedOrderId) {
@@ -321,7 +338,7 @@ export default function DeliveryTrackingMap({
   }, [agentLocation]);
 
   useEffect(() => {
-    if (!isLoaded || !agentLocation) {
+    if (!isLoaded || !agentLocation || !normalizedCustomerLocation) {
       setDirections(null);
       setRouteError('');
       onRouteMetricsChange?.(null);
@@ -331,46 +348,38 @@ export default function DeliveryTrackingMap({
     let isCancelled = false;
     const directionsService = new google.maps.DirectionsService();
 
-    const loadRoute = async () => {
-      try {
-        const nextDirections = await directionsService.route({
-          destination: customerLocation,
-          drivingOptions: {
-            departureTime: new Date(),
-            trafficModel: google.maps.TrafficModel.BEST_GUESS,
-          },
-          origin: agentLocation,
-          travelMode: google.maps.TravelMode.DRIVING,
-        });
-
+    directionsService.route(
+      {
+        origin: agentLocation,
+        destination: normalizedCustomerLocation,
+        travelMode: google.maps.TravelMode.DRIVING,
+      },
+      (result, status) => {
         if (isCancelled) {
           return;
         }
 
-        setDirections(nextDirections);
-        setRouteError('');
-        onRouteMetricsChange?.(formatMetricsFromDirections(nextDirections));
-      } catch (error) {
-        console.error('Failed to load delivery route', error);
-        if (isCancelled) {
+        if (status === 'OK' && result) {
+          setDirections(result);
+          setRouteError('');
+          onRouteMetricsChange?.(formatMetricsFromDirections(result));
           return;
         }
 
+        console.error('Directions failed', status);
         setDirections(null);
         setRouteError('Route preview is temporarily unavailable.');
         onRouteMetricsChange?.(null);
-      }
-    };
-
-    void loadRoute();
+      },
+    );
 
     return () => {
       isCancelled = true;
     };
-  }, [agentLocation, customerLocation, isLoaded, onRouteMetricsChange]);
+  }, [agentLocation, normalizedCustomerLocation, isLoaded, onRouteMetricsChange]);
 
   useEffect(() => {
-    if (!isLoaded || !mapRef.current) {
+    if (!isLoaded || !mapRef.current || !normalizedCustomerLocation) {
       return;
     }
 
@@ -379,15 +388,15 @@ export default function DeliveryTrackingMap({
     }
 
     const bounds = new google.maps.LatLngBounds();
-    bounds.extend(coffeeShopLocation);
-    bounds.extend(customerLocation);
+    bounds.extend(resolvedCoffeeShopLocation);
+    bounds.extend(normalizedCustomerLocation);
     if (agentLocation) {
       bounds.extend(agentLocation);
     }
 
     mapRef.current.fitBounds(bounds, 96);
     hasInitializedViewportRef.current = true;
-  }, [agentLocation, coffeeShopLocation, customerLocation, isLoaded]);
+  }, [agentLocation, resolvedCoffeeShopLocation, normalizedCustomerLocation, isLoaded]);
 
   useEffect(() => {
     return () => {
@@ -407,11 +416,11 @@ export default function DeliveryTrackingMap({
     );
   }
 
-  if (!isValidLocation(coffeeShopLocation) || !isValidLocation(customerLocation)) {
+  if (!normalizedCustomerLocation) {
     return (
       <MapMessage
         title="Customer location unavailable"
-        description="Coffee Hub needs valid coffee shop and customer coordinates to render live delivery tracking."
+        description="Coffee Hub needs customer coordinates (latitude and longitude) to render live delivery tracking."
         className={className}
       />
     );
@@ -448,7 +457,7 @@ export default function DeliveryTrackingMap({
       <div className={joinClassNames('h-[420px] w-full sm:h-[560px]', mapClassName)}>
         {isLoaded ? (
           <GoogleMap
-            center={animatedAgentLocation || coffeeShopLocation}
+            center={animatedAgentLocation || resolvedCoffeeShopLocation}
             mapContainerStyle={MAP_CONTAINER_STYLE}
             onLoad={map => {
               mapRef.current = map;
@@ -462,13 +471,13 @@ export default function DeliveryTrackingMap({
             <MarkerF
               icon={shopMarkerIcon}
               label={buildLabel('S')}
-              position={coffeeShopLocation}
+              position={resolvedCoffeeShopLocation}
               title="Coffee Hub"
             />
             <MarkerF
               icon={customerMarkerIcon}
               label={buildLabel('C')}
-              position={customerLocation}
+              position={normalizedCustomerLocation}
               title="Customer"
             />
             {animatedAgentLocation && (
