@@ -248,16 +248,6 @@ const buildProfileDraft = (profile: CustomerProfile) => ({
   addresses: ensureProfileAddresses(profile.addresses),
 });
 
-const getVisibleAddressCount = (addresses: string[]) => {
-  let lastFilledIndex = -1;
-  addresses.forEach((value, index) => {
-    if (value.trim()) {
-      lastFilledIndex = index;
-    }
-  });
-  return Math.min(3, Math.max(1, lastFilledIndex + 1));
-};
-
 const mapMenuDocToMenuItem = (snapshot: QueryDocumentSnapshot): MenuItem => {
   const data = snapshot.data() as Record<string, unknown>;
 
@@ -715,10 +705,12 @@ export default function App() {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [profileSaved, setProfileSaved] = useState<CustomerProfile>(EMPTY_PROFILE);
   const [profileDraft, setProfileDraft] = useState<CustomerProfile>(EMPTY_PROFILE);
-  const [profileAddressCount, setProfileAddressCount] = useState(1);
+  const [isProfileAddressExpanded, setIsProfileAddressExpanded] = useState(false);
   const [profileError, setProfileError] = useState('');
   const [isProfileSaving, setIsProfileSaving] = useState(false);
+  const [isProfileSavedToastVisible, setIsProfileSavedToastVisible] = useState(false);
   const [selectedAddressIndex, setSelectedAddressIndex] = useState<number | 'new'>('new');
+  const [isCheckoutAddressListOpen, setIsCheckoutAddressListOpen] = useState(false);
   const [checkoutError, setCheckoutError] = useState('');
   const [isLocatingCustomer, setIsLocatingCustomer] = useState(false);
   const [customerLocationError, setCustomerLocationError] = useState('');
@@ -734,6 +726,7 @@ export default function App() {
   const orderAlertAudioRef = useRef<HTMLAudioElement | null>(null);
   const adminOrdersSnapshotVersionRef = useRef(0);
   const userOrdersSnapshotVersionRef = useRef(0);
+  const hasCheckoutAddressSelectionRef = useRef(false);
   const agentTrackerRef = useRef<ReturnType<typeof createAgentTracker> | null>(null);
   const trackedOrderIdRef = useRef('');
   const [isAgentTracking, setIsAgentTracking] = useState(false);
@@ -890,8 +883,10 @@ export default function App() {
     if (!currentUserId) {
       setProfileSaved(EMPTY_PROFILE);
       setProfileDraft(EMPTY_PROFILE);
-      setProfileAddressCount(1);
+      setIsProfileAddressExpanded(false);
+      setIsProfileSavedToastVisible(false);
       setSelectedAddressIndex('new');
+      setIsCheckoutAddressListOpen(false);
       return;
     }
 
@@ -920,7 +915,7 @@ export default function App() {
   useEffect(() => {
     if (!isProfileOpen) {
       setProfileDraft(buildProfileDraft(profileSaved));
-      setProfileAddressCount(getVisibleAddressCount(profileSaved.addresses));
+      setIsProfileAddressExpanded(false);
     }
   }, [profileSaved, isProfileOpen]);
 
@@ -1560,8 +1555,9 @@ export default function App() {
 
   const handleOpenProfile = () => {
     setProfileDraft(buildProfileDraft(profileSaved));
-    setProfileAddressCount(getVisibleAddressCount(profileSaved.addresses));
+    setIsProfileAddressExpanded(false);
     setProfileError('');
+    setIsProfileSavedToastVisible(false);
     setIsProfileOpen(true);
     setIsCartOpen(false);
   };
@@ -1569,6 +1565,7 @@ export default function App() {
   const handleCloseProfile = () => {
     setIsProfileOpen(false);
     setProfileError('');
+    setIsProfileSavedToastVisible(false);
   };
 
   const handleSaveProfile = async () => {
@@ -1596,6 +1593,7 @@ export default function App() {
         },
         { merge: true },
       );
+      setIsProfileSavedToastVisible(true);
     } catch (error) {
       console.error('Failed to save customer profile', error);
       setProfileError('Unable to save profile right now.');
@@ -1627,10 +1625,29 @@ export default function App() {
       .filter(option => option.value),
     [profileSaved.addresses],
   );
+  const primaryAddressOption = savedAddressOptions.find(option => option.index === 0) || savedAddressOptions[0] || null;
+  const selectedAddressLabel = selectedAddressIndex === 'new'
+    ? 'New Address'
+    : selectedAddressIndex === 0
+      ? 'Primary Address'
+      : `Address ${selectedAddressIndex + 1}`;
+  const selectedSavedAddress = typeof selectedAddressIndex === 'number'
+    ? (profileSaved.addresses[selectedAddressIndex] || '')
+    : '';
+  const checkoutAddressSummary = selectedAddressIndex === 'new'
+    ? customerDetails.address
+    : selectedSavedAddress || customerDetails.address || primaryAddressOption?.value || '';
 
   useEffect(() => {
     if (!savedAddressOptions.length) {
       setSelectedAddressIndex('new');
+      setIsCheckoutAddressListOpen(false);
+      hasCheckoutAddressSelectionRef.current = false;
+      return;
+    }
+
+    if (!hasCheckoutAddressSelectionRef.current) {
+      setSelectedAddressIndex(savedAddressOptions[0].index);
       return;
     }
 
@@ -1655,14 +1672,6 @@ export default function App() {
   }, [selectedAddressIndex, profileSaved.addresses]);
 
   useEffect(() => {
-    if (!savedAddressOptions.length || customerDetails.address || selectedAddressIndex !== 'new') {
-      return;
-    }
-
-    setSelectedAddressIndex(savedAddressOptions[0].index);
-  }, [customerDetails.address, savedAddressOptions, selectedAddressIndex]);
-
-  useEffect(() => {
     if (!profileSaved.name && !profileSaved.phone) {
       return;
     }
@@ -1673,6 +1682,20 @@ export default function App() {
       phone: prev.phone || profileSaved.phone,
     }));
   }, [profileSaved.name, profileSaved.phone]);
+
+  useEffect(() => {
+    if (!isProfileSavedToastVisible) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      setIsProfileSavedToastVisible(false);
+    }, 1800);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [isProfileSavedToastVisible]);
   const cartQuantityById = useMemo(
     () => new Map(cart.map(item => [item.id, item.quantity])),
     [cart],
@@ -3094,6 +3117,23 @@ export default function App() {
                 </div>
               </div>
 
+              <AnimatePresence>
+                {isProfileSavedToastVisible && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }}
+                    transition={{ duration: 0.3 }}
+                    className="px-5 pt-4"
+                  >
+                    <div className="flex items-center gap-2 rounded-[18px] border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-300">
+                      <CheckCircle2 size={14} />
+                      Profile Saved Successfully
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
               <div className="flex-1 space-y-5 overflow-y-auto px-5 pb-6 pt-4">
                 <div className="coffee-surface-soft rounded-[26px] p-4">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-ink-muted">
@@ -3158,40 +3198,71 @@ export default function App() {
                     Save up to 3 delivery locations for faster checkout.
                   </p>
                   <div className="mt-4 space-y-3">
-                    {Array.from({ length: profileAddressCount }).map((_, index) => (
-                      <div key={`profile-address-${index}`}>
-                        <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-muted">
-                          {index === 0 ? 'Primary Address' : `Address ${index + 1}`}
-                        </label>
-                        <div className="relative">
-                          <MapPin className="absolute left-3 top-4 h-4 w-4 text-ink-muted" />
-                          <textarea
-                            className="coffee-textarea pl-10"
-                            value={profileDraft.addresses[index] || ''}
-                            onChange={event => {
-                              const value = event.target.value;
-                              setProfileDraft(prev => {
-                                const nextAddresses = ensureProfileAddresses(prev.addresses);
-                                nextAddresses[index] = value;
-                                return { ...prev, addresses: nextAddresses };
-                              });
-                            }}
-                            placeholder="Street, landmark, city"
-                          />
-                        </div>
+                    <div>
+                      <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-muted">
+                        Primary Address
+                      </label>
+                      <div className="relative">
+                        <MapPin className="absolute left-3 top-4 h-4 w-4 text-ink-muted" />
+                        <textarea
+                          className="coffee-textarea pl-10"
+                          value={profileDraft.addresses[0] || ''}
+                          onChange={event => {
+                            const value = event.target.value;
+                            setProfileDraft(prev => {
+                              const nextAddresses = ensureProfileAddresses(prev.addresses);
+                              nextAddresses[0] = value;
+                              return { ...prev, addresses: nextAddresses };
+                            });
+                          }}
+                          placeholder="Street, landmark, city"
+                        />
                       </div>
-                    ))}
+                    </div>
+                    <AnimatePresence initial={false}>
+                      {isProfileAddressExpanded && (
+                        <motion.div
+                          key="profile-more-addresses"
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: 'auto', opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: 0.3, ease: 'easeOut' }}
+                          className="space-y-3 overflow-hidden"
+                        >
+                          {[1, 2].map(index => (
+                            <div key={`profile-address-${index}`}>
+                              <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-muted">
+                                Address {index + 1}
+                              </label>
+                              <div className="relative">
+                                <MapPin className="absolute left-3 top-4 h-4 w-4 text-ink-muted" />
+                                <textarea
+                                  className="coffee-textarea pl-10"
+                                  value={profileDraft.addresses[index] || ''}
+                                  onChange={event => {
+                                    const value = event.target.value;
+                                    setProfileDraft(prev => {
+                                      const nextAddresses = ensureProfileAddresses(prev.addresses);
+                                      nextAddresses[index] = value;
+                                      return { ...prev, addresses: nextAddresses };
+                                    });
+                                  }}
+                                  placeholder="Street, landmark, city"
+                                />
+                              </div>
+                            </div>
+                          ))}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </div>
-                  {profileAddressCount < 3 && (
-                    <button
-                      type="button"
-                      onClick={() => setProfileAddressCount(prev => Math.min(3, prev + 1))}
-                      className="coffee-btn-secondary mt-4 w-full justify-center"
-                    >
-                      <Plus size={16} />
-                      Add Address
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => setIsProfileAddressExpanded(prev => !prev)}
+                    className="coffee-btn-secondary mt-4 w-full justify-center"
+                  >
+                    {isProfileAddressExpanded ? 'Hide Addresses' : 'View More Addresses'}
+                  </button>
                 </div>
 
                 {profileError && (
@@ -3472,84 +3543,114 @@ export default function App() {
                       <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.22em] text-ink-muted">Delivery Address</label>
                       {savedAddressOptions.length > 0 ? (
                         <div className="space-y-3">
-                          <div className="space-y-2">
-                            {savedAddressOptions.map(option => {
-                              const isSelected = selectedAddressIndex === option.index;
-                              return (
+                          <div className="rounded-[18px] border border-white/10 bg-[#120d0b]/75 px-3 py-2 text-sm">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-muted">
+                                  {selectedAddressLabel}
+                                </p>
+                                <p className="mt-1 line-clamp-2 text-xs leading-5 text-ink-muted">
+                                  {checkoutAddressSummary || 'Add a delivery address.'}
+                                </p>
+                              </div>
+                              <MapPin size={14} className="mt-0.5 text-secondary" />
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => setIsCheckoutAddressListOpen(prev => !prev)}
+                            className="coffee-btn-secondary w-full justify-center"
+                          >
+                            {isCheckoutAddressListOpen ? 'Hide Addresses' : 'All Addresses'}
+                          </button>
+
+                          <AnimatePresence initial={false}>
+                            {isCheckoutAddressListOpen && (
+                              <motion.div
+                                key="checkout-addresses"
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: 'auto', opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                transition={{ duration: 0.3, ease: 'easeOut' }}
+                                className="space-y-2 overflow-hidden"
+                              >
+                                {savedAddressOptions.map(option => {
+                                  const isSelected = selectedAddressIndex === option.index;
+                                  return (
+                                    <button
+                                      key={`saved-address-${option.index}`}
+                                      type="button"
+                                      onClick={() => {
+                                        setCheckoutError('');
+                                        hasCheckoutAddressSelectionRef.current = true;
+                                        setSelectedAddressIndex(option.index);
+                                        setIsCheckoutAddressListOpen(false);
+                                      }}
+                                      className={`flex w-full items-start gap-3 rounded-[18px] border px-3 py-2 text-left transition ${
+                                        isSelected
+                                          ? 'border-secondary/40 bg-white/5 shadow-[0_10px_20px_rgba(62,39,35,0.14)]'
+                                          : 'border-white/10 bg-[#120d0b]/70 hover:border-white/20'
+                                      }`}
+                                    >
+                                      <span
+                                        className={`mt-1 flex h-3 w-3 items-center justify-center rounded-full border ${
+                                          isSelected ? 'border-secondary bg-secondary' : 'border-white/20'
+                                        }`}
+                                      >
+                                        {isSelected && <span className="h-1.5 w-1.5 rounded-full bg-[#120d0b]" />}
+                                      </span>
+                                      <div className="min-w-0">
+                                        <p className="text-xs font-semibold text-accent">{option.label}</p>
+                                        <p className="mt-1 line-clamp-2 text-xs leading-5 text-ink-muted">{option.value}</p>
+                                      </div>
+                                    </button>
+                                  );
+                                })}
                                 <button
-                                  key={`saved-address-${option.index}`}
                                   type="button"
                                   onClick={() => {
                                     setCheckoutError('');
-                                    setSelectedAddressIndex(option.index);
+                                    hasCheckoutAddressSelectionRef.current = true;
+                                    setSelectedAddressIndex('new');
+                                    setIsCheckoutAddressListOpen(true);
                                   }}
-                                  className={`flex w-full items-start gap-3 rounded-[20px] border px-4 py-3 text-left transition ${
-                                    isSelected
-                                      ? 'border-secondary/40 bg-white/5 shadow-[0_12px_24px_rgba(62,39,35,0.16)]'
+                                  className={`flex w-full items-center gap-3 rounded-[18px] border px-3 py-2 text-left transition ${
+                                    selectedAddressIndex === 'new'
+                                      ? 'border-secondary/40 bg-white/5 shadow-[0_10px_20px_rgba(62,39,35,0.14)]'
                                       : 'border-white/10 bg-[#120d0b]/70 hover:border-white/20'
                                   }`}
                                 >
                                   <span
-                                    className={`mt-1 flex h-3 w-3 items-center justify-center rounded-full border ${
-                                      isSelected ? 'border-secondary bg-secondary' : 'border-white/20'
+                                    className={`flex h-3 w-3 items-center justify-center rounded-full border ${
+                                      selectedAddressIndex === 'new'
+                                        ? 'border-secondary bg-secondary'
+                                        : 'border-white/20'
                                     }`}
                                   >
-                                    {isSelected && <span className="h-1.5 w-1.5 rounded-full bg-[#120d0b]" />}
+                                    {selectedAddressIndex === 'new' && <span className="h-1.5 w-1.5 rounded-full bg-[#120d0b]" />}
                                   </span>
-                                  <div className="min-w-0">
-                                    <p className="text-sm font-semibold text-accent">{option.label}</p>
-                                    <p className="mt-1 text-xs leading-5 text-ink-muted break-words">{option.value}</p>
+                                  <div>
+                                    <p className="text-xs font-semibold text-accent">Enter New Address</p>
+                                    <p className="mt-1 text-[11px] text-ink-muted">Type a new delivery address.</p>
                                   </div>
                                 </button>
-                              );
-                            })}
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setCheckoutError('');
-                                setSelectedAddressIndex('new');
-                                setCustomerDetails(prev => ({ ...prev, address: '' }));
-                              }}
-                              className={`flex w-full items-center gap-3 rounded-[20px] border px-4 py-3 text-left transition ${
-                                selectedAddressIndex === 'new'
-                                  ? 'border-secondary/40 bg-white/5 shadow-[0_12px_24px_rgba(62,39,35,0.16)]'
-                                  : 'border-white/10 bg-[#120d0b]/70 hover:border-white/20'
-                              }`}
-                            >
-                              <span
-                                className={`flex h-3 w-3 items-center justify-center rounded-full border ${
-                                  selectedAddressIndex === 'new'
-                                    ? 'border-secondary bg-secondary'
-                                    : 'border-white/20'
-                                }`}
-                              >
-                                {selectedAddressIndex === 'new' && <span className="h-1.5 w-1.5 rounded-full bg-[#120d0b]" />}
-                              </span>
-                              <div>
-                                <p className="text-sm font-semibold text-accent">Enter New Address</p>
-                                <p className="mt-1 text-xs text-ink-muted">Type a new delivery address.</p>
-                              </div>
-                            </button>
-                          </div>
-                          {selectedAddressIndex === 'new' ? (
-                            <textarea
-                              className="coffee-textarea"
-                              value={customerDetails.address}
-                              onChange={event => {
-                                setCheckoutError('');
-                                setSelectedAddressIndex('new');
-                                setCustomerDetails(prev => ({ ...prev, address: event.target.value }));
-                              }}
-                              placeholder="Street, landmark, city"
-                            />
-                          ) : (
-                            <div className="rounded-[20px] border border-white/10 bg-[#1a1310]/92 px-4 py-3 text-sm text-ink">
-                              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-muted">
-                                Selected Address
-                              </p>
-                              <p className="mt-2 leading-6 break-words">{customerDetails.address}</p>
-                            </div>
-                          )}
+                                {selectedAddressIndex === 'new' && (
+                                  <textarea
+                                    className="coffee-textarea min-h-[88px]"
+                                    value={customerDetails.address}
+                                    onChange={event => {
+                                      setCheckoutError('');
+                                      setSelectedAddressIndex('new');
+                                      hasCheckoutAddressSelectionRef.current = true;
+                                      setCustomerDetails(prev => ({ ...prev, address: event.target.value }));
+                                    }}
+                                    placeholder="Street, landmark, city"
+                                  />
+                                )}
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
                         </div>
                       ) : (
                         <textarea
@@ -3558,6 +3659,7 @@ export default function App() {
                           onChange={event => {
                             setCheckoutError('');
                             setSelectedAddressIndex('new');
+                            hasCheckoutAddressSelectionRef.current = true;
                             setCustomerDetails(prev => ({ ...prev, address: event.target.value }));
                           }}
                           placeholder="Street, landmark, city"
