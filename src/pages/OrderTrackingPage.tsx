@@ -92,8 +92,12 @@ export default function OrderTrackingPage({
   const defaultAgentPhone = '+91 7893504891';
   const isAgentAssigned = Boolean(agentId);
   const displayAgentPhone = agentPhone || (isAgentAssigned ? defaultAgentPhone : '');
-  const phoneLabel = displayAgentPhone ? `Agent Number : ${displayAgentPhone}` : 'Will appear once assigned';
   const phoneHref = displayAgentPhone ? `tel:${normalizePhoneForTel(displayAgentPhone)}` : undefined;
+  const stepProgress = ORDER_FLOW.length > 1 ? activeStepIndex / (ORDER_FLOW.length - 1) : 0;
+  const stepProgressPercent = Math.max(0, Math.min(1, stepProgress)) * 100;
+  const stepProgressWidth = stepProgressPercent === 0
+    ? '0%'
+    : `calc(${stepProgressPercent}% - 8px)`;
 
   useEffect(() => {
     const unsubscribe = onSnapshot(
@@ -193,15 +197,15 @@ export default function OrderTrackingPage({
           initial={{ opacity: 0, y: 18 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.35, ease: 'easeOut' }}
-          className="rounded-[28px] border border-white/10 bg-[linear-gradient(135deg,rgba(36,24,18,0.96),rgba(15,10,8,0.98))] text-[#fff8f2] shadow-[0_20px_60px_rgba(8,5,4,0.28)]"
+          className="w-full overflow-hidden rounded-[28px] border border-white/10 bg-[linear-gradient(135deg,rgba(36,24,18,0.96),rgba(15,10,8,0.98))] text-[#fff8f2] shadow-[0_20px_60px_rgba(8,5,4,0.28)]"
         >
-          <div className="space-y-3 px-5 py-4 sm:px-6">
+          <div className="w-full space-y-3 px-5 py-4 sm:px-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
+              <div className="min-w-0">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.34em] text-[#f1b375]">
                   Order Tracking
                 </p>
-                <h1 className="mt-1 text-[1.6rem] font-semibold text-[#fff8f2] sm:text-[1.9rem]">
+                <h1 className="mt-1 break-words text-[1.6rem] font-semibold text-[#fff8f2] sm:text-[1.9rem]">
                   Order #{order.id}
                 </h1>
               </div>
@@ -213,15 +217,15 @@ export default function OrderTrackingPage({
               </div>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-3">
-              <div className="rounded-[22px] border border-white/10 bg-white/5 p-3">
-                <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#c9aa8b]">
+            <div className="grid w-full gap-3 sm:grid-cols-3">
+              <div className="min-w-0 rounded-[22px] border border-white/10 bg-white/5 p-3">
+                <div className="flex items-start gap-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#c9aa8b] sm:text-[11px]">
                   <Clock3 size={14} className="text-[#f6c18b]" />
-                  ETA
+                  Estimated Time of Arrival
                 </div>
                 <p className="mt-2 text-sm font-semibold text-[#fff8f2]">{etaLabel}</p>
               </div>
-              <div className="rounded-[22px] border border-white/10 bg-white/5 p-3">
+              <div className="min-w-0 rounded-[22px] border border-white/10 bg-white/5 p-3">
                 <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#c9aa8b]">
                   <MapPin size={14} className="text-[#22c55e]" />
                   Distance
@@ -230,45 +234,48 @@ export default function OrderTrackingPage({
                   {routeMetrics?.distance_text || '--'}
                 </p>
               </div>
-              <div className="rounded-[22px] border border-white/10 bg-white/5 p-3">
+              <div className="min-w-0 rounded-[22px] border border-white/10 bg-white/5 p-3">
                 <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#c9aa8b]">
                   <Sparkles size={14} className="text-[#f1b375]" />
                   Live Flow
                 </div>
-                <div className="mt-3 flex items-center gap-2 overflow-x-auto pb-1">
-                  {ORDER_FLOW.map((step, index) => {
-                    const isReached = index <= activeStepIndex;
-                    const isCurrent = index === activeStepIndex;
+                <div className="mt-3 w-full max-w-full overflow-hidden">
+                  <div className="relative">
+                    <div className="absolute left-2 right-2 top-[9px] h-[2px] rounded-full bg-white/15" />
+                    <div
+                      className="absolute left-2 top-[9px] h-[2px] rounded-full bg-[#f1b375]"
+                      style={{ width: stepProgressWidth }}
+                    />
+                    <div className="grid grid-cols-4 gap-2">
+                      {ORDER_FLOW.map((step, index) => {
+                        const isReached = index <= activeStepIndex;
+                        const isCurrent = index === activeStepIndex;
 
-                    return (
-                      <div key={step} className="flex items-center gap-2">
-                        <div
-                          aria-current={isCurrent ? 'step' : undefined}
-                          className={joinClassNames(
-                            'h-2.5 w-2.5 rounded-full border transition-colors',
-                            isReached ? 'border-[#f1b375] bg-[#f1b375]' : 'border-white/20 bg-transparent',
-                            isCurrent ? 'shadow-[0_0_0_4px_rgba(241,179,117,0.15)]' : undefined,
-                          )}
-                        />
-                        <span
-                          className={joinClassNames(
-                            'text-[10px] font-semibold uppercase tracking-[0.14em] whitespace-nowrap',
-                            isCurrent ? 'text-[#fff8f2]' : isReached ? 'text-[#f5ede3]' : 'text-[#8b7565]',
-                          )}
-                        >
-                          {step}
-                        </span>
-                        {index < ORDER_FLOW.length - 1 && (
-                          <div
-                            className={joinClassNames(
-                              'h-[2px] w-6 rounded-full sm:w-10 lg:w-12',
-                              index < activeStepIndex ? 'bg-[#f1b375]' : 'bg-white/15',
-                            )}
-                          />
-                        )}
-                      </div>
-                    );
-                  })}
+                        return (
+                          <div key={step} className="min-w-0 text-center">
+                            <div className="flex flex-col items-center gap-2">
+                              <div
+                                aria-current={isCurrent ? 'step' : undefined}
+                                className={joinClassNames(
+                                  'h-2.5 w-2.5 rounded-full border transition-colors',
+                                  isReached ? 'border-[#f1b375] bg-[#f1b375]' : 'border-white/20 bg-[#0f0a08]',
+                                  isCurrent ? 'shadow-[0_0_0_4px_rgba(241,179,117,0.15)]' : undefined,
+                                )}
+                              />
+                              <span
+                                className={joinClassNames(
+                                  'text-[9px] font-semibold uppercase tracking-[0.12em] leading-4 break-words sm:text-[10px]',
+                                  isCurrent ? 'text-[#fff8f2]' : isReached ? 'text-[#f5ede3]' : 'text-[#8b7565]',
+                                )}
+                              >
+                                {step}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -293,7 +300,7 @@ export default function OrderTrackingPage({
             customerLocation={order.customer_location}
             onRouteMetricsChange={setRouteMetrics}
             orderId={order.id}
-            className="rounded-[30px] [&_.pointer-events-none.absolute.inset-x-0.top-0.z-20]:hidden [&_.pointer-events-none.absolute.inset-x-0.bottom-0.z-20]:hidden"
+            className="w-full overflow-hidden rounded-[30px] [&_.pointer-events-none.absolute.inset-x-0.top-0.z-20]:hidden [&_.pointer-events-none.absolute.inset-x-0.bottom-0.z-20]:hidden"
             mapClassName="h-[520px] w-full sm:h-[640px] lg:h-[720px]"
           />
         </motion.section>
@@ -317,17 +324,8 @@ export default function OrderTrackingPage({
               </div>
             </div>
 
-            <div className="mt-4 grid gap-3 sm:grid-cols-3">
-              <div className="rounded-[20px] border border-white/10 bg-white/5 p-3">
-                <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#c9aa8b]">
-                  <Phone size={13} className="text-[#f97316]" />
-                  Phone
-                </div>
-                <p className="mt-2 text-sm font-semibold text-[#fff8f2]">
-                  {phoneLabel}
-                </p>
-              </div>
-              <div className="rounded-[20px] border border-white/10 bg-white/5 p-3">
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <div className="min-w-0 rounded-[20px] border border-white/10 bg-white/5 p-3">
                 <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#c9aa8b]">
                   <Bike size={13} className="text-[#f6c18b]" />
                   Session
@@ -336,7 +334,7 @@ export default function OrderTrackingPage({
                   {deliverySession?.status || 'Awaiting dispatch'}
                 </p>
               </div>
-              <div className="rounded-[20px] border border-white/10 bg-white/5 p-3">
+              <div className="min-w-0 rounded-[20px] border border-white/10 bg-white/5 p-3">
                 <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#c9aa8b]">
                   <Clock3 size={13} className="text-[#f1b375]" />
                   Route Time
