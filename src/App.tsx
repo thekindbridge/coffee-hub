@@ -2405,7 +2405,8 @@ export default function App() {
             </div>
             <div>
               <p className="text-xs text-ink-muted font-bold uppercase">Location</p>
-              <p className="font-bold">Inkollu, Andhra Pradesh, India</p>
+              <p className="font-bold">Coffee Hub</p>
+              <p className="text-sm text-ink-muted">R5CQ+CM Inkollu, Andhra Pradesh, India</p>
             </div>
           </div>
         </div>
@@ -2421,15 +2422,28 @@ export default function App() {
         </div>
       </div>
 
-      <div className="rounded-[40px] overflow-hidden h-64 border border-white/10 grayscale contrast-125">
-        <iframe 
-          src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d15336.123456789!2d80.1234567!3d15.1234567!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3a4b000000000001%3A0x0!2zSW5rb2xsdSwgQW5kaHJhIFByYWRlc2ggNTIzMTY3LCBJbmRpYQ!5e0!3m2!1sen!2sin!4v1620000000000!5m2!1sen!2sin" 
-          width="100%" 
-          height="100%" 
-          style={{ border: 0 }} 
-          allowFullScreen 
-          loading="lazy"
-        />
+      <div className="space-y-4">
+        <div className="rounded-[40px] overflow-hidden border border-white/10 grayscale contrast-125">
+          <div className="relative w-full aspect-[16/12] sm:aspect-[16/9]">
+            <iframe
+              src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d506.35838004601595!2d80.18905782789219!3d15.82115881859916!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3a4a5989b6574b4b%3A0x586644323376bd00!2sCOFFEE%20HUB!5e1!3m2!1sen!2sin!4v1773126673652!5m2!1sen!2sin"
+              title="Coffee Hub Inkollu Map"
+              className="absolute inset-0 h-full w-full"
+              style={{ border: 0 }}
+              allowFullScreen
+              loading="lazy"
+              referrerPolicy="no-referrer-when-downgrade"
+            />
+          </div>
+        </div>
+        <a
+          href="https://maps.app.goo.gl/8B32K8X6Vdhg6VUE6"
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center justify-center rounded-full border border-white/10 bg-white/5 px-5 py-3 text-sm font-semibold text-[#fff8f2] transition-colors hover:bg-primary"
+        >
+          Open in Google Maps
+        </a>
       </div>
     </div>
   );
