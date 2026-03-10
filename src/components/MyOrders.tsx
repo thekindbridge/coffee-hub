@@ -110,14 +110,16 @@ export default function MyOrders({ orders, isLoading, onBrowseMenu, onTrackOrder
             <h3 className="mt-1 text-lg font-semibold text-accent">#{order.id}</h3>
             <p className="mt-1 text-xs text-ink-muted">{formatOrderDate(order.created_at)}</p>
           </div>
-          <div className="flex items-center gap-2">
-            <span className={`rounded-full px-3 py-1 text-[11px] font-semibold ${STATUS_BADGE_CLASS[order.status]}`}>
+          <div className="flex w-full items-center justify-between gap-3 sm:w-auto sm:min-w-[220px]">
+            <span
+              className={`min-w-[130px] whitespace-nowrap rounded-full px-3 py-1 text-center text-[11px] font-semibold ${STATUS_BADGE_CLASS[order.status]}`}
+            >
               {order.status}
             </span>
             {showTracker && (
               <button
                 onClick={() => onTrackOrder(order)}
-                className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-semibold text-ink-muted transition-colors hover:border-white/20 hover:text-accent"
+                className="inline-flex flex-shrink-0 items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-semibold text-ink-muted transition-colors hover:border-white/20 hover:text-accent"
               >
                 <MapPin size={14} />
                 Track
