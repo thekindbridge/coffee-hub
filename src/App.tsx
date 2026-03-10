@@ -193,11 +193,35 @@ type CustomerProfile = {
   addresses: string[];
 };
 
+type StaffRole = 'admin' | 'agent';
+type AgentVehicleType = '' | 'Bike' | 'Scooter' | 'Cycle';
+type AgentStatus = 'Available' | 'Offline';
+
+type StaffProfile = {
+  role: StaffRole;
+  name: string;
+  phone: string;
+  email: string;
+  adminLocation: string;
+  vehicleType: AgentVehicleType;
+  status: AgentStatus;
+};
+
 const EMPTY_PROFILE: CustomerProfile = {
   name: '',
   phone: '',
   email: '',
   addresses: ['', '', ''],
+};
+
+const EMPTY_STAFF_PROFILE: StaffProfile = {
+  role: 'admin',
+  name: '',
+  phone: '',
+  email: '',
+  adminLocation: '',
+  vehicleType: '',
+  status: 'Available',
 };
 
 const ensureProfileAddresses = (addresses: string[] = []) => {
@@ -229,6 +253,34 @@ const mapProfileDocToProfile = (data?: Record<string, unknown>): CustomerProfile
   };
 };
 
+const normalizeStaffRole = (value: unknown, fallback: StaffRole): StaffRole =>
+  value === 'admin' || value === 'agent' ? value : fallback;
+
+const normalizeVehicleType = (value: unknown): AgentVehicleType =>
+  value === 'Bike' || value === 'Scooter' || value === 'Cycle' ? value : '';
+
+const normalizeAgentStatus = (value: unknown): AgentStatus => {
+  if (typeof value === 'string') {
+    const normalized = value.toLowerCase();
+    if (normalized === 'available') return 'Available';
+    if (normalized === 'offline') return 'Offline';
+  }
+  return 'Available';
+};
+
+const mapStaffProfileDocToProfile = (
+  data: Record<string, unknown> | undefined,
+  fallbackRole: StaffRole,
+): StaffProfile => ({
+  role: normalizeStaffRole(data?.role, fallbackRole),
+  name: (data?.name as string) || '',
+  phone: (data?.phone as string) || '',
+  email: (data?.email as string) || '',
+  adminLocation: (data?.adminLocation as string) || '',
+  vehicleType: normalizeVehicleType(data?.vehicleType),
+  status: normalizeAgentStatus(data?.status),
+});
+
 const stripPhonePrefix = (phone: string) => phone.replace(/^\+91\s*/i, '');
 
 const formatPhoneWithPrefix = (phone: string) => {
@@ -246,6 +298,11 @@ const buildProfileDraft = (profile: CustomerProfile) => ({
   ...profile,
   phone: stripPhonePrefix(profile.phone),
   addresses: ensureProfileAddresses(profile.addresses),
+});
+
+const buildStaffProfileDraft = (profile: StaffProfile): StaffProfile => ({
+  ...profile,
+  phone: stripPhonePrefix(profile.phone),
 });
 
 const mapMenuDocToMenuItem = (snapshot: QueryDocumentSnapshot): MenuItem => {
@@ -709,6 +766,12 @@ export default function App() {
   const [profileError, setProfileError] = useState('');
   const [isProfileSaving, setIsProfileSaving] = useState(false);
   const [isProfileSavedToastVisible, setIsProfileSavedToastVisible] = useState(false);
+  const [isStaffProfileOpen, setIsStaffProfileOpen] = useState(false);
+  const [staffProfileSaved, setStaffProfileSaved] = useState<StaffProfile>(EMPTY_STAFF_PROFILE);
+  const [staffProfileDraft, setStaffProfileDraft] = useState<StaffProfile>(EMPTY_STAFF_PROFILE);
+  const [staffProfileError, setStaffProfileError] = useState('');
+  const [isStaffProfileSaving, setIsStaffProfileSaving] = useState(false);
+  const [isStaffProfileSavedToastVisible, setIsStaffProfileSavedToastVisible] = useState(false);
   const [selectedAddressIndex, setSelectedAddressIndex] = useState<number | 'new'>('new');
   const [isCheckoutAddressListOpen, setIsCheckoutAddressListOpen] = useState(false);
   const [checkoutError, setCheckoutError] = useState('');
@@ -918,6 +981,49 @@ export default function App() {
       setIsProfileAddressExpanded(false);
     }
   }, [profileSaved, isProfileOpen]);
+
+  useEffect(() => {
+    const canAccessStaffProfile = isAdmin || isDeliveryAgent;
+    if (!currentUserId || !canAccessStaffProfile) {
+      const fallbackRole: StaffRole = isAdmin ? 'admin' : 'agent';
+      setStaffProfileSaved({ ...EMPTY_STAFF_PROFILE, role: fallbackRole });
+      setStaffProfileDraft({ ...EMPTY_STAFF_PROFILE, role: fallbackRole });
+      setIsStaffProfileSavedToastVisible(false);
+      return;
+    }
+
+    const fallbackRole: StaffRole = isAdmin ? 'admin' : 'agent';
+    const userRef = doc(db, 'users', currentUserId);
+    const unsubscribe = onSnapshot(
+      userRef,
+      snapshot => {
+        if (!snapshot.exists()) {
+          setStaffProfileSaved({ ...EMPTY_STAFF_PROFILE, role: fallbackRole });
+          return;
+        }
+
+        setStaffProfileSaved(
+          mapStaffProfileDocToProfile(snapshot.data() as Record<string, unknown>, fallbackRole),
+        );
+      },
+      error => {
+        console.error('Failed to load staff profile', error);
+        setStaffProfileSaved({ ...EMPTY_STAFF_PROFILE, role: fallbackRole });
+      },
+    );
+
+    return () => {
+      unsubscribe();
+    };
+  }, [currentUserId, isAdmin, isDeliveryAgent]);
+
+  useEffect(() => {
+    if (!isStaffProfileOpen) {
+      setStaffProfileDraft(buildStaffProfileDraft(staffProfileSaved));
+      setStaffProfileError('');
+      setIsStaffProfileSavedToastVisible(false);
+    }
+  }, [staffProfileSaved, isStaffProfileOpen]);
 
   useEffect(() => {
     const canAccessStaffOrders = isAdmin || isDeliveryAgent;
@@ -1576,6 +1682,25 @@ export default function App() {
     setIsProfileSavedToastVisible(false);
   };
 
+  const handleOpenStaffProfile = () => {
+    const role: StaffRole = isAdmin ? 'admin' : 'agent';
+    const seededEmail = staffProfileSaved.email || currentUserEmail;
+    setStaffProfileDraft(buildStaffProfileDraft({
+      ...staffProfileSaved,
+      role,
+      email: seededEmail,
+    }));
+    setStaffProfileError('');
+    setIsStaffProfileSavedToastVisible(false);
+    setIsStaffProfileOpen(true);
+  };
+
+  const handleCloseStaffProfile = () => {
+    setIsStaffProfileOpen(false);
+    setStaffProfileError('');
+    setIsStaffProfileSavedToastVisible(false);
+  };
+
   const handleSaveProfile = async () => {
     if (!currentUserId) {
       setProfileError('Please sign in to save your profile.');
@@ -1608,6 +1733,277 @@ export default function App() {
     } finally {
       setIsProfileSaving(false);
     }
+  };
+
+  const handleSaveStaffProfile = async () => {
+    if (!currentUserId) {
+      setStaffProfileError('Please sign in to save your profile.');
+      return;
+    }
+
+    const role: StaffRole = isAdmin ? 'admin' : 'agent';
+    setIsStaffProfileSaving(true);
+    setStaffProfileError('');
+    try {
+      const payload: Record<string, unknown> = {
+        role,
+        name: staffProfileDraft.name.trim(),
+        phone: formatPhoneWithPrefix(staffProfileDraft.phone),
+        email: staffProfileDraft.email.trim(),
+        updatedAt: serverTimestamp(),
+      };
+
+      if (role === 'admin') {
+        payload.adminLocation = staffProfileDraft.adminLocation.trim();
+      }
+
+      if (role === 'agent') {
+        payload.vehicleType = staffProfileDraft.vehicleType;
+        payload.status = staffProfileDraft.status;
+      }
+
+      await setDoc(doc(db, 'users', currentUserId), payload, { merge: true });
+      setIsStaffProfileSavedToastVisible(true);
+    } catch (error) {
+      console.error('Failed to save staff profile', error);
+      setStaffProfileError('Unable to save profile right now.');
+    } finally {
+      setIsStaffProfileSaving(false);
+    }
+  };
+
+  const renderStaffProfileDrawer = () => {
+    if (!isAdmin && !isDeliveryAgent) {
+      return null;
+    }
+
+    const profileTitle = isAdmin ? 'Admin Profile' : 'Agent Profile';
+    const profileSubtitle = isAdmin ? 'Coffee Hub Management' : 'Delivery operations';
+    const nameLabel = isAdmin ? 'Name' : 'Agent Name';
+
+    return (
+      <AnimatePresence>
+        {isStaffProfileOpen && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={handleCloseStaffProfile}
+              className="fixed inset-0 z-[80] bg-black/70 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', damping: 26, stiffness: 220 }}
+              className="fixed inset-y-0 right-0 z-[90] flex w-full max-w-md flex-col border-l border-white/10 bg-[linear-gradient(180deg,rgba(23,16,14,0.98),rgba(11,8,7,0.98))] shadow-[0_0_60px_rgba(0,0,0,0.45)]"
+            >
+              <div className="border-b border-white/6 px-5 pb-4 pt-5">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-secondary">
+                      {profileTitle}
+                    </p>
+                    <h2 className="mt-1 text-[1.55rem] font-semibold text-accent">{profileSubtitle}</h2>
+                  </div>
+                  <button onClick={handleCloseStaffProfile} className="coffee-icon-btn">
+                    <X size={18} />
+                  </button>
+                </div>
+              </div>
+
+              <AnimatePresence>
+                {isStaffProfileSavedToastVisible && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }}
+                    transition={{ duration: 0.3 }}
+                    className="px-5 pt-4"
+                  >
+                    <div className="flex items-center gap-2 rounded-[18px] border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-300">
+                      <CheckCircle2 size={14} />
+                      Profile Saved Successfully
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              <div className="flex-1 space-y-5 overflow-y-auto px-5 pb-6 pt-4">
+                <div className="coffee-surface-soft rounded-[26px] p-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-ink-muted">
+                    Profile Information
+                  </p>
+                  <div className="mt-4 space-y-3">
+                    <div>
+                      <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-muted">
+                        {nameLabel}
+                      </label>
+                      <div className="relative">
+                        <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted" />
+                        <input
+                          type="text"
+                          className="coffee-input pl-10"
+                          value={staffProfileDraft.name}
+                          onChange={event => setStaffProfileDraft(prev => ({ ...prev, name: event.target.value }))}
+                          placeholder={isAdmin ? 'Admin name' : 'Agent name'}
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-muted">
+                        Phone Number
+                      </label>
+                      <div className="relative">
+                        <Phone className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted" />
+                        <span className="absolute left-9 top-1/2 -translate-y-1/2 text-sm font-semibold text-ink-muted">
+                          +91
+                        </span>
+                        <input
+                          type="tel"
+                          className="coffee-input pl-16"
+                          value={staffProfileDraft.phone}
+                          onChange={event => setStaffProfileDraft(prev => ({ ...prev, phone: event.target.value }))}
+                          placeholder="9876543210"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-muted">
+                        Email (Optional)
+                      </label>
+                      <div className="relative">
+                        <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted" />
+                        <input
+                          type="email"
+                          className="coffee-input pl-10"
+                          value={staffProfileDraft.email}
+                          onChange={event => setStaffProfileDraft(prev => ({ ...prev, email: event.target.value }))}
+                          placeholder="name@email.com"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {isAdmin && (
+                  <div className="coffee-surface-soft rounded-[26px] p-4">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-ink-muted">
+                      Admin Details
+                    </p>
+                    <div className="mt-4 space-y-3">
+                      <div>
+                        <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-muted">
+                          Admin Role
+                        </label>
+                        <div className="flex items-center gap-2 rounded-[20px] border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-ink">
+                          <ShieldCheck size={16} className="text-secondary" />
+                          Admin &ndash; Coffee Hub Management
+                        </div>
+                      </div>
+                      <div>
+                        <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-muted">
+                          Admin Location (Optional)
+                        </label>
+                        <div className="relative">
+                          <MapPin className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted" />
+                          <input
+                            type="text"
+                            className="coffee-input pl-10"
+                            value={staffProfileDraft.adminLocation}
+                            onChange={event => setStaffProfileDraft(prev => ({ ...prev, adminLocation: event.target.value }))}
+                            placeholder="Coffee Hub Inkollu"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {isDeliveryAgent && (
+                  <div className="coffee-surface-soft rounded-[26px] p-4">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-ink-muted">
+                      Agent Details
+                    </p>
+                    <div className="mt-4 space-y-3">
+                      <div>
+                        <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-muted">
+                          Vehicle Type (Optional)
+                        </label>
+                        <div className="relative">
+                          <Truck className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted" />
+                          <select
+                            className="coffee-input pl-10 pr-10"
+                            value={staffProfileDraft.vehicleType}
+                            onChange={event => setStaffProfileDraft(prev => ({
+                              ...prev,
+                              vehicleType: event.target.value as AgentVehicleType,
+                            }))}
+                          >
+                            <option value="">Select vehicle</option>
+                            <option value="Bike">Bike</option>
+                            <option value="Scooter">Scooter</option>
+                            <option value="Cycle">Cycle</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-muted">
+                          Agent Status
+                        </label>
+                        <div className="grid grid-cols-2 gap-2">
+                          {(['Available', 'Offline'] as AgentStatus[]).map(status => (
+                            <button
+                              key={status}
+                              type="button"
+                              onClick={() => setStaffProfileDraft(prev => ({ ...prev, status }))}
+                              className={`rounded-2xl border px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] transition ${
+                                staffProfileDraft.status === status
+                                  ? 'border-secondary/40 bg-[linear-gradient(135deg,rgba(111,78,55,0.6),rgba(62,39,35,0.92))] text-accent shadow-[0_10px_24px_rgba(62,39,35,0.24)]'
+                                  : 'border-white/10 bg-white/5 text-ink-muted hover:bg-white/8'
+                              }`}
+                            >
+                              {status}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {staffProfileError && (
+                  <div className="rounded-[22px] border border-primary/25 bg-primary/10 px-4 py-3 text-sm font-semibold text-primary">
+                    {staffProfileError}
+                  </div>
+                )}
+              </div>
+
+              <div className="border-t border-white/6 bg-[#0f0b09]/94 px-5 py-4">
+                <button
+                  onClick={() => void handleSaveStaffProfile()}
+                  disabled={isStaffProfileSaving}
+                  className="coffee-btn-primary w-full justify-center disabled:opacity-70"
+                >
+                  {isStaffProfileSaving ? 'Saving profile...' : 'Save Profile'}
+                </button>
+                <button
+                  onClick={() => {
+                    handleCloseStaffProfile();
+                    void handleLogout();
+                  }}
+                  className="coffee-btn-secondary mt-3 w-full justify-center"
+                >
+                  <LogOut size={16} />
+                  Logout
+                </button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+    );
   };
 
   const categories = useMemo(() => ['All', ...new Set(menu.map(item => item.category))], [menu]);
@@ -2867,12 +3263,11 @@ export default function App() {
               </div>
             </div>
             <button
-              onClick={() => {
-                void handleLogout();
-              }}
+              onClick={handleOpenStaffProfile}
               className="coffee-icon-btn"
+              aria-label="Profile"
             >
-              <LogOut size={18} />
+              <User size={18} />
             </button>
           </div>
         </header>
@@ -2895,6 +3290,8 @@ export default function App() {
             onToggleOfferStatus={toggleOfferStatus}
           />
         </main>
+
+        {renderStaffProfileDrawer()}
       </div>
     );
   }
@@ -2914,12 +3311,11 @@ export default function App() {
               </div>
             </div>
             <button
-              onClick={() => {
-                void handleLogout();
-              }}
+              onClick={handleOpenStaffProfile}
               className="coffee-icon-btn"
+              aria-label="Profile"
             >
-              <LogOut size={18} />
+              <User size={18} />
             </button>
           </div>
         </header>
@@ -2943,6 +3339,8 @@ export default function App() {
             trackerStatus={agentTrackerStatus}
           />
         </main>
+
+        {renderStaffProfileDrawer()}
       </div>
     );
   }
