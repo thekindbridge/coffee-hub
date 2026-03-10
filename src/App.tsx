@@ -1124,6 +1124,14 @@ export default function App() {
     setIsTrackingOrder(false);
   };
 
+  const handleTrackFromOrder = (order: Order) => {
+    setTrackingError('');
+    setIsTrackingOrder(false);
+    setTrackingOrderId(order.id);
+    setOrderStatus(order);
+    setActiveTab('tracking');
+  };
+
   useEffect(() => {
     if (!orderStatus) {
       return;
@@ -2974,6 +2982,7 @@ export default function App() {
             orders={userOrders}
             isLoading={isUserOrdersLoading}
             onBrowseMenu={() => setActiveTab('menu')}
+            onTrackOrder={handleTrackFromOrder}
           />
         )}
         {activeTab === 'tracking' && renderTrackingExperience()}
@@ -3033,7 +3042,7 @@ export default function App() {
 
       {/* Bottom Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/8 bg-[#0f0b09]/92 px-4 py-3 backdrop-blur-2xl sm:px-6">
-        <div className="mx-auto grid max-w-screen-md grid-cols-5 gap-2 rounded-[24px] border border-white/8 bg-[#120d0b]/88 p-2 shadow-[0_-10px_36px_rgba(0,0,0,0.16)]">
+        <div className="mx-auto grid max-w-screen-md grid-cols-4 gap-2 rounded-[24px] border border-white/8 bg-[#120d0b]/88 p-2 shadow-[0_-10px_36px_rgba(0,0,0,0.16)]">
           {[
             {
               id: 'home',
@@ -3062,13 +3071,6 @@ export default function App() {
               label: 'Orders',
               active: activeTab === 'orders',
               onClick: () => setActiveTab('orders'),
-            },
-            {
-              id: 'tracking',
-              icon: MapPin,
-              label: 'Track',
-              active: activeTab === 'tracking',
-              onClick: () => setActiveTab('tracking'),
             },
           ].map(item => (
             <button
