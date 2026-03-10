@@ -28,13 +28,6 @@ export interface OrderTrackingPageProps {
   onClearTracking?: () => void;
 }
 
-const STATUS_COPY: Record<Order['status'], string> = {
-  Pending: 'Your order is confirmed and waiting to enter the kitchen queue.',
-  Preparing: 'Our kitchen is plating your order and getting it ready for dispatch.',
-  'Out for Delivery': 'Your delivery partner is on the route with a live ETA.',
-  Delivered: 'Delivered successfully. Enjoy your Coffee Hub order.',
-};
-
 const normalizePhoneForTel = (phone: string) => phone.replace(/[^\d+]/g, '');
 
 const joinClassNames = (...classNames: Array<string | undefined>) =>
@@ -92,6 +85,11 @@ export default function OrderTrackingPage({
   const agentId = deliverySession?.agent_id || order.delivery_agent_id || '';
   const agentPhone = deliveryAgent?.phone || order.delivery_agent_phone || '';
   const agentName = deliveryAgent?.name || deliverySession?.agent_name || order.delivery_agent_name || 'Delivery Partner';
+  const liveFlowLabel = ORDER_FLOW[currentStepIndex] || order.status;
+  const partnerStatus = deliverySession?.status || (order.status === 'Out for Delivery' ? 'assigned' : order.status.toLowerCase());
+  const paymentLabel = order.payment_method === 'razorpay' || order.payment_method === 'Pay Online'
+    ? 'Pay Online'
+    : order.payment_method;
 
   useEffect(() => {
     const unsubscribe = onSnapshot(
@@ -214,103 +212,67 @@ export default function OrderTrackingPage({
   }
 
   return (
-    <div className="px-4 pb-28 pt-24 sm:px-6">
-      <div className="mx-auto flex max-w-screen-xl flex-col gap-5">
+    <div className="px-4 pb-20 pt-24 sm:px-6">
+      <div className="mx-auto flex max-w-screen-xl flex-col gap-4">
         <motion.section
           initial={{ opacity: 0, y: 18 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.35, ease: 'easeOut' }}
-          className="overflow-hidden rounded-[34px] border border-white/10 bg-[linear-gradient(135deg,rgba(36,24,18,0.96),rgba(15,10,8,0.98))] text-[#fff8f2] shadow-[0_28px_90px_rgba(8,5,4,0.32)]"
+          className="rounded-[28px] border border-white/10 bg-[linear-gradient(135deg,rgba(36,24,18,0.96),rgba(15,10,8,0.98))] text-[#fff8f2] shadow-[0_20px_60px_rgba(8,5,4,0.28)]"
         >
-          <div className="grid gap-5 px-5 py-5 sm:px-6 lg:grid-cols-[1.4fr,0.9fr]">
-            <div className="space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.34em] text-[#f1b375]">
-                    Order Tracking
-                  </p>
-                  <h1 className="mt-2 text-[2rem] font-semibold text-[#fff8f2] sm:text-[2.4rem]">
-                    Order #{order.id}
-                  </h1>
-                </div>
-                <div className={joinClassNames(
-                  'rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em]',
-                  statusToneClass[order.status],
-                )}>
-                  {order.status}
-                </div>
+          <div className="space-y-4 px-5 py-4 sm:px-6">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.34em] text-[#f1b375]">
+                  Order Tracking
+                </p>
+                <h1 className="mt-1 text-[1.6rem] font-semibold text-[#fff8f2] sm:text-[1.9rem]">
+                  Order #{order.id}
+                </h1>
               </div>
-
-              <p className="max-w-2xl text-sm leading-6 text-[#d8c7ba]">
-                {STATUS_COPY[order.status]}
-              </p>
-
-              <div className="grid gap-3 sm:grid-cols-3">
-                <div className="rounded-[26px] border border-white/10 bg-white/5 p-4 backdrop-blur-xl">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#c9aa8b]">
-                    ETA
-                  </p>
-                  <p className="mt-2 text-lg font-semibold text-[#fff8f2]">{etaLabel}</p>
-                </div>
-                <div className="rounded-[26px] border border-white/10 bg-white/5 p-4 backdrop-blur-xl">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#c9aa8b]">
-                    Distance
-                  </p>
-                  <p className="mt-2 text-lg font-semibold text-[#fff8f2]">
-                    {routeMetrics?.distance_text || '--'}
-                  </p>
-                </div>
-                <div className="rounded-[26px] border border-white/10 bg-white/5 p-4 backdrop-blur-xl">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#c9aa8b]">
-                    Traffic
-                  </p>
-                  <p className="mt-2 text-lg font-semibold text-[#fff8f2]">
-                    {routeMetrics?.duration_in_traffic_text || '--'}
-                  </p>
-                  <p className={`mt-1 text-xs font-semibold ${trafficToneClass}`}>
-                    {trafficLabel}
-                  </p>
-                </div>
+              <div className={joinClassNames(
+                'rounded-full border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.22em]',
+                statusToneClass[order.status],
+              )}>
+                {order.status}
               </div>
             </div>
 
-            <div className="rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.04))] p-5">
-              <div className="flex items-center gap-2 text-[#f1b375]">
-                <Sparkles size={15} />
-                <p className="text-[11px] font-semibold uppercase tracking-[0.32em]">Live flow</p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-[22px] border border-white/10 bg-white/5 p-3">
+                <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#c9aa8b]">
+                  <Clock3 size={14} className="text-[#f6c18b]" />
+                  ETA
+                </div>
+                <p className="mt-2 text-sm font-semibold text-[#fff8f2]">{etaLabel}</p>
               </div>
-              <div className="mt-4 space-y-4">
-                {[
-                  { label: 'Pending', icon: Clock3 },
-                  { label: 'Preparing', icon: Flame },
-                  { label: 'Out for Delivery', icon: Bike },
-                  { label: 'Delivered', icon: CheckCircle2 },
-                ].map((step, index) => {
-                  const isComplete = index <= currentStepIndex;
-                  const isActive = index === currentStepIndex;
-
-                  return (
-                    <div key={step.label} className="flex items-center gap-3">
-                      <div
-                        className={`flex h-11 w-11 items-center justify-center rounded-2xl border ${
-                          isComplete
-                            ? 'border-orange-300/30 bg-orange-400/20 text-[#fff8f2]'
-                            : 'border-white/10 bg-white/5 text-[#8b7565]'
-                        }`}
-                      >
-                        <step.icon size={18} />
-                      </div>
-                      <div>
-                        <p className={`text-sm font-semibold ${isActive ? 'text-[#fff8f2]' : 'text-[#c9aa8b]'}`}>
-                          {step.label}
-                        </p>
-                        <p className="text-xs text-[#8b7565]">
-                          {isComplete ? 'Completed' : 'Waiting'}
-                        </p>
-                      </div>
-                    </div>
-                  );
-                })}
+              <div className="rounded-[22px] border border-white/10 bg-white/5 p-3">
+                <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#c9aa8b]">
+                  <MapPin size={14} className="text-[#22c55e]" />
+                  Distance
+                </div>
+                <p className="mt-2 text-sm font-semibold text-[#fff8f2]">
+                  {routeMetrics?.distance_text || '--'}
+                </p>
+              </div>
+              <div className="rounded-[22px] border border-white/10 bg-white/5 p-3">
+                <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#c9aa8b]">
+                  <Flame size={14} className="text-[#f97316]" />
+                  Traffic
+                </div>
+                <p className="mt-2 text-sm font-semibold text-[#fff8f2]">
+                  {routeMetrics?.duration_in_traffic_text || '--'}
+                </p>
+                <p className={`mt-1 text-[11px] font-semibold ${trafficToneClass}`}>
+                  {trafficLabel}
+                </p>
+              </div>
+              <div className="rounded-[22px] border border-white/10 bg-white/5 p-3">
+                <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#c9aa8b]">
+                  <Sparkles size={14} className="text-[#f1b375]" />
+                  Live Flow
+                </div>
+                <p className="mt-2 text-sm font-semibold text-[#fff8f2]">{liveFlowLabel}</p>
               </div>
             </div>
           </div>
@@ -321,11 +283,21 @@ export default function OrderTrackingPage({
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.35, delay: 0.05, ease: 'easeOut' }}
         >
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <div className="rounded-full border border-white/10 bg-black/30 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.22em] text-[#f6c18b]">
+              Live Route
+            </div>
+            <div className="text-xs font-semibold text-[#d8c7ba]">
+              {order.status === 'Out for Delivery' ? 'Rider on the way' : order.status}
+            </div>
+          </div>
           <DeliveryTrackingMap
             coffeeShopLocation={coffeeShopLocation}
             customerLocation={order.customer_location}
             onRouteMetricsChange={setRouteMetrics}
             orderId={order.id}
+            className="rounded-[30px] [&_.pointer-events-none.absolute.inset-x-0.top-0.z-20]:hidden [&_.pointer-events-none.absolute.inset-x-0.bottom-0.z-20]:hidden"
+            mapClassName="h-[520px] w-full sm:h-[640px] lg:h-[720px]"
           />
         </motion.section>
 
@@ -333,64 +305,74 @@ export default function OrderTrackingPage({
           initial={{ opacity: 0, y: 18 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.35, delay: 0.1, ease: 'easeOut' }}
-          className="grid gap-4 lg:grid-cols-[1fr,0.58fr]"
+          className="grid gap-4 lg:grid-cols-[1.1fr,0.9fr]"
         >
-          <div className="rounded-[32px] border border-white/10 bg-[linear-gradient(180deg,#17110d,#0f0a08)] p-5 text-[#fff8f2] shadow-[0_22px_60px_rgba(9,6,5,0.24)]">
+          <div className="rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,#17110d,#0f0a08)] p-4 text-[#fff8f2] shadow-[0_20px_50px_rgba(9,6,5,0.22)]">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.32em] text-[#f1b375]">
                   Delivery Partner
                 </p>
-                <h2 className="mt-2 text-2xl font-semibold text-[#fff8f2]">{agentName}</h2>
+                <h2 className="mt-1 text-lg font-semibold text-[#fff8f2]">{agentName}</h2>
               </div>
-              <div className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-[#f5ede3]">
-                {deliverySession?.status || (order.status === 'Out for Delivery' ? 'assigned' : order.status.toLowerCase())}
+              <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#f5ede3]">
+                {partnerStatus}
               </div>
             </div>
 
-            <div className="mt-5 grid gap-3 sm:grid-cols-3">
-              <div className="rounded-[24px] border border-white/10 bg-white/5 p-4">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#c9aa8b]">
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-[20px] border border-white/10 bg-white/5 p-3">
+                <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#c9aa8b]">
+                  <Sparkles size={13} className="text-[#f1b375]" />
+                  Status
+                </div>
+                <p className="mt-2 text-sm font-semibold text-[#fff8f2]">{order.status}</p>
+              </div>
+              <div className="rounded-[20px] border border-white/10 bg-white/5 p-3">
+                <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#c9aa8b]">
+                  <Phone size={13} className="text-[#f97316]" />
                   Phone
-                </p>
+                </div>
                 <p className="mt-2 text-sm font-semibold text-[#fff8f2]">
-                  {agentPhone || 'Will appear once assigned'}
+                  {agentPhone || 'Not shared yet'}
                 </p>
               </div>
-              <div className="rounded-[24px] border border-white/10 bg-white/5 p-4">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#c9aa8b]">
+              <div className="rounded-[20px] border border-white/10 bg-white/5 p-3">
+                <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#c9aa8b]">
+                  <Bike size={13} className="text-[#f6c18b]" />
                   Session
-                </p>
+                </div>
                 <p className="mt-2 text-sm font-semibold text-[#fff8f2]">
                   {deliverySession?.status || 'Awaiting dispatch'}
                 </p>
               </div>
-              <div className="rounded-[24px] border border-white/10 bg-white/5 p-4">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#c9aa8b]">
-                  Route
-                </p>
+              <div className="rounded-[20px] border border-white/10 bg-white/5 p-3">
+                <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#c9aa8b]">
+                  <Clock3 size={13} className="text-[#f1b375]" />
+                  Route Time
+                </div>
                 <p className="mt-2 text-sm font-semibold text-[#fff8f2]">
                   {routeMetrics?.duration_text || 'Calculating'}
                 </p>
               </div>
             </div>
 
-            <div className="mt-5 flex flex-wrap gap-3">
+            <div className="mt-4 flex flex-wrap gap-3">
               <a
                 href={agentPhone ? `tel:${normalizePhoneForTel(agentPhone)}` : undefined}
-                className={`inline-flex min-h-12 items-center justify-center gap-2 rounded-full px-5 text-sm font-semibold transition-colors ${
+                className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-full px-4 text-sm font-semibold transition-colors ${
                   agentPhone
                     ? 'bg-[#f97316] text-white hover:bg-[#ea6a10]'
                     : 'cursor-not-allowed border border-white/10 bg-white/5 text-[#8b7565]'
                 }`}
               >
-                <Phone size={16} />
+                <Phone size={15} />
                 Call Partner
               </a>
               {onClearTracking && (
                 <button
                   onClick={onClearTracking}
-                  className="inline-flex min-h-12 items-center justify-center rounded-full border border-white/10 bg-white/5 px-5 text-sm font-semibold text-[#f5ede3]"
+                  className="inline-flex min-h-11 items-center justify-center rounded-full border border-white/10 bg-white/5 px-4 text-sm font-semibold text-[#f5ede3]"
                 >
                   Clear Tracking
                 </button>
@@ -398,20 +380,21 @@ export default function OrderTrackingPage({
             </div>
           </div>
 
-          <div className="rounded-[32px] border border-white/10 bg-[linear-gradient(180deg,#17110d,#0f0a08)] p-5 text-[#fff8f2] shadow-[0_22px_60px_rgba(9,6,5,0.24)]">
-            <div className="flex items-center gap-2 text-[#f1b375]">
-              <MapPin size={15} />
-              <p className="text-[11px] font-semibold uppercase tracking-[0.32em]">Delivery Address</p>
+          <div className="grid gap-3">
+            <div className="rounded-[26px] border border-white/10 bg-[linear-gradient(180deg,#17110d,#0f0a08)] p-4 text-[#fff8f2] shadow-[0_20px_50px_rgba(9,6,5,0.22)]">
+              <div className="flex items-center gap-2 text-[#f1b375]">
+                <MapPin size={14} />
+                <p className="text-[11px] font-semibold uppercase tracking-[0.28em]">Delivery Address</p>
+              </div>
+              <p className="mt-3 text-sm font-semibold text-[#f5ede3]">Inkollu</p>
             </div>
-            <p className="mt-4 text-sm leading-7 text-[#f5ede3]">{order.address}</p>
 
-            <div className="mt-5 rounded-[24px] border border-white/10 bg-white/5 p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#c9aa8b]">
-                Payment
-              </p>
-              <p className="mt-2 text-sm font-semibold text-[#fff8f2]">
-                {order.payment_method} • {order.payment_status || 'pending'}
-              </p>
+            <div className="rounded-[26px] border border-white/10 bg-[linear-gradient(180deg,#17110d,#0f0a08)] p-4 text-[#fff8f2] shadow-[0_20px_50px_rgba(9,6,5,0.22)]">
+              <div className="flex items-center gap-2 text-[#f1b375]">
+                <CheckCircle2 size={14} />
+                <p className="text-[11px] font-semibold uppercase tracking-[0.28em]">Payment Info</p>
+              </div>
+              <p className="mt-3 text-sm font-semibold text-[#f5ede3]">{paymentLabel}</p>
             </div>
           </div>
         </motion.section>
