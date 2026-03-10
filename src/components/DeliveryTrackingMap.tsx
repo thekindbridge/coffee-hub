@@ -69,13 +69,38 @@ export interface DeliveryTrackingMapProps {
 const joinClassNames = (...classNames: Array<string | undefined>) =>
   classNames.filter(Boolean).join(' ');
 
-const isFiniteCoordinate = (value: unknown): value is number =>
-  typeof value === 'number' && Number.isFinite(value);
+const isCoordinateInRange = (value: number, minimum: number, maximum: number) =>
+  value >= minimum && value <= maximum;
 
-const isValidLocation = (
-  location: Partial<DeliveryLocation> | null | undefined,
-): location is DeliveryLocation =>
-  isFiniteCoordinate(location?.lat) && isFiniteCoordinate(location?.lng);
+const normalizeLocationRecord = (value: unknown): DeliveryLocation | null => {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  const data = value as Record<string, unknown>;
+  const lat = Number(data.lat);
+  const lng = Number(data.lng);
+  const accuracy = Number(data.accuracy);
+
+  if (
+    !Number.isFinite(lat) ||
+    !Number.isFinite(lng) ||
+    !isCoordinateInRange(lat, -90, 90) ||
+    !isCoordinateInRange(lng, -180, 180) ||
+    (lat === 0 && lng === 0)
+  ) {
+    return null;
+  }
+
+  return {
+    lat,
+    lng,
+    accuracy: Number.isFinite(accuracy) ? accuracy : undefined,
+  };
+};
+
+const isValidLocation = (location: DeliveryLocation | null | undefined): location is DeliveryLocation =>
+  normalizeLocationRecord(location) !== null;
 
 const easeOutCubic = (value: number) => 1 - ((1 - value) ** 3);
 
@@ -191,6 +216,10 @@ export default function DeliveryTrackingMap({
   );
 
   useEffect(() => {
+    hasInitializedViewportRef.current = false;
+  }, [normalizedOrderId]);
+
+  useEffect(() => {
     if (!normalizedOrderId) {
       setAgentLocation(null);
       setAnimatedAgentLocation(null);
@@ -212,21 +241,17 @@ export default function DeliveryTrackingMap({
           return;
         }
 
-        const nextLocation = snapshot.data() as Partial<DeliveryLocation>;
-        if (!isValidLocation(nextLocation)) {
+        const nextLocation = normalizeLocationRecord(snapshot.data());
+        if (!nextLocation) {
           setAgentLocation(null);
           setAnimatedAgentLocation(null);
           setDirections(null);
-          setTrackingLabel('Delivery partner location is temporarily unavailable.');
+          setTrackingLabel('Waiting for a live GPS ping from the rider.');
           onRouteMetricsChange?.(null);
           return;
         }
 
-        setAgentLocation({
-          lat: nextLocation.lat,
-          lng: nextLocation.lng,
-          accuracy: isFiniteCoordinate(nextLocation.accuracy) ? nextLocation.accuracy : undefined,
-        });
+        setAgentLocation(nextLocation);
         setTrackingLabel('Rider is live on the route.');
       },
       error => {

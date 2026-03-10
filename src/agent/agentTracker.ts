@@ -2,7 +2,6 @@ import {
   doc,
   serverTimestamp,
   setDoc,
-  writeBatch,
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import type { DeliveryLocation } from '../types';
@@ -31,23 +30,19 @@ export interface AgentTrackerOptions {
   agentId: string;
   orderId: string;
   orderDocId: string;
-  customerLocation: DeliveryLocation;
   minimumUpdateIntervalMs?: number;
   minimumDistanceDeltaMeters?: number;
-  completionRadiusMeters?: number;
   restartAfterMs?: number;
   restartDelayMs?: number;
   geolocationOptions?: PositionOptions;
   onLocation?: (location: DeliveryLocation) => void;
   onStatusChange?: (status: AgentTrackerStatus) => void;
   onPermissionChange?: (permissionState: AgentTrackerPermissionState) => void;
-  onAutoComplete?: () => void;
   onError?: (errorMessage: string) => void;
 }
 
 const DEFAULT_MINIMUM_UPDATE_INTERVAL_MS = 5000;
 const DEFAULT_MINIMUM_DISTANCE_DELTA_METERS = 15;
-const DEFAULT_COMPLETION_RADIUS_METERS = 50;
 const DEFAULT_RESTART_AFTER_MS = 20000;
 const DEFAULT_RESTART_DELAY_MS = 4000;
 
@@ -90,10 +85,8 @@ export class AgentTracker {
       | 'agentId'
       | 'orderId'
       | 'orderDocId'
-      | 'customerLocation'
       | 'minimumUpdateIntervalMs'
       | 'minimumDistanceDeltaMeters'
-      | 'completionRadiusMeters'
       | 'restartAfterMs'
       | 'restartDelayMs'
       | 'geolocationOptions'
@@ -101,7 +94,7 @@ export class AgentTracker {
   > &
     Pick<
       AgentTrackerOptions,
-      'onLocation' | 'onStatusChange' | 'onPermissionChange' | 'onAutoComplete' | 'onError'
+      'onLocation' | 'onStatusChange' | 'onPermissionChange' | 'onError'
     >;
 
   private watchId: number | null = null;
@@ -113,7 +106,6 @@ export class AgentTracker {
   private writeQueue: Promise<void> = Promise.resolve();
   private permissionState: AgentTrackerPermissionState = 'unavailable';
   private hasStopped = false;
-  private isCompleting = false;
 
   constructor(options: AgentTrackerOptions) {
     this.options = {
@@ -122,8 +114,6 @@ export class AgentTracker {
         options.minimumUpdateIntervalMs ?? DEFAULT_MINIMUM_UPDATE_INTERVAL_MS,
       minimumDistanceDeltaMeters:
         options.minimumDistanceDeltaMeters ?? DEFAULT_MINIMUM_DISTANCE_DELTA_METERS,
-      completionRadiusMeters:
-        options.completionRadiusMeters ?? DEFAULT_COMPLETION_RADIUS_METERS,
       restartAfterMs: options.restartAfterMs ?? DEFAULT_RESTART_AFTER_MS,
       restartDelayMs: options.restartDelayMs ?? DEFAULT_RESTART_DELAY_MS,
       geolocationOptions: options.geolocationOptions ?? {
@@ -208,7 +198,7 @@ export class AgentTracker {
     );
 
     this.healthIntervalId = window.setInterval(() => {
-      if (this.hasStopped || this.isCompleting) {
+      if (this.hasStopped) {
         return;
       }
 
@@ -223,7 +213,7 @@ export class AgentTracker {
   }
 
   private handlePosition(position: GeolocationPosition) {
-    if (this.hasStopped || this.isCompleting) {
+    if (this.hasStopped) {
       return;
     }
 
@@ -248,13 +238,6 @@ export class AgentTracker {
     this.writeQueue = this.writeQueue
       .then(async () => {
         await this.persistLocation(nextLocation);
-
-        if (
-          calculateDistanceMeters(nextLocation, this.options.customerLocation) <=
-          this.options.completionRadiusMeters
-        ) {
-          await this.completeDelivery(nextLocation);
-        }
       })
       .catch(error => {
         console.error('Failed to process GPS update', error);
@@ -311,58 +294,8 @@ export class AgentTracker {
     ]);
   }
 
-  private async completeDelivery(location: DeliveryLocation) {
-    if (this.isCompleting) {
-      return;
-    }
-
-    this.isCompleting = true;
-
-    const batch = writeBatch(db);
-    batch.update(doc(db, 'orders', this.options.orderDocId), {
-      status: 'Delivered',
-      deliveredAt: serverTimestamp(),
-    });
-    batch.set(
-      doc(db, 'delivery_sessions', this.options.orderId),
-      {
-        status: 'completed',
-        completedAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        lastLocation: {
-          lat: location.lat,
-          lng: location.lng,
-          accuracy: location.accuracy ?? null,
-          updatedAt: serverTimestamp(),
-        },
-      },
-      { merge: true },
-    );
-    batch.set(
-      doc(db, 'delivery_agents', this.options.agentId),
-      {
-        currentOrderId: '',
-        lastLocation: {
-          lat: location.lat,
-          lng: location.lng,
-          accuracy: location.accuracy ?? null,
-          updatedAt: serverTimestamp(),
-        },
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true },
-    );
-
-    await batch.commit();
-    this.clearWatch();
-    this.clearRestartTimer();
-    this.clearHealthInterval();
-    this.emitStatus(createStatus('completed', 'Delivery completed automatically near the destination.'));
-    this.options.onAutoComplete?.();
-  }
-
   private handlePositionError(error: GeolocationPositionError) {
-    if (this.hasStopped || this.isCompleting) {
+    if (this.hasStopped) {
       return;
     }
 
@@ -385,7 +318,7 @@ export class AgentTracker {
   }
 
   private scheduleRestart(message: string) {
-    if (this.restartTimeoutId !== null || this.hasStopped || this.isCompleting) {
+    if (this.restartTimeoutId !== null || this.hasStopped) {
       return;
     }
 
@@ -394,7 +327,7 @@ export class AgentTracker {
 
     this.restartTimeoutId = window.setTimeout(() => {
       this.restartTimeoutId = null;
-      if (this.hasStopped || this.isCompleting) {
+      if (this.hasStopped) {
         return;
       }
 

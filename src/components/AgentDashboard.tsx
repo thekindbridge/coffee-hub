@@ -26,7 +26,7 @@ interface AgentDashboardProps {
   permissionState: AgentTrackerPermissionState;
   trackerStatus: AgentTrackerStatus;
   onStartDelivery: () => void | Promise<void>;
-  onCompleteDelivery: (orderDocId: string) => void | Promise<void>;
+  onEndDelivery: (orderDocId: string) => void | Promise<void>;
 }
 
 export default function AgentDashboard({
@@ -40,7 +40,7 @@ export default function AgentDashboard({
   permissionState,
   trackerStatus,
   onStartDelivery,
-  onCompleteDelivery,
+  onEndDelivery,
 }: AgentDashboardProps) {
   const [activeTab, setActiveTab] = useState<AgentTab>('active');
 
@@ -67,7 +67,7 @@ export default function AgentDashboard({
               return;
             }
 
-            void onCompleteDelivery(activeOrder.doc_id);
+            void onEndDelivery(activeOrder.doc_id);
           }}
           onStartDelivery={onStartDelivery}
           order={activeOrder}

@@ -58,6 +58,22 @@ export default function AgentDeliveryPage({
   onStartDelivery,
   onEndDelivery,
 }: AgentDeliveryPageProps) {
+  const startDelivery = async (orderId: string) => {
+    if (!orderId) {
+      return;
+    }
+
+    await onStartDelivery();
+  };
+
+  const endDelivery = async (orderId: string) => {
+    if (!orderId) {
+      return;
+    }
+
+    await onEndDelivery();
+  };
+
   if (!order) {
     return (
       <div className="rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,#17110d,#0f0a08)] px-6 py-10 text-center text-[#fff8f2]">
@@ -195,7 +211,7 @@ export default function AgentDeliveryPage({
           <div className="mt-4 space-y-3">
             <button
               onClick={() => {
-                void onStartDelivery();
+                void startDelivery(order.id);
               }}
               disabled={isTracking}
               className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[#f97316] px-5 text-sm font-semibold text-white transition-colors hover:bg-[#ea6a10] disabled:cursor-not-allowed disabled:opacity-60"
@@ -206,7 +222,7 @@ export default function AgentDeliveryPage({
 
             <button
               onClick={() => {
-                void onEndDelivery();
+                void endDelivery(order.id);
               }}
               className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full border border-white/10 bg-white/5 px-5 text-sm font-semibold text-[#fff8f2]"
             >

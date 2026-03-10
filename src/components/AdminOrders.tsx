@@ -36,24 +36,6 @@ const toSerializableLocation = (location: DeliveryLocation | null | undefined) =
   };
 };
 
-const getInitialAgentLocation = (agentData: Record<string, unknown>, selectedAgent: DeliveryAgent) => {
-  const lastLocationValue =
-    agentData.lastLocation && typeof agentData.lastLocation === 'object'
-      ? (agentData.lastLocation as Record<string, unknown>)
-      : null;
-
-  const fallbackLocation = selectedAgent.last_location;
-  const lat = Number(lastLocationValue?.lat ?? fallbackLocation?.lat ?? 0);
-  const lng = Number(lastLocationValue?.lng ?? fallbackLocation?.lng ?? 0);
-  const accuracyValue = Number(lastLocationValue?.accuracy ?? fallbackLocation?.accuracy ?? Number.NaN);
-
-  return {
-    lat: Number.isFinite(lat) ? lat : 0,
-    lng: Number.isFinite(lng) ? lng : 0,
-    accuracy: Number.isFinite(accuracyValue) ? accuracyValue : null,
-  };
-};
-
 export default function AdminOrders({
   orders,
   newOrderDocIds,
@@ -183,8 +165,6 @@ export default function AdminOrders({
 
         const previousAgentId =
           ((orderData.deliveryAgentId as string) || selectedOrder.delivery_agent_id || '').trim();
-        const initialAgentLocation = getInitialAgentLocation(agentData, selectedAgent);
-
         transaction.update(orderRef, {
           agentId,
           deliveryAgentId: agentId,
@@ -199,12 +179,6 @@ export default function AdminOrders({
           {
             currentOrderId: trackingOrderId,
             isActive: true,
-            lastLocation: {
-              lat: initialAgentLocation.lat,
-              lng: initialAgentLocation.lng,
-              accuracy: initialAgentLocation.accuracy,
-              updatedAt: serverTimestamp(),
-            },
             name: (agentData.name as string) || selectedAgent.name,
             phone: (agentData.phone as string) || selectedAgent.phone || '',
             updatedAt: serverTimestamp(),
@@ -231,26 +205,16 @@ export default function AdminOrders({
             completedAt: null,
             customerLocation:
               orderData.customerLocation ?? toSerializableLocation(selectedOrder.customer_location),
+            lastLocation: null,
             orderDocId,
             orderId: trackingOrderId,
-            startedAt: serverTimestamp(),
-            status: 'active',
+            startedAt: null,
+            status: 'assigned',
             updatedAt: serverTimestamp(),
           },
           { merge: true },
         );
-
-        transaction.set(
-          locationRef,
-          {
-            agentId,
-            lat: initialAgentLocation.lat,
-            lng: initialAgentLocation.lng,
-            accuracy: initialAgentLocation.accuracy,
-            updatedAt: serverTimestamp(),
-          },
-          { merge: true },
-        );
+        transaction.delete(locationRef);
       });
 
       setOptimisticStatuses(previousStatuses => ({

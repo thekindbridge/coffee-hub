@@ -1185,7 +1185,13 @@ export default function App() {
     }
   };
 
-  const markOrderDelivered = async (order: Order) => {
+  const toFirestoreLocation = (location: DeliveryLocation) => ({
+    lat: location.lat,
+    lng: location.lng,
+    accuracy: location.accuracy ?? null,
+  });
+
+  const markOrderDelivered = async (order: Order, finalLocation?: DeliveryLocation | null) => {
     const batch = writeBatch(db);
     batch.update(doc(db, 'orders', order.doc_id), {
       status: 'Delivered',
@@ -1197,6 +1203,12 @@ export default function App() {
         agentId: order.delivery_agent_id || '',
         agentName: order.delivery_agent_name || '',
         completedAt: serverTimestamp(),
+        lastLocation: finalLocation
+          ? {
+              ...toFirestoreLocation(finalLocation),
+              updatedAt: serverTimestamp(),
+            }
+          : null,
         orderDocId: order.doc_id,
         orderId: order.id,
         status: 'completed',
@@ -1205,11 +1217,31 @@ export default function App() {
       { merge: true },
     );
 
+    if (finalLocation) {
+      batch.set(
+        doc(db, 'agent_locations', order.id),
+        {
+          agentId: order.delivery_agent_id || '',
+          ...toFirestoreLocation(finalLocation),
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      );
+    }
+
     if (order.delivery_agent_id) {
       batch.set(
         doc(db, 'delivery_agents', order.delivery_agent_id),
         {
           currentOrderId: '',
+          ...(finalLocation
+            ? {
+                lastLocation: {
+                  ...toFirestoreLocation(finalLocation),
+                  updatedAt: serverTimestamp(),
+                },
+              }
+            : {}),
           updatedAt: serverTimestamp(),
         },
         { merge: true },
@@ -1235,15 +1267,6 @@ export default function App() {
 
     const tracker = createAgentTracker({
       agentId,
-      customerLocation: currentDeliveryOrder.customer_location,
-      onAutoComplete: () => {
-        setIsAgentTracking(false);
-        trackedOrderIdRef.current = '';
-        setAgentTrackerStatus({
-          lifecycle: 'completed',
-          message: 'Customer reached. Delivery completed automatically.',
-        });
-      },
       onError: message => {
         console.error('Agent tracker error', message);
       },
@@ -1285,6 +1308,35 @@ export default function App() {
     );
   };
 
+  const handleEndDelivery = async (orderDocId: string) => {
+    const orderToComplete =
+      adminOrders.find(order => order.doc_id === orderDocId) ||
+      userOrders.find(order => order.doc_id === orderDocId) ||
+      (orderStatus?.doc_id === orderDocId ? orderStatus : null);
+
+    if (!orderToComplete) {
+      alert('Unable to find the order for this delivery.');
+      return;
+    }
+
+    const finalLocation = agentLastTrackedLocation;
+
+    try {
+      agentTrackerRef.current?.stop();
+      agentTrackerRef.current = null;
+      trackedOrderIdRef.current = '';
+      setIsAgentTracking(false);
+      await markOrderDelivered(orderToComplete, finalLocation);
+      setAgentTrackerStatus({
+        lifecycle: 'completed',
+        message: 'Delivery ended and the order is marked as delivered.',
+      });
+    } catch (error) {
+      console.error('Failed to end delivery', error);
+      alert('Unable to end this delivery right now.');
+    }
+  };
+
   const updateOrderStatus = async (orderDocId: string, status: Order['status']) => {
     const normalizedStatus = normalizeOrderStatus(status);
     const existingOrder =
@@ -1308,7 +1360,7 @@ export default function App() {
         agentTrackerRef.current = null;
         trackedOrderIdRef.current = '';
         setIsAgentTracking(false);
-        await markOrderDelivered(existingOrder);
+        await markOrderDelivered(existingOrder, agentLastTrackedLocation);
       } catch (error) {
         console.error('Failed to complete delivery', error);
         alert('Unable to mark this order as delivered right now.');
@@ -2540,8 +2592,8 @@ export default function App() {
             isTracking={isAgentTracking}
             lastTrackedLocation={agentLastTrackedLocation}
             orders={adminOrders}
-            onCompleteDelivery={orderDocId => {
-              void updateOrderStatus(orderDocId, 'Delivered');
+            onEndDelivery={orderDocId => {
+              void handleEndDelivery(orderDocId);
             }}
             onStartDelivery={() => {
               void handleStartDelivery();
