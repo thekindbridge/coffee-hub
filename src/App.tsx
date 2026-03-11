@@ -45,6 +45,7 @@ import {
 } from 'firebase/auth';
 import {
   collection,
+  deleteDoc,
   deleteField,
   doc,
   getDocs,
@@ -205,6 +206,13 @@ type StaffProfile = {
   adminLocation: string;
   vehicleType: AgentVehicleType;
   status: AgentStatus;
+};
+
+type AccessEntry = {
+  id: string;
+  email: string;
+  role: 'admin' | 'delivery';
+  accessOnly?: boolean;
 };
 
 const EMPTY_PROFILE: CustomerProfile = {
@@ -772,6 +780,19 @@ export default function App() {
   const [staffProfileError, setStaffProfileError] = useState('');
   const [isStaffProfileSaving, setIsStaffProfileSaving] = useState(false);
   const [isStaffProfileSavedToastVisible, setIsStaffProfileSavedToastVisible] = useState(false);
+  const [isAccessManagementOpen, setIsAccessManagementOpen] = useState(false);
+  const [adminAccessEntries, setAdminAccessEntries] = useState<AccessEntry[]>([]);
+  const [deliveryAccessEntries, setDeliveryAccessEntries] = useState<AccessEntry[]>([]);
+  const [adminAccessInput, setAdminAccessInput] = useState('');
+  const [deliveryAccessInput, setDeliveryAccessInput] = useState('');
+  const [adminAccessError, setAdminAccessError] = useState('');
+  const [deliveryAccessError, setDeliveryAccessError] = useState('');
+  const [adminAccessSuccess, setAdminAccessSuccess] = useState('');
+  const [deliveryAccessSuccess, setDeliveryAccessSuccess] = useState('');
+  const [isAdminAccessSaving, setIsAdminAccessSaving] = useState(false);
+  const [isDeliveryAccessSaving, setIsDeliveryAccessSaving] = useState(false);
+  const [adminAccessRemovingId, setAdminAccessRemovingId] = useState('');
+  const [deliveryAccessRemovingId, setDeliveryAccessRemovingId] = useState('');
   const [selectedAddressIndex, setSelectedAddressIndex] = useState<number | 'new'>('new');
   const [isCheckoutAddressListOpen, setIsCheckoutAddressListOpen] = useState(false);
   const [checkoutError, setCheckoutError] = useState('');
@@ -797,6 +818,9 @@ export default function App() {
   const [agentTrackerStatus, setAgentTrackerStatus] = useState<AgentTrackerStatus>(DEFAULT_TRACKER_STATUS);
   const [agentLastTrackedLocation, setAgentLastTrackedLocation] = useState<DeliveryLocation | null>(null);
 
+  const normalizedCurrentEmail = currentUserEmail.trim().toLowerCase();
+  const isMainAdmin = normalizedCurrentEmail === ADMIN_EMAIL;
+
   const {
     offers,
     activeOffers,
@@ -813,12 +837,9 @@ export default function App() {
     const unsubscribe = onAuthStateChanged(auth, user => {
       if (user) {
         const email = user.email || '';
-        const normalizedEmail = email.toLowerCase();
         setIsLoggedIn(true);
         setCurrentUserId(user.uid);
         setCurrentUserEmail(email);
-        setIsAdmin(normalizedEmail === ADMIN_EMAIL);
-        setIsDeliveryAgent(normalizedEmail === DELIVERY_AGENT_EMAIL);
       } else {
         setIsLoggedIn(false);
         setCurrentUserId('');
@@ -835,6 +856,168 @@ export default function App() {
       unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    if (!currentUserEmail) {
+      setIsAdmin(false);
+      setIsDeliveryAgent(false);
+      return;
+    }
+
+    const normalizedEmail = currentUserEmail.trim().toLowerCase();
+    const adminQuery = query(
+      collection(db, 'admin_access'),
+      where('email', '==', normalizedEmail),
+    );
+    const deliveryQuery = query(
+      collection(db, 'delivery_agents'),
+      where('email', '==', normalizedEmail),
+    );
+
+    const unsubscribeAdmin = onSnapshot(
+      adminQuery,
+      snapshot => {
+        setIsAdmin(!snapshot.empty || normalizedEmail === ADMIN_EMAIL);
+      },
+      error => {
+        console.error('Failed to verify admin access', error);
+        setIsAdmin(normalizedEmail === ADMIN_EMAIL);
+      },
+    );
+
+    const unsubscribeDelivery = onSnapshot(
+      deliveryQuery,
+      snapshot => {
+        setIsDeliveryAgent(!snapshot.empty);
+      },
+      error => {
+        console.error('Failed to verify delivery agent access', error);
+        setIsDeliveryAgent(false);
+      },
+    );
+
+    return () => {
+      unsubscribeAdmin();
+      unsubscribeDelivery();
+    };
+  }, [currentUserEmail]);
+
+  useEffect(() => {
+    if (!isMainAdmin) {
+      return;
+    }
+
+    void setDoc(
+      doc(db, 'admin_access', ADMIN_EMAIL),
+      {
+        email: ADMIN_EMAIL,
+        role: 'admin',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    ).catch(error => {
+      console.error('Failed to seed main admin access', error);
+    });
+  }, [isMainAdmin]);
+
+  useEffect(() => {
+    if (!isAdmin) {
+      setAdminAccessEntries([]);
+      setDeliveryAccessEntries([]);
+      return;
+    }
+
+    const unsubscribeAdmins = onSnapshot(
+      collection(db, 'admin_access'),
+      snapshot => {
+        const entries = snapshot.docs
+          .map(docSnapshot => {
+            const data = docSnapshot.data() as Record<string, unknown>;
+            const emailValue = ((data.email as string) || docSnapshot.id || '').trim().toLowerCase();
+            if (!emailValue) {
+              return null;
+            }
+
+            return {
+              id: docSnapshot.id,
+              email: emailValue,
+              role: 'admin' as const,
+            };
+          })
+          .filter((entry): entry is AccessEntry => Boolean(entry))
+          .sort((a, b) => a.email.localeCompare(b.email));
+
+        setAdminAccessEntries(entries);
+      },
+      error => {
+        console.error('Failed to load admin access list', error);
+        setAdminAccessEntries([]);
+      },
+    );
+
+    const unsubscribeAgents = onSnapshot(
+      collection(db, 'delivery_agents'),
+      snapshot => {
+        const entries = snapshot.docs
+          .map(docSnapshot => {
+            const data = docSnapshot.data() as Record<string, unknown>;
+            const emailValue = ((data.email as string) || '').trim().toLowerCase();
+            if (!emailValue) {
+              return null;
+            }
+
+            return {
+              id: docSnapshot.id,
+              email: emailValue,
+              role: ((data.role as AccessEntry['role']) || 'delivery'),
+              accessOnly: data.accessOnly === true,
+            };
+          })
+          .filter((entry): entry is AccessEntry => Boolean(entry))
+          .sort((a, b) => a.email.localeCompare(b.email));
+
+        setDeliveryAccessEntries(entries);
+      },
+      error => {
+        console.error('Failed to load delivery access list', error);
+        setDeliveryAccessEntries([]);
+      },
+    );
+
+    return () => {
+      unsubscribeAdmins();
+      unsubscribeAgents();
+    };
+  }, [isAdmin]);
+
+  useEffect(() => {
+    if (!adminAccessSuccess) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setAdminAccessSuccess('');
+    }, 2500);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [adminAccessSuccess]);
+
+  useEffect(() => {
+    if (!deliveryAccessSuccess) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setDeliveryAccessSuccess('');
+    }, 2500);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [deliveryAccessSuccess]);
 
   useEffect(() => {
     if (!isLoggedIn) {
@@ -1129,14 +1312,17 @@ export default function App() {
   }, [isAdmin, isDeliveryAgent]);
 
   useEffect(() => {
-    if (!isAdmin && !isDeliveryAgent) {
+    const shouldSeedDefaultAgent =
+      isAdmin || isDeliveryAgent || normalizedCurrentEmail === DELIVERY_AGENT_EMAIL;
+    if (!shouldSeedDefaultAgent) {
       return;
     }
 
-    const seededAgentName = isDeliveryAgent
+    const shouldUseUserDetails = normalizedCurrentEmail === DELIVERY_AGENT_EMAIL;
+    const seededAgentName = shouldUseUserDetails
       ? auth.currentUser?.displayName || DEFAULT_DELIVERY_AGENT.name
       : DEFAULT_DELIVERY_AGENT.name;
-    const seededAgentPhone = isDeliveryAgent
+    const seededAgentPhone = shouldUseUserDetails
       ? auth.currentUser?.phoneNumber || DEFAULT_DELIVERY_AGENT.phone
       : DEFAULT_DELIVERY_AGENT.phone;
 
@@ -1144,6 +1330,7 @@ export default function App() {
       doc(db, 'delivery_agents', DEFAULT_DELIVERY_AGENT.id),
       {
         email: DELIVERY_AGENT_EMAIL,
+        role: 'delivery',
         isActive: true,
         name: seededAgentName,
         phone: seededAgentPhone,
@@ -1153,7 +1340,7 @@ export default function App() {
     ).catch(error => {
       console.error('Failed to seed delivery agent profile', error);
     });
-  }, [isAdmin, isDeliveryAgent]);
+  }, [isAdmin, isDeliveryAgent, normalizedCurrentEmail]);
 
   useEffect(() => {
     if (!isAdmin && !isDeliveryAgent) {
@@ -1164,7 +1351,9 @@ export default function App() {
     const unsubscribe = onSnapshot(
       collection(db, 'delivery_agents'),
       snapshot => {
-        const mappedAgents = snapshot.docs.map(mapDeliveryAgentDocToAgent);
+        const mappedAgents = snapshot.docs
+          .filter(docSnapshot => (docSnapshot.data() as Record<string, unknown>).accessOnly !== true)
+          .map(mapDeliveryAgentDocToAgent);
         setDeliveryAgents(mappedAgents);
       },
       error => {
@@ -1692,6 +1881,11 @@ export default function App() {
     }));
     setStaffProfileError('');
     setIsStaffProfileSavedToastVisible(false);
+    setIsAccessManagementOpen(false);
+    setAdminAccessError('');
+    setDeliveryAccessError('');
+    setAdminAccessSuccess('');
+    setDeliveryAccessSuccess('');
     setIsStaffProfileOpen(true);
   };
 
@@ -1699,6 +1893,7 @@ export default function App() {
     setIsStaffProfileOpen(false);
     setStaffProfileError('');
     setIsStaffProfileSavedToastVisible(false);
+    setIsAccessManagementOpen(false);
   };
 
   const handleSaveProfile = async () => {
@@ -1772,6 +1967,156 @@ export default function App() {
     }
   };
 
+  const normalizeAccessEmail = (value: string) => value.trim().toLowerCase();
+
+  const validateAccessEmail = (email: string) => {
+    if (!email) {
+      return 'Enter an email address.';
+    }
+
+    const isValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    if (!isValid) {
+      return 'Enter a valid email address.';
+    }
+
+    return '';
+  };
+
+  const handleAddAdminAccess = async () => {
+    if (!isMainAdmin) {
+      setAdminAccessError('Only the main admin can add new admins.');
+      return;
+    }
+
+    const normalizedEmail = normalizeAccessEmail(adminAccessInput);
+    const validationError = validateAccessEmail(normalizedEmail);
+    if (validationError) {
+      setAdminAccessError(validationError);
+      return;
+    }
+
+    if (adminAccessEntries.some(entry => entry.email === normalizedEmail)) {
+      setAdminAccessError('This admin already has access.');
+      return;
+    }
+
+    setIsAdminAccessSaving(true);
+    setAdminAccessError('');
+    setAdminAccessSuccess('');
+    try {
+      await setDoc(
+        doc(db, 'admin_access', normalizedEmail),
+        {
+          email: normalizedEmail,
+          role: 'admin',
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      );
+      setAdminAccessInput('');
+      setAdminAccessSuccess('Admin access added.');
+    } catch (error) {
+      console.error('Failed to add admin access', error);
+      setAdminAccessError('Unable to add admin right now.');
+    } finally {
+      setIsAdminAccessSaving(false);
+    }
+  };
+
+  const handleRemoveAdminAccess = async (entry: AccessEntry) => {
+    if (!isMainAdmin) {
+      setAdminAccessError('Only the main admin can remove admins.');
+      return;
+    }
+
+    if (entry.email === ADMIN_EMAIL) {
+      setAdminAccessError('Main admin access cannot be removed.');
+      return;
+    }
+
+    setAdminAccessRemovingId(entry.id);
+    setAdminAccessError('');
+    setAdminAccessSuccess('');
+    try {
+      await deleteDoc(doc(db, 'admin_access', entry.id));
+      setAdminAccessSuccess('Admin access removed.');
+    } catch (error) {
+      console.error('Failed to remove admin access', error);
+      setAdminAccessError('Unable to remove admin right now.');
+    } finally {
+      setAdminAccessRemovingId('');
+    }
+  };
+
+  const handleAddDeliveryAccess = async () => {
+    if (!isMainAdmin) {
+      setDeliveryAccessError('Only the main admin can add delivery agents.');
+      return;
+    }
+
+    const normalizedEmail = normalizeAccessEmail(deliveryAccessInput);
+    const validationError = validateAccessEmail(normalizedEmail);
+    if (validationError) {
+      setDeliveryAccessError(validationError);
+      return;
+    }
+
+    if (deliveryAccessEntries.some(entry => entry.email === normalizedEmail)) {
+      setDeliveryAccessError('This delivery agent already has access.');
+      return;
+    }
+
+    setIsDeliveryAccessSaving(true);
+    setDeliveryAccessError('');
+    setDeliveryAccessSuccess('');
+    try {
+      await setDoc(
+        doc(db, 'delivery_agents', normalizedEmail),
+        {
+          email: normalizedEmail,
+          role: 'delivery',
+          accessOnly: true,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      );
+      setDeliveryAccessInput('');
+      setDeliveryAccessSuccess('Delivery agent access added.');
+    } catch (error) {
+      console.error('Failed to add delivery agent access', error);
+      setDeliveryAccessError('Unable to add delivery agent right now.');
+    } finally {
+      setIsDeliveryAccessSaving(false);
+    }
+  };
+
+  const handleRemoveDeliveryAccess = async (entry: AccessEntry) => {
+    if (!isMainAdmin) {
+      setDeliveryAccessError('Only the main admin can remove delivery agents.');
+      return;
+    }
+
+    if (entry.email === DELIVERY_AGENT_EMAIL || entry.id === DEFAULT_DELIVERY_AGENT.id) {
+      setDeliveryAccessError('Default delivery agent access cannot be removed.');
+      return;
+    }
+
+    setDeliveryAccessRemovingId(entry.id);
+    setDeliveryAccessError('');
+    setDeliveryAccessSuccess('');
+    try {
+      await deleteDoc(doc(db, 'delivery_agents', entry.id));
+      setDeliveryAccessSuccess('Delivery agent access removed.');
+    } catch (error) {
+      console.error('Failed to remove delivery agent access', error);
+      setDeliveryAccessError('Unable to remove delivery agent right now.');
+    } finally {
+      setDeliveryAccessRemovingId('');
+    }
+  };
+
   const renderStaffProfileDrawer = () => {
     if (!isAdmin && !isDeliveryAgent) {
       return null;
@@ -1797,7 +2142,7 @@ export default function App() {
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={{ type: 'spring', damping: 26, stiffness: 220 }}
-              className="fixed inset-y-0 right-0 z-[90] flex w-full max-w-md flex-col border-l border-white/10 bg-[linear-gradient(180deg,rgba(23,16,14,0.98),rgba(11,8,7,0.98))] shadow-[0_0_60px_rgba(0,0,0,0.45)]"
+              className="fixed inset-y-0 right-0 z-[90] flex w-full max-w-md flex-col border-l border-white/10 bg-[linear-gradient(180deg,rgba(23,16,14,0.98),rgba(11,8,7,0.98))] shadow-[0_0_60px_rgba(0,0,0,0.45)] relative"
             >
               <div className="border-b border-white/6 px-5 pb-4 pt-5">
                 <div className="flex items-center justify-between gap-4">
@@ -1981,6 +2326,21 @@ export default function App() {
               </div>
 
               <div className="border-t border-white/6 bg-[#0f0b09]/94 px-5 py-4">
+                {isAdmin && (
+                  <button
+                    onClick={() => {
+                      setIsAccessManagementOpen(true);
+                      setAdminAccessError('');
+                      setDeliveryAccessError('');
+                      setAdminAccessSuccess('');
+                      setDeliveryAccessSuccess('');
+                    }}
+                    className="coffee-btn-secondary mb-3 w-full justify-center"
+                  >
+                    <ShieldCheck size={16} />
+                    Management
+                  </button>
+                )}
                 <button
                   onClick={() => void handleSaveStaffProfile()}
                   disabled={isStaffProfileSaving}
@@ -1999,6 +2359,204 @@ export default function App() {
                   Logout
                 </button>
               </div>
+
+              <AnimatePresence>
+                {isAccessManagementOpen && (
+                  <motion.div
+                    initial={{ x: '100%', opacity: 0.2 }}
+                    animate={{ x: 0, opacity: 1 }}
+                    exit={{ x: '100%', opacity: 0 }}
+                    transition={{ type: 'spring', damping: 26, stiffness: 220 }}
+                    className="absolute inset-0 z-20 flex flex-col bg-[linear-gradient(180deg,rgba(23,16,14,0.98),rgba(11,8,7,0.98))]"
+                  >
+                    <div className="border-b border-white/6 px-5 pb-4 pt-5">
+                      <div className="flex items-center justify-between gap-4">
+                        <div>
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-secondary">
+                            Admin Access Management
+                          </p>
+                          <h2 className="mt-1 text-[1.4rem] font-semibold text-accent">
+                            Manage access roles
+                          </h2>
+                        </div>
+                        <button
+                          onClick={() => setIsAccessManagementOpen(false)}
+                          className="coffee-icon-btn"
+                          aria-label="Back"
+                        >
+                          <ChevronRight size={18} className="rotate-180" />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="flex-1 space-y-5 overflow-y-auto px-5 pb-6 pt-4">
+                      <div className="rounded-[20px] border border-white/10 bg-white/5 px-4 py-3 text-xs font-semibold text-ink-muted">
+                        {isMainAdmin
+                          ? 'You can add or remove admin and delivery agent access.'
+                          : 'View only. Only the main admin can update access.'}
+                      </div>
+
+                      <div className="coffee-surface-soft rounded-[26px] p-4">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-ink-muted">
+                          Admins
+                        </p>
+                        <h3 className="mt-1 text-lg font-semibold text-accent">Admin Management</h3>
+                        <div className="mt-4 space-y-2">
+                          {adminAccessEntries.length === 0 ? (
+                            <p className="text-sm text-ink-muted">No admins added yet.</p>
+                          ) : (
+                            adminAccessEntries.map(entry => {
+                              const isProtected = entry.email === ADMIN_EMAIL;
+                              return (
+                                <div
+                                  key={entry.id}
+                                  className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/5 px-3 py-2"
+                                >
+                                  <span className="text-sm font-semibold text-accent break-all">
+                                    {entry.email}
+                                  </span>
+                                  {isMainAdmin ? (
+                                    <button
+                                      onClick={() => void handleRemoveAdminAccess(entry)}
+                                      disabled={isProtected || adminAccessRemovingId === entry.id}
+                                      className="rounded-full border border-white/12 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-muted transition hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
+                                      {isProtected
+                                        ? 'Main'
+                                        : adminAccessRemovingId === entry.id
+                                          ? 'Removing'
+                                          : 'Remove'}
+                                    </button>
+                                  ) : (
+                                    <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-muted">
+                                      View only
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+                        {adminAccessError && (
+                          <div className="mt-3 rounded-[18px] border border-primary/25 bg-primary/10 px-3 py-2 text-xs font-semibold text-primary">
+                            {adminAccessError}
+                          </div>
+                        )}
+                        {adminAccessSuccess && (
+                          <div className="mt-3 rounded-[18px] border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-300">
+                            {adminAccessSuccess}
+                          </div>
+                        )}
+                        <div className="mt-4 flex flex-col gap-2">
+                          <input
+                            type="email"
+                            className="coffee-input"
+                            placeholder="Add Admin Email"
+                            value={adminAccessInput}
+                            onChange={event => {
+                              setAdminAccessInput(event.target.value);
+                              if (adminAccessError) {
+                                setAdminAccessError('');
+                              }
+                              if (adminAccessSuccess) {
+                                setAdminAccessSuccess('');
+                              }
+                            }}
+                            disabled={!isMainAdmin || isAdminAccessSaving}
+                          />
+                          <button
+                            onClick={() => void handleAddAdminAccess()}
+                            disabled={!isMainAdmin || isAdminAccessSaving}
+                            className="coffee-btn-primary w-full justify-center disabled:opacity-60"
+                          >
+                            {isAdminAccessSaving ? 'Adding...' : 'Add Admin'}
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="coffee-surface-soft rounded-[26px] p-4">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-ink-muted">
+                          Delivery Agents
+                        </p>
+                        <h3 className="mt-1 text-lg font-semibold text-accent">
+                          Delivery Agent Management
+                        </h3>
+                        <div className="mt-4 space-y-2">
+                          {deliveryAccessEntries.length === 0 ? (
+                            <p className="text-sm text-ink-muted">No delivery agents added yet.</p>
+                          ) : (
+                            deliveryAccessEntries.map(entry => {
+                              const isProtected = entry.email === DELIVERY_AGENT_EMAIL || entry.id === DEFAULT_DELIVERY_AGENT.id;
+                              return (
+                                <div
+                                  key={entry.id}
+                                  className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/5 px-3 py-2"
+                                >
+                                  <span className="text-sm font-semibold text-accent break-all">
+                                    {entry.email}
+                                  </span>
+                                  {isMainAdmin ? (
+                                    <button
+                                      onClick={() => void handleRemoveDeliveryAccess(entry)}
+                                      disabled={isProtected || deliveryAccessRemovingId === entry.id}
+                                      className="rounded-full border border-white/12 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-muted transition hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
+                                      {isProtected
+                                        ? 'Default'
+                                        : deliveryAccessRemovingId === entry.id
+                                          ? 'Removing'
+                                          : 'Remove'}
+                                    </button>
+                                  ) : (
+                                    <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-muted">
+                                      View only
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+                        {deliveryAccessError && (
+                          <div className="mt-3 rounded-[18px] border border-primary/25 bg-primary/10 px-3 py-2 text-xs font-semibold text-primary">
+                            {deliveryAccessError}
+                          </div>
+                        )}
+                        {deliveryAccessSuccess && (
+                          <div className="mt-3 rounded-[18px] border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-300">
+                            {deliveryAccessSuccess}
+                          </div>
+                        )}
+                        <div className="mt-4 flex flex-col gap-2">
+                          <input
+                            type="email"
+                            className="coffee-input"
+                            placeholder="Add Delivery Agent"
+                            value={deliveryAccessInput}
+                            onChange={event => {
+                              setDeliveryAccessInput(event.target.value);
+                              if (deliveryAccessError) {
+                                setDeliveryAccessError('');
+                              }
+                              if (deliveryAccessSuccess) {
+                                setDeliveryAccessSuccess('');
+                              }
+                            }}
+                            disabled={!isMainAdmin || isDeliveryAccessSaving}
+                          />
+                          <button
+                            onClick={() => void handleAddDeliveryAccess()}
+                            disabled={!isMainAdmin || isDeliveryAccessSaving}
+                            className="coffee-btn-primary w-full justify-center disabled:opacity-60"
+                          >
+                            {isDeliveryAccessSaving ? 'Adding...' : 'Add Delivery Agent'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </motion.div>
           </>
         )}
@@ -3325,7 +3883,7 @@ export default function App() {
             activeOrder={currentDeliveryOrder}
             deliveryAgent={currentDeliveryAgent}
             deliverySession={currentDeliverySession}
-            isAuthorized={currentUserEmail.toLowerCase() === DELIVERY_AGENT_EMAIL}
+            isAuthorized={isDeliveryAgent}
             isTracking={isAgentTracking}
             lastTrackedLocation={agentLastTrackedLocation}
             orders={adminOrders}
