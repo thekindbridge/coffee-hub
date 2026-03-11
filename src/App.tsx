@@ -780,7 +780,6 @@ export default function App() {
   const [staffProfileError, setStaffProfileError] = useState('');
   const [isStaffProfileSaving, setIsStaffProfileSaving] = useState(false);
   const [isStaffProfileSavedToastVisible, setIsStaffProfileSavedToastVisible] = useState(false);
-  const [isAccessManagementOpen, setIsAccessManagementOpen] = useState(false);
   const [adminAccessEntries, setAdminAccessEntries] = useState<AccessEntry[]>([]);
   const [deliveryAccessEntries, setDeliveryAccessEntries] = useState<AccessEntry[]>([]);
   const [adminAccessInput, setAdminAccessInput] = useState('');
@@ -1897,7 +1896,6 @@ export default function App() {
     }));
     setStaffProfileError('');
     setIsStaffProfileSavedToastVisible(false);
-    setIsAccessManagementOpen(false);
     setAdminAccessError('');
     setDeliveryAccessError('');
     setAdminAccessSuccess('');
@@ -1909,7 +1907,6 @@ export default function App() {
     setIsStaffProfileOpen(false);
     setStaffProfileError('');
     setIsStaffProfileSavedToastVisible(false);
-    setIsAccessManagementOpen(false);
   };
 
   const handleSaveProfile = async () => {
@@ -2141,7 +2138,6 @@ export default function App() {
     const profileTitle = isAdmin ? 'Admin Profile' : 'Agent Profile';
     const profileSubtitle = isAdmin ? 'Coffee Hub Management' : 'Delivery operations';
     const nameLabel = isAdmin ? 'Name' : 'Agent Name';
-    const staffDrawerScrollClass = isAccessManagementOpen ? 'overflow-hidden' : 'overflow-y-auto';
 
     return (
       <AnimatePresence>
@@ -2162,10 +2158,10 @@ export default function App() {
               className="fixed top-0 left-0 right-0 z-[90] h-screen"
             >
               <div
-                className={`relative ml-auto flex h-screen w-full max-w-md flex-col ${staffDrawerScrollClass} border-l border-white/10 bg-[linear-gradient(180deg,rgba(23,16,14,0.98),rgba(11,8,7,0.98))] shadow-[0_0_60px_rgba(0,0,0,0.45)]`}
+                className="relative ml-auto flex h-screen w-full max-w-md flex-col overflow-y-auto border-l border-white/10 bg-[linear-gradient(180deg,rgba(23,16,14,0.98),rgba(11,8,7,0.98))] shadow-[0_0_60px_rgba(0,0,0,0.45)]"
                 style={{ WebkitOverflowScrolling: 'touch', scrollBehavior: 'smooth', height: '100vh' }}
               >
-                <div className="border-b border-white/6 px-5 pb-4 pt-5">
+                <div className="sticky top-0 z-10 border-b border-white/6 bg-[linear-gradient(180deg,rgba(23,16,14,0.98),rgba(11,8,7,0.98))] px-5 pb-4 pt-5">
                   <div className="flex items-center justify-between gap-4">
                     <div>
                       <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-secondary">
@@ -2287,6 +2283,173 @@ export default function App() {
                   </div>
                 )}
 
+                {isAdmin && (
+                  <div className="coffee-surface-soft rounded-[26px] p-4">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-ink-muted">
+                      Management
+                    </p>
+                    <h3 className="mt-1 text-lg font-semibold text-accent">Admin Management</h3>
+                    <div className="mt-3 rounded-[20px] border border-white/10 bg-white/5 px-4 py-3 text-xs font-semibold text-ink-muted">
+                      {isMainAdmin
+                        ? 'You can add or remove admin and delivery agent access.'
+                        : 'View only. Only the main admin can update access.'}
+                    </div>
+                    <div className="mt-4 space-y-2">
+                      {adminAccessEntries.length === 0 ? (
+                        <p className="text-sm text-ink-muted">No admins added yet.</p>
+                      ) : (
+                        adminAccessEntries.map(entry => {
+                          const isProtected = entry.email === ADMIN_EMAIL;
+                          return (
+                            <div
+                              key={entry.id}
+                              className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/5 px-3 py-2"
+                            >
+                              <span className="text-sm font-semibold text-accent break-all">
+                                {entry.email}
+                              </span>
+                              {isMainAdmin ? (
+                                <button
+                                  onClick={() => void handleRemoveAdminAccess(entry)}
+                                  disabled={isProtected || adminAccessRemovingId === entry.id}
+                                  className="rounded-full border border-white/12 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-muted transition hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                  {isProtected
+                                    ? 'Main'
+                                    : adminAccessRemovingId === entry.id
+                                      ? 'Removing'
+                                      : 'Remove'}
+                                </button>
+                              ) : (
+                                <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-muted">
+                                  View only
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                    {adminAccessError && (
+                      <div className="mt-3 rounded-[18px] border border-primary/25 bg-primary/10 px-3 py-2 text-xs font-semibold text-primary">
+                        {adminAccessError}
+                      </div>
+                    )}
+                    {adminAccessSuccess && (
+                      <div className="mt-3 rounded-[18px] border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-300">
+                        {adminAccessSuccess}
+                      </div>
+                    )}
+                    <div className="mt-4 flex flex-col gap-2">
+                      <input
+                        type="email"
+                        className="coffee-input"
+                        placeholder="Add Admin Email"
+                        value={adminAccessInput}
+                        onChange={event => {
+                          setAdminAccessInput(event.target.value);
+                          if (adminAccessError) {
+                            setAdminAccessError('');
+                          }
+                          if (adminAccessSuccess) {
+                            setAdminAccessSuccess('');
+                          }
+                        }}
+                        disabled={!isMainAdmin || isAdminAccessSaving}
+                      />
+                      <button
+                        onClick={() => void handleAddAdminAccess()}
+                        disabled={!isMainAdmin || isAdminAccessSaving}
+                        className="coffee-btn-primary w-full justify-center disabled:opacity-60"
+                      >
+                        {isAdminAccessSaving ? 'Adding...' : 'Add Admin'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {isAdmin && (
+                  <div className="coffee-surface-soft rounded-[26px] p-4">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-ink-muted">
+                      Delivery Agents
+                    </p>
+                    <h3 className="mt-1 text-lg font-semibold text-accent">
+                      Delivery Agent Management
+                    </h3>
+                    <div className="mt-4 space-y-2">
+                      {deliveryAccessEntries.length === 0 ? (
+                        <p className="text-sm text-ink-muted">No delivery agents added yet.</p>
+                      ) : (
+                        deliveryAccessEntries.map(entry => {
+                          const isProtected = entry.email === DELIVERY_AGENT_EMAIL || entry.id === DEFAULT_DELIVERY_AGENT.id;
+                          return (
+                            <div
+                              key={entry.id}
+                              className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/5 px-3 py-2"
+                            >
+                              <span className="text-sm font-semibold text-accent break-all">
+                                {entry.email}
+                              </span>
+                              {isMainAdmin ? (
+                                <button
+                                  onClick={() => void handleRemoveDeliveryAccess(entry)}
+                                  disabled={isProtected || deliveryAccessRemovingId === entry.id}
+                                  className="rounded-full border border-white/12 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-muted transition hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                  {isProtected
+                                    ? 'Default'
+                                    : deliveryAccessRemovingId === entry.id
+                                      ? 'Removing'
+                                      : 'Remove'}
+                                </button>
+                              ) : (
+                                <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-muted">
+                                  View only
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                    {deliveryAccessError && (
+                      <div className="mt-3 rounded-[18px] border border-primary/25 bg-primary/10 px-3 py-2 text-xs font-semibold text-primary">
+                        {deliveryAccessError}
+                      </div>
+                    )}
+                    {deliveryAccessSuccess && (
+                      <div className="mt-3 rounded-[18px] border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-300">
+                        {deliveryAccessSuccess}
+                      </div>
+                    )}
+                    <div className="mt-4 flex flex-col gap-2">
+                      <input
+                        type="email"
+                        className="coffee-input"
+                        placeholder="Add Delivery Agent"
+                        value={deliveryAccessInput}
+                        onChange={event => {
+                          setDeliveryAccessInput(event.target.value);
+                          if (deliveryAccessError) {
+                            setDeliveryAccessError('');
+                          }
+                          if (deliveryAccessSuccess) {
+                            setDeliveryAccessSuccess('');
+                          }
+                        }}
+                        disabled={!isMainAdmin || isDeliveryAccessSaving}
+                      />
+                      <button
+                        onClick={() => void handleAddDeliveryAccess()}
+                        disabled={!isMainAdmin || isDeliveryAccessSaving}
+                        className="coffee-btn-primary w-full justify-center disabled:opacity-60"
+                      >
+                        {isDeliveryAccessSaving ? 'Adding...' : 'Add Delivery Agent'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 {isDeliveryAgent && (
                   <div className="coffee-surface-soft rounded-[26px] p-4">
                     <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-ink-muted">
@@ -2347,21 +2510,6 @@ export default function App() {
               </div>
 
               <div className="border-t border-white/6 bg-[#0f0b09]/94 px-5 pt-4 pb-20">
-                {isAdmin && (
-                  <button
-                    onClick={() => {
-                      setIsAccessManagementOpen(true);
-                      setAdminAccessError('');
-                      setDeliveryAccessError('');
-                      setAdminAccessSuccess('');
-                      setDeliveryAccessSuccess('');
-                    }}
-                    className="coffee-btn-secondary mb-3 w-full justify-center"
-                  >
-                    <ShieldCheck size={16} />
-                    Management
-                  </button>
-                )}
                 <button
                   onClick={() => void handleSaveStaffProfile()}
                   disabled={isStaffProfileSaving}
@@ -2380,204 +2528,6 @@ export default function App() {
                   Logout
                 </button>
               </div>
-
-              <AnimatePresence>
-                {isAccessManagementOpen && (
-                  <motion.div
-                    initial={{ x: '100%', opacity: 0.2 }}
-                    animate={{ x: 0, opacity: 1 }}
-                    exit={{ x: '100%', opacity: 0 }}
-                    transition={{ type: 'spring', damping: 26, stiffness: 220 }}
-                    className="absolute inset-0 z-20 flex h-full flex-col overflow-y-auto bg-[linear-gradient(180deg,rgba(23,16,14,0.98),rgba(11,8,7,0.98))]"
-                  >
-                    <div className="border-b border-white/6 px-5 pb-4 pt-5">
-                      <div className="flex items-center justify-between gap-4">
-                        <div>
-                          <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-secondary">
-                            Admin Access Management
-                          </p>
-                          <h2 className="mt-1 text-[1.4rem] font-semibold text-accent">
-                            Manage access roles
-                          </h2>
-                        </div>
-                        <button
-                          onClick={() => setIsAccessManagementOpen(false)}
-                          className="coffee-icon-btn"
-                          aria-label="Back"
-                        >
-                          <ChevronRight size={18} className="rotate-180" />
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="space-y-5 px-5 pb-6 pt-4">
-                      <div className="rounded-[20px] border border-white/10 bg-white/5 px-4 py-3 text-xs font-semibold text-ink-muted">
-                        {isMainAdmin
-                          ? 'You can add or remove admin and delivery agent access.'
-                          : 'View only. Only the main admin can update access.'}
-                      </div>
-
-                      <div className="coffee-surface-soft rounded-[26px] p-4">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-ink-muted">
-                          Admins
-                        </p>
-                        <h3 className="mt-1 text-lg font-semibold text-accent">Admin Management</h3>
-                        <div className="mt-4 space-y-2">
-                          {adminAccessEntries.length === 0 ? (
-                            <p className="text-sm text-ink-muted">No admins added yet.</p>
-                          ) : (
-                            adminAccessEntries.map(entry => {
-                              const isProtected = entry.email === ADMIN_EMAIL;
-                              return (
-                                <div
-                                  key={entry.id}
-                                  className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/5 px-3 py-2"
-                                >
-                                  <span className="text-sm font-semibold text-accent break-all">
-                                    {entry.email}
-                                  </span>
-                                  {isMainAdmin ? (
-                                    <button
-                                      onClick={() => void handleRemoveAdminAccess(entry)}
-                                      disabled={isProtected || adminAccessRemovingId === entry.id}
-                                      className="rounded-full border border-white/12 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-muted transition hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
-                                    >
-                                      {isProtected
-                                        ? 'Main'
-                                        : adminAccessRemovingId === entry.id
-                                          ? 'Removing'
-                                          : 'Remove'}
-                                    </button>
-                                  ) : (
-                                    <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-muted">
-                                      View only
-                                    </span>
-                                  )}
-                                </div>
-                              );
-                            })
-                          )}
-                        </div>
-                        {adminAccessError && (
-                          <div className="mt-3 rounded-[18px] border border-primary/25 bg-primary/10 px-3 py-2 text-xs font-semibold text-primary">
-                            {adminAccessError}
-                          </div>
-                        )}
-                        {adminAccessSuccess && (
-                          <div className="mt-3 rounded-[18px] border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-300">
-                            {adminAccessSuccess}
-                          </div>
-                        )}
-                        <div className="mt-4 flex flex-col gap-2">
-                          <input
-                            type="email"
-                            className="coffee-input"
-                            placeholder="Add Admin Email"
-                            value={adminAccessInput}
-                            onChange={event => {
-                              setAdminAccessInput(event.target.value);
-                              if (adminAccessError) {
-                                setAdminAccessError('');
-                              }
-                              if (adminAccessSuccess) {
-                                setAdminAccessSuccess('');
-                              }
-                            }}
-                            disabled={!isMainAdmin || isAdminAccessSaving}
-                          />
-                          <button
-                            onClick={() => void handleAddAdminAccess()}
-                            disabled={!isMainAdmin || isAdminAccessSaving}
-                            className="coffee-btn-primary w-full justify-center disabled:opacity-60"
-                          >
-                            {isAdminAccessSaving ? 'Adding...' : 'Add Admin'}
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="coffee-surface-soft rounded-[26px] p-4">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-ink-muted">
-                          Delivery Agents
-                        </p>
-                        <h3 className="mt-1 text-lg font-semibold text-accent">
-                          Delivery Agent Management
-                        </h3>
-                        <div className="mt-4 space-y-2">
-                          {deliveryAccessEntries.length === 0 ? (
-                            <p className="text-sm text-ink-muted">No delivery agents added yet.</p>
-                          ) : (
-                            deliveryAccessEntries.map(entry => {
-                              const isProtected = entry.email === DELIVERY_AGENT_EMAIL || entry.id === DEFAULT_DELIVERY_AGENT.id;
-                              return (
-                                <div
-                                  key={entry.id}
-                                  className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/5 px-3 py-2"
-                                >
-                                  <span className="text-sm font-semibold text-accent break-all">
-                                    {entry.email}
-                                  </span>
-                                  {isMainAdmin ? (
-                                    <button
-                                      onClick={() => void handleRemoveDeliveryAccess(entry)}
-                                      disabled={isProtected || deliveryAccessRemovingId === entry.id}
-                                      className="rounded-full border border-white/12 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-muted transition hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
-                                    >
-                                      {isProtected
-                                        ? 'Default'
-                                        : deliveryAccessRemovingId === entry.id
-                                          ? 'Removing'
-                                          : 'Remove'}
-                                    </button>
-                                  ) : (
-                                    <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-muted">
-                                      View only
-                                    </span>
-                                  )}
-                                </div>
-                              );
-                            })
-                          )}
-                        </div>
-                        {deliveryAccessError && (
-                          <div className="mt-3 rounded-[18px] border border-primary/25 bg-primary/10 px-3 py-2 text-xs font-semibold text-primary">
-                            {deliveryAccessError}
-                          </div>
-                        )}
-                        {deliveryAccessSuccess && (
-                          <div className="mt-3 rounded-[18px] border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-300">
-                            {deliveryAccessSuccess}
-                          </div>
-                        )}
-                        <div className="mt-4 flex flex-col gap-2">
-                          <input
-                            type="email"
-                            className="coffee-input"
-                            placeholder="Add Delivery Agent"
-                            value={deliveryAccessInput}
-                            onChange={event => {
-                              setDeliveryAccessInput(event.target.value);
-                              if (deliveryAccessError) {
-                                setDeliveryAccessError('');
-                              }
-                              if (deliveryAccessSuccess) {
-                                setDeliveryAccessSuccess('');
-                              }
-                            }}
-                            disabled={!isMainAdmin || isDeliveryAccessSaving}
-                          />
-                          <button
-                            onClick={() => void handleAddDeliveryAccess()}
-                            disabled={!isMainAdmin || isDeliveryAccessSaving}
-                            className="coffee-btn-primary w-full justify-center disabled:opacity-60"
-                          >
-                            {isDeliveryAccessSaving ? 'Adding...' : 'Add Delivery Agent'}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
               </div>
             </motion.div>
           </>
