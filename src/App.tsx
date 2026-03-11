@@ -2142,9 +2142,10 @@ export default function App() {
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={{ type: 'spring', damping: 26, stiffness: 220 }}
-              className="fixed inset-y-0 right-0 z-[90] flex w-full max-w-md flex-col border-l border-white/10 bg-[linear-gradient(180deg,rgba(23,16,14,0.98),rgba(11,8,7,0.98))] shadow-[0_0_60px_rgba(0,0,0,0.45)] relative"
+              className="fixed top-0 left-0 right-0 z-[90] h-screen"
             >
-              <div className="border-b border-white/6 px-5 pb-4 pt-5">
+              <div className="relative ml-auto flex h-screen w-full max-w-md flex-col overflow-y-auto border-l border-white/10 bg-[linear-gradient(180deg,rgba(23,16,14,0.98),rgba(11,8,7,0.98))] shadow-[0_0_60px_rgba(0,0,0,0.45)]">
+                <div className="border-b border-white/6 px-5 pb-4 pt-5">
                 <div className="flex items-center justify-between gap-4">
                   <div>
                     <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-secondary">
@@ -2175,7 +2176,7 @@ export default function App() {
                 )}
               </AnimatePresence>
 
-              <div className="flex-1 space-y-5 overflow-y-auto px-5 pb-6 pt-4">
+              <div className="space-y-5 px-5 pb-6 pt-4">
                 <div className="coffee-surface-soft rounded-[26px] p-4">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-ink-muted">
                     Profile Information
@@ -2367,7 +2368,7 @@ export default function App() {
                     animate={{ x: 0, opacity: 1 }}
                     exit={{ x: '100%', opacity: 0 }}
                     transition={{ type: 'spring', damping: 26, stiffness: 220 }}
-                    className="absolute inset-0 z-20 flex flex-col bg-[linear-gradient(180deg,rgba(23,16,14,0.98),rgba(11,8,7,0.98))]"
+                    className="absolute inset-0 z-20 flex h-full flex-col overflow-y-auto bg-[linear-gradient(180deg,rgba(23,16,14,0.98),rgba(11,8,7,0.98))]"
                   >
                     <div className="border-b border-white/6 px-5 pb-4 pt-5">
                       <div className="flex items-center justify-between gap-4">
@@ -2389,7 +2390,7 @@ export default function App() {
                       </div>
                     </div>
 
-                    <div className="flex-1 space-y-5 overflow-y-auto px-5 pb-6 pt-4">
+                    <div className="space-y-5 px-5 pb-6 pt-4">
                       <div className="rounded-[20px] border border-white/10 bg-white/5 px-4 py-3 text-xs font-semibold text-ink-muted">
                         {isMainAdmin
                           ? 'You can add or remove admin and delivery agent access.'
@@ -2557,6 +2558,7 @@ export default function App() {
                   </motion.div>
                 )}
               </AnimatePresence>
+              </div>
             </motion.div>
           </>
         )}
