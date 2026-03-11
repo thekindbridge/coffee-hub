@@ -1209,6 +1209,22 @@ export default function App() {
   }, [staffProfileSaved, isStaffProfileOpen]);
 
   useEffect(() => {
+    if (typeof document === 'undefined') {
+      return;
+    }
+
+    if (isStaffProfileOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'auto';
+    }
+
+    return () => {
+      document.body.style.overflow = 'auto';
+    };
+  }, [isStaffProfileOpen]);
+
+  useEffect(() => {
     const canAccessStaffOrders = isAdmin || isDeliveryAgent;
     if (!canAccessStaffOrders) {
       setAdminOrders([]);
@@ -2125,6 +2141,7 @@ export default function App() {
     const profileTitle = isAdmin ? 'Admin Profile' : 'Agent Profile';
     const profileSubtitle = isAdmin ? 'Coffee Hub Management' : 'Delivery operations';
     const nameLabel = isAdmin ? 'Name' : 'Agent Name';
+    const staffDrawerScrollClass = isAccessManagementOpen ? 'overflow-hidden' : 'overflow-y-auto';
 
     return (
       <AnimatePresence>
@@ -2144,20 +2161,23 @@ export default function App() {
               transition={{ type: 'spring', damping: 26, stiffness: 220 }}
               className="fixed top-0 left-0 right-0 z-[90] h-screen"
             >
-              <div className="relative ml-auto flex h-screen w-full max-w-md flex-col overflow-y-auto border-l border-white/10 bg-[linear-gradient(180deg,rgba(23,16,14,0.98),rgba(11,8,7,0.98))] shadow-[0_0_60px_rgba(0,0,0,0.45)]">
+              <div
+                className={`relative ml-auto flex h-screen w-full max-w-md flex-col ${staffDrawerScrollClass} border-l border-white/10 bg-[linear-gradient(180deg,rgba(23,16,14,0.98),rgba(11,8,7,0.98))] shadow-[0_0_60px_rgba(0,0,0,0.45)]`}
+                style={{ WebkitOverflowScrolling: 'touch', scrollBehavior: 'smooth', height: '100vh' }}
+              >
                 <div className="border-b border-white/6 px-5 pb-4 pt-5">
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-secondary">
-                      {profileTitle}
-                    </p>
-                    <h2 className="mt-1 text-[1.55rem] font-semibold text-accent">{profileSubtitle}</h2>
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-secondary">
+                        {profileTitle}
+                      </p>
+                      <h2 className="mt-1 text-[1.55rem] font-semibold text-accent">{profileSubtitle}</h2>
+                    </div>
+                    <button onClick={handleCloseStaffProfile} className="coffee-icon-btn">
+                      <X size={18} />
+                    </button>
                   </div>
-                  <button onClick={handleCloseStaffProfile} className="coffee-icon-btn">
-                    <X size={18} />
-                  </button>
                 </div>
-              </div>
 
               <AnimatePresence>
                 {isStaffProfileSavedToastVisible && (
@@ -2326,7 +2346,7 @@ export default function App() {
                 )}
               </div>
 
-              <div className="border-t border-white/6 bg-[#0f0b09]/94 px-5 py-4">
+              <div className="border-t border-white/6 bg-[#0f0b09]/94 px-5 pt-4 pb-20">
                 {isAdmin && (
                   <button
                     onClick={() => {
