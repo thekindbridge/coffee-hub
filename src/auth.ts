@@ -1,4 +1,4 @@
-import { getAuth, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, signInWithPopup } from "firebase/auth";
 
 const auth = getAuth();
 const provider = new GoogleAuthProvider();
@@ -6,11 +6,12 @@ const provider = new GoogleAuthProvider();
 export async function loginWithGoogle() {
   try {
     const result = await signInWithPopup(auth, provider);
-    const user = result.user;
-    console.log('Google login success:', user);
-    return user;
+    console.log("Google login success:", result.user);
+    return result.user;
   } catch (error) {
-    console.error('Google login failed:', error);
+    console.error("Firebase Google login error:", error);
+    console.error("Error code:", error.code);
+    console.error("Error message:", error.message);
     throw error;
   }
 }
