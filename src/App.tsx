@@ -38,9 +38,7 @@ import {
 } from 'lucide-react';
 import { FirebaseError } from 'firebase/app';
 import {
-  GoogleAuthProvider,
   onAuthStateChanged,
-  signInWithPopup,
   signOut,
 } from 'firebase/auth';
 import {
@@ -62,6 +60,7 @@ import {
 import type { QueryDocumentSnapshot, Timestamp } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'motion/react';
 import { auth, db } from './firebase';
+import { loginWithGoogle } from './auth';
 import {
   MenuItem,
   CartItem,
@@ -1842,16 +1841,6 @@ export default function App() {
     } catch (error) {
       console.error('Failed to update order status', error);
       alert('Unable to update order status right now.');
-    }
-  };
-
-  const handleGoogleLogin = async () => {
-    try {
-      const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
-    } catch (error) {
-      console.error('Google sign-in failed', error);
-      alert('Unable to sign in with Google right now.');
     }
   };
 
@@ -3720,7 +3709,11 @@ export default function App() {
 
           <motion.button
             onClick={() => {
-              void handleGoogleLogin();
+              void loginWithGoogle().then(user => {
+                if (!user) {
+                  alert('Unable to sign in with Google right now.');
+                }
+              });
             }}
             whileHover={{ y: -2, scale: 1.03 }}
             whileTap={{ scale: 0.985 }}
