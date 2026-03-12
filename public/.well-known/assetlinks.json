@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.coffeehub.inkollu",
+      "sha256_cert_fingerprints": [
+        "9E:B5:BA:51:E8:D2:77:70:18:9A:48:E7:BC:B0:C7:E2:AA:4D:B9:A4:4A:D0:56:5D:B7:4A:09:DC:65:67:27:B5"
+      ]
+    }
+  }
+]
