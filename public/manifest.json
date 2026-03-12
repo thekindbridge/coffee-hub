@@ -1,0 +1,20 @@
+{
+  "name": "Coffee Hub",
+  "short_name": "CoffeeHub",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#000000",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://res.cloudinary.com/ddfhaqeme/image/upload/v1773253679/grok-image-42302cf0-204b-482e-9159-1e3e5307f1f7_nsgzp9.jpg",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
