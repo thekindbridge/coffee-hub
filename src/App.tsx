@@ -53,7 +53,6 @@ import {
   runTransaction,
   setDoc,
   serverTimestamp,
-  updateDoc,
   where,
   writeBatch,
 } from 'firebase/firestore';
@@ -94,8 +93,8 @@ import OrderTrackingPage from './pages/OrderTrackingPage';
 
 const ORDER_STATUSES: Order['status'][] = ['Pending', 'Preparing', 'Out for Delivery', 'Delivered'];
 const ORDER_ITEMS_IN_QUERY_LIMIT = 10;
-const ADMIN_EMAIL = 'thekindbridge@gmail.com';
-const DELIVERY_AGENT_EMAIL = 'pavankumarnaidu343@gmail.com';
+const ADMIN_EMAIL = (import.meta.env.VITE_ADMIN_EMAIL || '').trim().toLowerCase();
+const DELIVERY_AGENT_EMAIL = (import.meta.env.VITE_DELIVERY_AGENT_EMAIL || '').trim().toLowerCase();
 const CURRENCY_SYMBOL = '\u20B9';
 const STANDARD_DELIVERY_FEE = 50;
 const AUTH_BACKGROUND_IMAGE = 'url(https://res.cloudinary.com/ddfhaqeme/image/upload/v1772713816/5f272fcd-02a1-4f33-b91c-9ff009e08610_z4faz2.jpg)';
@@ -525,68 +524,6 @@ interface FoodCardProps {
   cartQuantity: number;
 }
 
-const FoodCard: React.FC<FoodCardProps> = ({ item, onAdd, cartQuantity }) => {
-  return (
-    <motion.div 
-      whileHover={{ y: -5 }}
-      className="bg-white/5 rounded-2xl overflow-hidden border border-white/10 flex flex-col h-full"
-    >
-      <div className="relative aspect-square overflow-hidden group">
-        <img 
-          src={item.image_url} 
-          alt={item.name} 
-          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-          referrerPolicy="no-referrer"
-        />
-        <div className="absolute top-2 left-2 px-2 py-1 bg-black/60 backdrop-blur-md rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center gap-1">
-          {item.is_veg ? (
-            <div className="w-2 h-2 rounded-full bg-emerald-500" />
-          ) : (
-            <div className="w-2 h-2 rounded-full bg-red-500" />
-          )}
-          {item.is_veg ? 'Veg' : 'Non-Veg'}
-        </div>
-        <div className="absolute bottom-2 right-2 px-2 py-1 bg-accent text-black font-bold rounded-lg text-xs flex items-center gap-1">
-          <Star size={12} fill="black" /> {item.rating}
-        </div>
-      </div>
-      
-      <div className="p-4 flex flex-col flex-grow">
-        <div className="flex justify-between items-start mb-1">
-          <h3 className="font-display font-bold text-lg leading-tight">{item.name}</h3>
-        </div>
-        <p className="text-ink-muted text-xs mb-3 line-clamp-2">{item.description}</p>
-        
-        <div className="mt-auto flex items-center justify-between">
-          <div className="flex flex-col">
-            <span className="text-primary font-bold text-lg">₹{item.price}</span>
-            <SpiceMeter level={item.spice_level} />
-          </div>
-          
-          {cartQuantity > 0 ? (
-            <div className="flex items-center bg-primary rounded-xl p-1 gap-3">
-              <button onClick={() => onAdd(item, -1)} className="p-1 hover:bg-white/10 rounded-lg transition-colors">
-                <Minus size={16} />
-              </button>
-              <span className="font-bold min-w-[1.5rem] text-center">{cartQuantity}</span>
-              <button onClick={() => onAdd(item, 1)} className="p-1 hover:bg-white/10 rounded-lg transition-colors">
-                <Plus size={16} />
-              </button>
-            </div>
-          ) : (
-            <button 
-              onClick={() => onAdd(item, 1)}
-              className="bg-primary hover:bg-red-600 text-white px-4 py-2 rounded-xl font-bold transition-all flex items-center gap-2 active:scale-95"
-            >
-              <Plus size={18} /> Add to Cart
-            </button>
-          )}
-        </div>
-      </div>
-    </motion.div>
-  );
-};
-
 const CoffeeFoodCard: React.FC<FoodCardProps> = ({ item, onAdd, cartQuantity }) => {
   return (
     <motion.article
@@ -937,11 +874,12 @@ export default function App() {
               return null;
             }
 
-            return {
+            const entry: AccessEntry = {
               id: docSnapshot.id,
               email: emailValue,
-              role: 'admin' as const,
+              role: 'admin',
             };
+            return entry;
           })
           .filter((entry): entry is AccessEntry => Boolean(entry))
           .sort((a, b) => a.email.localeCompare(b.email));
@@ -965,12 +903,13 @@ export default function App() {
               return null;
             }
 
-            return {
+            const entry: AccessEntry = {
               id: docSnapshot.id,
               email: emailValue,
               role: ((data.role as AccessEntry['role']) || 'delivery'),
               accessOnly: data.accessOnly === true,
             };
+            return entry;
           })
           .filter((entry): entry is AccessEntry => Boolean(entry))
           .sort((a, b) => a.email.localeCompare(b.email));
@@ -3417,112 +3356,6 @@ export default function App() {
           </div>
         )}
       </div>
-    </div>
-  );
-
-  const renderTracking = () => (
-    <div className="pt-24 pb-24 px-6 max-w-md mx-auto">
-      {!orderStatus ? (
-        <div className="py-20">
-          <ShoppingBag size={64} className="mx-auto text-ink-muted mb-6 opacity-20" />
-          <h2 className="text-2xl font-black mb-2 text-center">No Active Orders</h2>
-          <p className="text-ink-muted mb-8 text-center">Enter your order ID to track your delivery.</p>
-          <div className="bg-white/5 border border-white/10 rounded-3xl p-5 space-y-4">
-            <input
-              type="text"
-              placeholder="Order ID (e.g. COF1001)"
-              className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 uppercase focus:outline-none focus:border-primary"
-              value={trackingOrderId}
-              onChange={(e) => setTrackingOrderId(e.target.value.toUpperCase())}
-            />
-            {trackingError && (
-              <p className="text-xs text-primary font-bold">{trackingError}</p>
-            )}
-            <button
-              onClick={handleTrackOrderLookup}
-              disabled={isTrackingOrder}
-              className="w-full bg-primary text-white py-3 rounded-2xl font-bold disabled:opacity-70"
-            >
-              {isTrackingOrder ? 'TRACKING...' : 'TRACK ORDER'}
-            </button>
-          </div>
-          <button 
-            onClick={() => setActiveTab('menu')}
-            className="w-full mt-5 bg-white/5 text-ink py-3 rounded-2xl font-bold"
-          >
-            Go to Menu
-          </button>
-        </div>
-      ) : (
-        <div>
-          <div className="bg-white/5 rounded-3xl p-6 border border-white/10 mb-6">
-            <div className="flex justify-between items-start mb-6">
-              <div>
-                <span className="text-xs text-ink-muted uppercase tracking-widest font-bold">Order ID</span>
-                <h2 className="text-2xl font-black text-accent">#{orderStatus.id}</h2>
-              </div>
-              <div className="bg-primary/20 text-primary px-3 py-1 rounded-full text-xs font-bold">
-                {orderStatus.status}
-              </div>
-            </div>
-            
-            <div className="space-y-8 relative">
-              {/* Progress Line */}
-              <div className="absolute left-3 top-2 bottom-2 w-0.5 bg-white/10" />
-              
-              {[
-                { label: 'Pending', status: 'Pending', icon: CheckCircle2 },
-                { label: 'Preparing', status: 'Preparing', icon: Flame },
-                { label: 'Out for Delivery', status: 'Out for Delivery', icon: MapPin },
-                { label: 'Delivered', status: 'Delivered', icon: ShoppingBag },
-              ].map((step, i) => {
-                const currentIdx = ORDER_STATUSES.indexOf(orderStatus.status);
-                const isCompleted = i <= currentIdx;
-                const isActive = i === currentIdx;
-                
-                return (
-                  <div key={step.label} className="flex items-center gap-6 relative z-10">
-                    <div className={`w-6 h-6 rounded-full flex items-center justify-center ${
-                      isCompleted ? "bg-primary text-white" : "bg-white/10 text-ink-muted"
-                    }`}>
-                      <step.icon size={12} />
-                    </div>
-                    <div className={isActive ? "text-white font-bold" : "text-ink-muted"}>
-                      {step.label}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-          
-          <div className="bg-white/5 rounded-3xl p-6 border border-white/10">
-            <h3 className="font-bold mb-4">Order Summary</h3>
-            <div className="space-y-3">
-              {orderStatus.items?.map(item => (
-                <div key={item.id} className="flex justify-between text-sm">
-                  <span className="text-ink-muted">{item.quantity}x {item.name}</span>
-                  <span>₹{item.price * item.quantity}</span>
-                </div>
-              ))}
-              <div className="pt-3 border-t border-white/10 flex justify-between font-black text-lg">
-                <span>Total</span>
-                <span className="text-primary">₹{orderStatus.total_amount}</span>
-              </div>
-            </div>
-          </div>
-          
-          <button 
-            onClick={() => {
-              setOrderStatus(null);
-              setTrackingError('');
-            }}
-            className="w-full mt-8 text-ink-muted font-bold text-sm"
-          >
-            Clear Tracking
-          </button>
-        </div>
-      )}
     </div>
   );
 
