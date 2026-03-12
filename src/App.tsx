@@ -3708,13 +3708,7 @@ export default function App() {
           </p>
 
           <motion.button
-            onClick={() => {
-              void loginWithGoogle().then(user => {
-                if (!user) {
-                  alert('Unable to sign in with Google right now.');
-                }
-              });
-            }}
+            onClick={loginWithGoogle}
             whileHover={{ y: -2, scale: 1.03 }}
             whileTap={{ scale: 0.985 }}
             className="google-btn group relative mt-7 flex w-full items-center justify-center gap-3 overflow-hidden rounded-[20px] border border-white/12 bg-[linear-gradient(135deg,rgba(255,250,244,0.94),rgba(244,229,211,0.86))] px-4 py-3.5 text-[15px] font-semibold text-[#24140b] shadow-[0_14px_34px_rgba(24,12,6,0.3)] transition-shadow duration-300 hover:shadow-[0_20px_44px_rgba(18,8,4,0.34)]"

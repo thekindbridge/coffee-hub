@@ -10,6 +10,7 @@ export async function loginWithGoogle() {
     console.log('Google login success:', user);
     return user;
   } catch (error) {
-    console.error('Google login error:', error);
+    console.error('Google login failed:', error);
+    throw error;
   }
 }
