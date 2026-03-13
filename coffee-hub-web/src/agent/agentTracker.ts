@@ -255,6 +255,7 @@ export class AgentTracker {
           lng: location.lng,
           accuracy: location.accuracy ?? null,
           agentId: this.options.agentId,
+          orderDocId: this.options.orderDocId,
           updatedAt: serverTimestamp(),
         },
         { merge: true },
@@ -264,6 +265,12 @@ export class AgentTracker {
         {
           isActive: true,
           currentOrderId: this.options.orderId,
+          currentLocation: {
+            lat: location.lat,
+            lng: location.lng,
+            accuracy: location.accuracy ?? null,
+            updatedAt: serverTimestamp(),
+          },
           lastLocation: {
             lat: location.lat,
             lng: location.lng,

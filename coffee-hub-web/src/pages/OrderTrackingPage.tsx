@@ -20,7 +20,15 @@ import type {
   Order,
 } from '../types';
 
-const ORDER_FLOW: Order['status'][] = ['Pending', 'Preparing', 'Out for Delivery', 'Delivered'];
+const ORDER_FLOW: Order['status'][] = [
+  'Pending',
+  'Preparing',
+  'Ready for Pickup',
+  'Assigned to Agent',
+  'Picked Up',
+  'Out for Delivery',
+  'Delivered',
+];
 
 export interface OrderTrackingPageProps {
   order: Order;
@@ -31,6 +39,19 @@ export interface OrderTrackingPageProps {
 
 const normalizePhoneForTel = (phone: string) => phone.replace(/[^\d+]/g, '');
 
+const formatTimelineTime = (value?: string) => {
+  if (!value) {
+    return '--';
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return '--';
+  }
+
+  return parsed.toLocaleTimeString();
+};
+
 const joinClassNames = (...classNames: Array<string | undefined>) =>
   classNames.filter(Boolean).join(' ');
 
@@ -38,11 +59,26 @@ const mapDeliveryAgent = (agentId: string, value: Record<string, unknown>): Deli
   id: agentId,
   name: (value.name as string) || 'Delivery Partner',
   phone: (value.phone as string) || '',
+  email: (value.email as string) || '',
+  vehicle_type: (value.vehicleType as string) || '',
+  status: typeof value.status === 'string'
+    ? (value.status as string).toLowerCase() === 'offline'
+      ? 'offline'
+      : (value.status as string).toLowerCase() === 'busy'
+        ? 'busy'
+        : 'available'
+    : undefined,
   is_active: Boolean(value.isActive ?? false),
   current_order_id: (value.currentOrderId as string) || '',
+  current_location:
+    value.currentLocation && typeof value.currentLocation === 'object'
+      ? {
+          lat: Number((value.currentLocation as { lat?: number }).lat ?? 0),
+          lng: Number((value.currentLocation as { lng?: number }).lng ?? 0),
+        }
+      : null,
   last_location:
-    value.lastLocation &&
-    typeof value.lastLocation === 'object'
+    value.lastLocation && typeof value.lastLocation === 'object'
       ? {
           lat: Number((value.lastLocation as { lat?: number }).lat ?? 0),
           lng: Number((value.lastLocation as { lng?: number }).lng ?? 0),
@@ -69,6 +105,9 @@ const mapDeliverySession = (orderId: string, value: Record<string, unknown>): De
 const statusToneClass: Record<Order['status'], string> = {
   Pending: 'border-amber-300/25 bg-amber-300/10 text-amber-100',
   Preparing: 'border-sky-300/25 bg-sky-300/10 text-sky-100',
+  'Ready for Pickup': 'border-violet-300/25 bg-violet-300/10 text-violet-100',
+  'Assigned to Agent': 'border-indigo-300/25 bg-indigo-300/10 text-indigo-100',
+  'Picked Up': 'border-cyan-300/25 bg-cyan-300/10 text-cyan-100',
   'Out for Delivery': 'border-orange-300/25 bg-orange-300/10 text-orange-100',
   Delivered: 'border-emerald-300/25 bg-emerald-300/10 text-emerald-100',
 };
@@ -87,14 +126,20 @@ export default function OrderTrackingPage({
   const activeStepIndex = currentStepIndex >= 0 ? currentStepIndex : 0;
   const agentId = deliverySession?.agent_id || order.delivery_agent_id || '';
   const agentPhone = deliveryAgent?.phone || order.delivery_agent_phone || '';
+  const agentVehicle = deliveryAgent?.vehicle_type || order.delivery_agent_vehicle || '';
   const agentName = deliveryAgent?.name || deliverySession?.agent_name || order.delivery_agent_name || 'Delivery Partner';
-  const partnerStatus = deliverySession?.status || (order.status === 'Out for Delivery' ? 'assigned' : order.status.toLowerCase());
+  const partnerStatus = order.status;
+  const sessionLabel = deliverySession?.status === 'active'
+    ? 'Active'
+    : deliverySession?.status === 'completed'
+      ? 'Completed'
+      : deliverySession?.status === 'assigned'
+        ? 'Assigned'
+        : 'Awaiting dispatch';
   const paymentLabel = order.payment_method === 'razorpay' || order.payment_method === 'Pay Online'
     ? 'Pay Online'
     : order.payment_method;
-  const defaultAgentPhone = '+91 7893504891';
-  const isAgentAssigned = Boolean(agentId);
-  const displayAgentPhone = agentPhone || (isAgentAssigned ? defaultAgentPhone : '');
+  const displayAgentPhone = agentPhone || '';
   const phoneHref = displayAgentPhone ? `tel:${normalizePhoneForTel(displayAgentPhone)}` : undefined;
   const stepProgress = ORDER_FLOW.length > 1 ? activeStepIndex / (ORDER_FLOW.length - 1) : 0;
   const stepProgressPercent = Math.max(0, Math.min(1, stepProgress)) * 100;
@@ -171,12 +216,37 @@ export default function OrderTrackingPage({
       return `Arriving in ${routeMetrics.eta_minutes} min`;
     }
 
-    if (order.status === 'Out for Delivery') {
+    if (order.status === 'Out for Delivery' || order.status === 'Picked Up' || order.status === 'Assigned to Agent') {
       return 'Rider is syncing route...';
     }
 
-    return order.status === 'Preparing' ? 'Dispatching soon' : 'Awaiting kitchen';
+    if (order.status === 'Ready for Pickup') {
+      return 'Ready for pickup';
+    }
+
+    return order.status === 'Preparing' ? 'Preparing order' : 'Awaiting kitchen';
   }, [order.status, routeMetrics?.eta_minutes]);
+
+  const timelineSteps = useMemo(
+    () => [
+      { label: 'Order placed', time: order.created_at },
+      { label: 'Preparing', time: order.preparing_at },
+      { label: 'Ready for pickup', time: order.ready_for_pickup_at },
+      { label: 'Agent assigned', time: order.delivery_assigned_at },
+      { label: 'Picked up', time: order.delivery_picked_at },
+      { label: 'Out for delivery', time: order.delivery_out_for_delivery_at || order.delivery_picked_at },
+      { label: 'Delivered', time: order.delivery_delivered_at },
+    ],
+    [
+      order.created_at,
+      order.preparing_at,
+      order.ready_for_pickup_at,
+      order.delivery_assigned_at,
+      order.delivery_picked_at,
+      order.delivery_out_for_delivery_at,
+      order.delivery_delivered_at,
+    ],
+  );
 
   if (!order.customer_location) {
     return (
@@ -262,7 +332,7 @@ export default function OrderTrackingPage({
                       className="absolute left-2 top-[9px] h-[2px] rounded-full bg-[#f1b375]"
                       style={{ width: stepProgressWidth }}
                     />
-                    <div className="grid grid-cols-4 gap-2">
+                    <div className="grid grid-cols-7 gap-2">
                       {ORDER_FLOW.map((step, index) => {
                         const isReached = index <= activeStepIndex;
                         const isCurrent = index === activeStepIndex;
@@ -308,7 +378,9 @@ export default function OrderTrackingPage({
               Live Route
             </div>
             <div className="text-xs font-semibold text-[#d8c7ba]">
-              {order.status === 'Out for Delivery' ? 'Rider on the way' : order.status}
+              {order.status === 'Assigned to Agent' || order.status === 'Picked Up' || order.status === 'Out for Delivery'
+                ? 'Rider on the way'
+                : order.status}
             </div>
           </div>
           <DeliveryTrackingMap
@@ -316,9 +388,38 @@ export default function OrderTrackingPage({
             customerLocation={order.customer_location}
             onRouteMetricsChange={setRouteMetrics}
             orderId={order.id}
+            agentId={agentId}
             className="w-full overflow-hidden rounded-[30px] [&_.pointer-events-none.absolute.inset-x-0.top-0.z-20]:hidden [&_.pointer-events-none.absolute.inset-x-0.bottom-0.z-20]:hidden"
             mapClassName="h-[520px] w-full sm:h-[640px] lg:h-[720px]"
           />
+        </motion.section>
+
+        <motion.section
+          initial={{ opacity: 0, y: 18 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, delay: 0.08, ease: 'easeOut' }}
+        >
+          <div className="rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,#17110d,#0f0a08)] p-5 text-[#fff8f2] shadow-[0_20px_50px_rgba(9,6,5,0.22)]">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.32em] text-[#f1b375]">
+              Delivery Timeline
+            </p>
+            <h3 className="mt-2 text-lg font-semibold text-[#fff8f2]">Order lifecycle</h3>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              {timelineSteps.map(step => (
+                <div
+                  key={step.label}
+                  className="flex items-center justify-between rounded-[18px] border border-white/10 bg-white/5 px-4 py-3 text-sm"
+                >
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#c9aa8b]">
+                    {step.label}
+                  </span>
+                  <span className="text-sm font-semibold text-[#fff8f2]">
+                    {formatTimelineTime(step.time)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
         </motion.section>
 
         <motion.section
@@ -347,7 +448,7 @@ export default function OrderTrackingPage({
                   Session
                 </div>
                 <p className="mt-2 text-sm font-semibold text-[#fff8f2]">
-                  {deliverySession?.status || 'Awaiting dispatch'}
+                  {sessionLabel}
                 </p>
               </div>
               <div className="min-w-0 rounded-[20px] border border-white/10 bg-white/5 p-3">
@@ -357,6 +458,33 @@ export default function OrderTrackingPage({
                 </div>
                 <p className="mt-2 text-sm font-semibold text-[#fff8f2]">
                   {routeMetrics?.duration_text || 'Calculating'}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              <div className="min-w-0 rounded-[20px] border border-white/10 bg-white/5 p-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#c9aa8b]">
+                  Partner
+                </p>
+                <p className="mt-2 text-sm font-semibold text-[#fff8f2]">
+                  {agentName}
+                </p>
+              </div>
+              <div className="min-w-0 rounded-[20px] border border-white/10 bg-white/5 p-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#c9aa8b]">
+                  Vehicle
+                </p>
+                <p className="mt-2 text-sm font-semibold text-[#fff8f2]">
+                  {agentVehicle || '--'}
+                </p>
+              </div>
+              <div className="min-w-0 rounded-[20px] border border-white/10 bg-white/5 p-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#c9aa8b]">
+                  Phone
+                </p>
+                <p className="mt-2 text-sm font-semibold text-[#fff8f2]">
+                  {displayAgentPhone || '--'}
                 </p>
               </div>
             </div>
@@ -390,7 +518,7 @@ export default function OrderTrackingPage({
                 <MapPin size={14} />
                 <p className="text-[11px] font-semibold uppercase tracking-[0.28em]">Delivery Address</p>
               </div>
-              <p className="mt-3 text-sm font-semibold text-[#f5ede3]">Inkollu</p>
+              <p className="mt-3 text-sm font-semibold text-[#f5ede3]">{order.address || 'Delivery address'}</p>
             </div>
 
             <div className="rounded-[26px] border border-white/10 bg-[linear-gradient(180deg,#17110d,#0f0a08)] p-4 text-[#fff8f2] shadow-[0_20px_50px_rgba(9,6,5,0.22)]">

@@ -18,6 +18,7 @@ export interface CartItem extends MenuItem {
 export type CheckoutPaymentOption = 'Cash on Delivery' | 'Pay Online';
 export type OrderPaymentStatus = 'pending' | 'paid' | 'failed';
 export type DeliverySessionStatus = 'assigned' | 'active' | 'completed';
+export type DeliveryAgentStatus = 'available' | 'offline' | 'busy';
 
 export interface DeliveryLocation {
   lat: number;
@@ -30,8 +31,12 @@ export interface DeliveryAgent {
   id: string;
   name: string;
   phone: string;
+  email?: string;
+  vehicle_type?: string;
+  status?: DeliveryAgentStatus;
   is_active: boolean;
   current_order_id: string;
+  current_location?: DeliveryLocation | null;
   last_location: DeliveryLocation | null;
 }
 
@@ -76,7 +81,7 @@ export interface Order {
   delivery_fee?: number;
   coupon_code?: string;
   final_total?: number;
-  status: 'Pending' | 'Preparing' | 'Out for Delivery' | 'Delivered';
+  status: 'Pending' | 'Preparing' | 'Ready for Pickup' | 'Assigned to Agent' | 'Picked Up' | 'Out for Delivery' | 'Delivered';
   payment_method: string;
   payment_status?: OrderPaymentStatus;
   created_at: string;
@@ -88,7 +93,14 @@ export interface Order {
   delivery_agent_id?: string;
   delivery_agent_name?: string;
   delivery_agent_phone?: string;
+  delivery_agent_email?: string;
+  delivery_agent_vehicle?: string;
   delivery_assigned_at?: string;
+  delivery_picked_at?: string;
+  delivery_out_for_delivery_at?: string;
+  delivery_delivered_at?: string;
+  preparing_at?: string;
+  ready_for_pickup_at?: string;
   items?: OrderItem[];
 }
 

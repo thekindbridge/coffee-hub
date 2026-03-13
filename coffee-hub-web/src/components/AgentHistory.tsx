@@ -56,7 +56,14 @@ export default function AgentHistory({ orders }: AgentHistoryProps) {
             </div>
             <div>
               <p className="text-[11px] font-bold uppercase tracking-wide text-ink-muted">Delivered Date</p>
-              <p className="font-bold">{formatDeliveredDate(order.delivery_assigned_at || order.created_at)}</p>
+              <p className="font-bold">
+                {formatDeliveredDate(
+                  order.delivery_delivered_at ||
+                  order.delivery_picked_at ||
+                  order.delivery_assigned_at ||
+                  order.created_at,
+                )}
+              </p>
             </div>
           </div>
         </article>

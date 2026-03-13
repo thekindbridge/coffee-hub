@@ -10,12 +10,23 @@ interface MyOrdersProps {
   onTrackOrder: (order: Order) => void;
 }
 
-const ORDER_FLOW: Order['status'][] = ['Pending', 'Preparing', 'Out for Delivery', 'Delivered'];
+const ORDER_FLOW: Order['status'][] = [
+  'Pending',
+  'Preparing',
+  'Ready for Pickup',
+  'Assigned to Agent',
+  'Picked Up',
+  'Out for Delivery',
+  'Delivered',
+];
 const CURRENCY_SYMBOL = '\u20B9';
 
 const STATUS_BADGE_CLASS: Record<Order['status'], string> = {
   Pending: 'border border-white/12 bg-white/6 text-ink-muted',
   Preparing: 'border border-amber-400/30 bg-amber-400/14 text-amber-300',
+  'Ready for Pickup': 'border border-violet-400/30 bg-violet-400/14 text-violet-300',
+  'Assigned to Agent': 'border border-indigo-400/30 bg-indigo-400/14 text-indigo-300',
+  'Picked Up': 'border border-cyan-400/30 bg-cyan-400/14 text-cyan-300',
   'Out for Delivery': 'border border-sky-400/30 bg-sky-400/14 text-sky-300',
   Delivered: 'border border-emerald-400/30 bg-emerald-400/14 text-emerald-300',
 };

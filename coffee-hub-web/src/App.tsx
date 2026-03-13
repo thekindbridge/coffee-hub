@@ -91,7 +91,15 @@ import OrderTrackingPage from './pages/OrderTrackingPage';
 
 // --- Components ---
 
-const ORDER_STATUSES: Order['status'][] = ['Pending', 'Preparing', 'Out for Delivery', 'Delivered'];
+const ORDER_STATUSES: Order['status'][] = [
+  'Pending',
+  'Preparing',
+  'Ready for Pickup',
+  'Assigned to Agent',
+  'Picked Up',
+  'Out for Delivery',
+  'Delivered',
+];
 const ORDER_ITEMS_IN_QUERY_LIMIT = 10;
 const ADMIN_EMAIL = (import.meta.env.VITE_ADMIN_EMAIL || '').trim().toLowerCase();
 const DELIVERY_AGENT_EMAIL = (import.meta.env.VITE_DELIVERY_AGENT_EMAIL || '').trim().toLowerCase();
@@ -148,14 +156,29 @@ const mapLocationRecord = (value: unknown): DeliveryLocation | null => {
 
 const mapDeliveryAgentDocToAgent = (snapshot: QueryDocumentSnapshot): DeliveryAgent => {
   const data = snapshot.data() as Record<string, unknown>;
+  const statusValue = typeof data.status === 'string' ? data.status.toLowerCase() : '';
+  const isActive = Boolean(
+    data.isActive ?? (statusValue ? statusValue !== 'offline' : false),
+  );
+  const currentLocation = mapLocationRecord(data.currentLocation);
 
   return {
     id: snapshot.id,
     name: (data.name as string) || 'Delivery Partner',
     phone: (data.phone as string) || '',
-    is_active: Boolean(data.isActive ?? false),
+    email: (data.email as string) || '',
+    vehicle_type: (data.vehicleType as string) || '',
+    status: statusValue === 'offline'
+      ? 'offline'
+      : statusValue === 'busy'
+        ? 'busy'
+        : statusValue
+          ? 'available'
+          : undefined,
+    is_active: isActive,
     current_order_id: (data.currentOrderId as string) || '',
-    last_location: mapLocationRecord(data.lastLocation),
+    current_location: currentLocation,
+    last_location: currentLocation ?? mapLocationRecord(data.lastLocation),
   };
 };
 
@@ -174,12 +197,29 @@ const mapDeliverySessionDocToSession = (snapshot: QueryDocumentSnapshot): Delive
 };
 
 const normalizeOrderStatus = (status: unknown): Order['status'] => {
-  if (status === 'Placed' || status === 'Pending') {
-    return 'Pending';
-  }
-
-  if (status === 'Preparing' || status === 'Out for Delivery' || status === 'Delivered') {
-    return status;
+  if (typeof status === 'string') {
+    const normalized = status.trim().toLowerCase();
+    if (normalized === 'placed' || normalized === 'pending') {
+      return 'Pending';
+    }
+    if (normalized === 'preparing') {
+      return 'Preparing';
+    }
+    if (normalized === 'ready for pickup' || normalized === 'ready') {
+      return 'Ready for Pickup';
+    }
+    if (normalized === 'assigned' || normalized === 'assigned to agent' || normalized === 'assigned to rider') {
+      return 'Assigned to Agent';
+    }
+    if (normalized === 'picked up' || normalized === 'picked') {
+      return 'Picked Up';
+    }
+    if (normalized === 'out for delivery') {
+      return 'Out for Delivery';
+    }
+    if (normalized === 'delivered') {
+      return 'Delivered';
+    }
   }
 
   return 'Pending';
@@ -335,6 +375,19 @@ const mapOrderDocToOrder = (snapshot: QueryDocumentSnapshot): Order => {
   const discount = Number(data.discount || 0);
   const deliveryFee = Number(data.deliveryFee || 0);
   const finalTotal = Number(data.finalTotal ?? data.total ?? Math.max(0, subtotal - discount));
+  const assignedAt = mapTimestampToIsoString(data.assignedAt ?? data.deliveryAssignedAt ?? data.delivery_assigned_at);
+  const pickedAt = mapTimestampToIsoString(data.pickedAt ?? data.deliveryPickedAt ?? data.delivery_picked_at);
+  const outForDeliveryAt = mapTimestampToIsoString(
+    data.outForDeliveryAt ?? data.deliveryOutForDeliveryAt ?? data.delivery_out_for_delivery_at,
+  );
+  const deliveredAt = mapTimestampToIsoString(data.deliveredAt ?? data.deliveryDeliveredAt ?? data.delivery_delivered_at);
+  const preparingAt = mapTimestampToIsoString(data.preparingAt ?? data.preparing_at);
+  const readyAt = mapTimestampToIsoString(data.readyAt ?? data.readyForPickupAt ?? data.ready_for_pickup_at);
+  const agentId = ((data.agentId as string) || (data.deliveryAgentId as string) || (data.delivery_agent_id as string) || '').trim();
+  const agentName = (data.agentName as string) || (data.deliveryAgentName as string) || (data.delivery_agent_name as string) || '';
+  const agentPhone = (data.agentPhone as string) || (data.deliveryAgentPhone as string) || (data.delivery_agent_phone as string) || '';
+  const agentVehicle = (data.agentVehicle as string) || (data.deliveryAgentVehicle as string) || (data.delivery_agent_vehicle as string) || '';
+  const agentEmail = (data.agentEmail as string) || (data.deliveryAgentEmail as string) || (data.delivery_agent_email as string) || '';
 
   return {
     id: ((data.orderId as string) || snapshot.id).toUpperCase(),
@@ -357,10 +410,17 @@ const mapOrderDocToOrder = (snapshot: QueryDocumentSnapshot): Order => {
     razorpay_order_id: (data.razorpayOrderId as string) || '',
     razorpay_payment_id: (data.razorpayPaymentId as string) || '',
     razorpay_signature: (data.razorpaySignature as string) || '',
-    delivery_agent_id: (data.deliveryAgentId as string) || '',
-    delivery_agent_name: (data.deliveryAgentName as string) || '',
-    delivery_agent_phone: (data.deliveryAgentPhone as string) || '',
-    delivery_assigned_at: ((data.deliveryAssignedAt as Timestamp | undefined)?.toDate()?.toISOString()) || '',
+    delivery_agent_id: agentId,
+    delivery_agent_name: agentName,
+    delivery_agent_phone: agentPhone,
+    delivery_agent_email: agentEmail,
+    delivery_agent_vehicle: agentVehicle,
+    delivery_assigned_at: assignedAt,
+    delivery_picked_at: pickedAt,
+    delivery_out_for_delivery_at: outForDeliveryAt,
+    delivery_delivered_at: deliveredAt,
+    preparing_at: preparingAt,
+    ready_for_pickup_at: readyAt,
   };
 };
 
@@ -402,6 +462,17 @@ const buildLocalOrderState = (params: {
   razorpay_order_id: params.razorpayOrderId || '',
   razorpay_payment_id: params.razorpayPaymentId || '',
   razorpay_signature: params.razorpaySignature || '',
+  delivery_agent_id: '',
+  delivery_agent_name: '',
+  delivery_agent_phone: '',
+  delivery_agent_email: '',
+  delivery_agent_vehicle: '',
+  delivery_assigned_at: '',
+  delivery_picked_at: '',
+  delivery_out_for_delivery_at: '',
+  delivery_delivered_at: '',
+  preparing_at: '',
+  ready_for_pickup_at: '',
   items: params.items.map(item => ({
     id: item.id,
     order_id: params.orderId,
@@ -1285,6 +1356,7 @@ export default function App() {
         email: DELIVERY_AGENT_EMAIL,
         role: 'delivery',
         isActive: true,
+        status: 'available',
         name: seededAgentName,
         phone: seededAgentPhone,
         updatedAt: serverTimestamp(),
@@ -1293,6 +1365,22 @@ export default function App() {
     ).catch(error => {
       console.error('Failed to seed delivery agent profile', error);
     });
+
+    if (DELIVERY_AGENT_EMAIL) {
+      void setDoc(
+        doc(db, 'delivery_agents', DELIVERY_AGENT_EMAIL),
+        {
+          email: DELIVERY_AGENT_EMAIL,
+          role: 'delivery',
+          accessOnly: true,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      ).catch(error => {
+        console.error('Failed to seed delivery agent access', error);
+      });
+    }
   }, [isAdmin, isDeliveryAgent, normalizedCurrentEmail]);
 
   useEffect(() => {
@@ -1426,7 +1514,13 @@ export default function App() {
   const currentDeliverySession = useMemo(() => {
     const activeSessions = deliverySessions.filter(session => {
       const sessionOrder = adminOrders.find(order => order.id === session.order_id);
-      return Boolean(sessionOrder && sessionOrder.status === 'Out for Delivery' && session.status !== 'completed');
+      return Boolean(
+        sessionOrder &&
+          (sessionOrder.status === 'Assigned to Agent' ||
+            sessionOrder.status === 'Picked Up' ||
+            sessionOrder.status === 'Out for Delivery') &&
+          session.status !== 'completed',
+      );
     });
 
     const matchingSessionByOrder = activeSessions.find(
@@ -1448,7 +1542,9 @@ export default function App() {
     }
 
     return adminOrders.find(
-      order => order.delivery_agent_id === DEFAULT_DELIVERY_AGENT.id && order.status === 'Out for Delivery',
+      order =>
+        order.delivery_agent_id === DEFAULT_DELIVERY_AGENT.id &&
+        (order.status === 'Assigned to Agent' || order.status === 'Picked Up' || order.status === 'Out for Delivery'),
     ) || null;
   }, [
     adminOrders,
@@ -1573,6 +1669,7 @@ export default function App() {
     batch.update(doc(db, 'orders', order.doc_id), {
       status: 'Delivered',
       deliveredAt: serverTimestamp(),
+      deliveryDeliveredAt: serverTimestamp(),
     });
     batch.set(
       doc(db, 'delivery_sessions', order.id),
@@ -1599,6 +1696,7 @@ export default function App() {
         doc(db, 'agent_locations', order.id),
         {
           agentId: order.delivery_agent_id || '',
+          orderDocId: order.doc_id,
           ...toFirestoreLocation(finalLocation),
           updatedAt: serverTimestamp(),
         },
@@ -1630,6 +1728,7 @@ export default function App() {
     applyOrderLocalUpdate(order.doc_id, currentOrder => ({
       ...currentOrder,
       status: 'Delivered',
+      delivery_delivered_at: currentOrder.delivery_delivered_at || new Date().toISOString(),
     }));
   };
 
@@ -1669,6 +1768,26 @@ export default function App() {
     }
 
     trackedOrderIdRef.current = currentDeliveryOrder.id;
+
+    const nowIso = new Date().toISOString();
+    await setDoc(
+      doc(db, 'orders', currentDeliveryOrder.doc_id),
+      {
+        status: 'Out for Delivery',
+        pickedAt: serverTimestamp(),
+        deliveryPickedAt: serverTimestamp(),
+        outForDeliveryAt: serverTimestamp(),
+        deliveryOutForDeliveryAt: serverTimestamp(),
+      },
+      { merge: true },
+    );
+
+    applyOrderLocalUpdate(currentDeliveryOrder.doc_id, order => ({
+      ...order,
+      status: 'Out for Delivery',
+      delivery_picked_at: order.delivery_picked_at || nowIso,
+      delivery_out_for_delivery_at: order.delivery_out_for_delivery_at || nowIso,
+    }));
 
     await setDoc(
       doc(db, 'delivery_sessions', currentDeliveryOrder.id),
@@ -1726,8 +1845,19 @@ export default function App() {
       return;
     }
 
-    if (normalizedStatus === 'Out for Delivery') {
-      alert('Use Assign & Dispatch to start delivery tracking for this order.');
+    const requiresAgent =
+      normalizedStatus === 'Assigned to Agent' ||
+      normalizedStatus === 'Picked Up' ||
+      normalizedStatus === 'Out for Delivery' ||
+      normalizedStatus === 'Delivered';
+
+    if (requiresAgent && !existingOrder.delivery_agent_id) {
+      alert('Assign a delivery partner before updating this status.');
+      return;
+    }
+
+    if (normalizedStatus === 'Assigned to Agent' && !existingOrder.delivery_agent_id) {
+      alert('Use Assign & Dispatch to assign a delivery partner.');
       return;
     }
 
@@ -1747,15 +1877,79 @@ export default function App() {
 
     try {
       const batch = writeBatch(db);
-      batch.update(doc(db, 'orders', orderDocId), {
-        status: normalizedStatus,
-        deliveryAgentId: deleteField(),
-        deliveryAgentName: deleteField(),
-        deliveryAgentPhone: deleteField(),
-        deliveryAssignedAt: deleteField(),
-      });
+      const nowIso = new Date().toISOString();
+      const isPreDispatch =
+        normalizedStatus === 'Pending' ||
+        normalizedStatus === 'Preparing' ||
+        normalizedStatus === 'Ready for Pickup';
 
-      if (existingOrder.delivery_agent_id) {
+      const timestampUpdates: Record<string, unknown> = {};
+      const localTimestampUpdates: Partial<Order> = {};
+
+      if (normalizedStatus === 'Preparing' && !existingOrder.preparing_at) {
+        timestampUpdates.preparingAt = serverTimestamp();
+        localTimestampUpdates.preparing_at = nowIso;
+      }
+
+      if (normalizedStatus === 'Ready for Pickup' && !existingOrder.ready_for_pickup_at) {
+        timestampUpdates.readyForPickupAt = serverTimestamp();
+        localTimestampUpdates.ready_for_pickup_at = nowIso;
+      }
+
+      if (normalizedStatus === 'Assigned to Agent' && !existingOrder.delivery_assigned_at) {
+        timestampUpdates.assignedAt = serverTimestamp();
+        timestampUpdates.deliveryAssignedAt = serverTimestamp();
+        localTimestampUpdates.delivery_assigned_at = nowIso;
+      }
+
+      if (normalizedStatus === 'Picked Up' && !existingOrder.delivery_picked_at) {
+        timestampUpdates.pickedAt = serverTimestamp();
+        timestampUpdates.deliveryPickedAt = serverTimestamp();
+        localTimestampUpdates.delivery_picked_at = nowIso;
+      }
+
+      if (normalizedStatus === 'Out for Delivery') {
+        if (!existingOrder.delivery_picked_at) {
+          timestampUpdates.pickedAt = serverTimestamp();
+          timestampUpdates.deliveryPickedAt = serverTimestamp();
+          localTimestampUpdates.delivery_picked_at = nowIso;
+        }
+        if (!existingOrder.delivery_out_for_delivery_at) {
+          timestampUpdates.outForDeliveryAt = serverTimestamp();
+          timestampUpdates.deliveryOutForDeliveryAt = serverTimestamp();
+          localTimestampUpdates.delivery_out_for_delivery_at = nowIso;
+        }
+      }
+
+      const baseUpdate: Record<string, unknown> = {
+        status: normalizedStatus,
+        ...timestampUpdates,
+      };
+
+      if (isPreDispatch) {
+        baseUpdate.agentId = deleteField();
+        baseUpdate.agentName = deleteField();
+        baseUpdate.agentPhone = deleteField();
+        baseUpdate.agentEmail = deleteField();
+        baseUpdate.agentVehicle = deleteField();
+        baseUpdate.deliveryAgentId = deleteField();
+        baseUpdate.deliveryAgentName = deleteField();
+        baseUpdate.deliveryAgentPhone = deleteField();
+        baseUpdate.deliveryAgentEmail = deleteField();
+        baseUpdate.deliveryAgentVehicle = deleteField();
+        baseUpdate.assignedAt = deleteField();
+        baseUpdate.deliveryAssignedAt = deleteField();
+        baseUpdate.pickedAt = deleteField();
+        baseUpdate.deliveryPickedAt = deleteField();
+        baseUpdate.outForDeliveryAt = deleteField();
+        baseUpdate.deliveryOutForDeliveryAt = deleteField();
+        baseUpdate.deliveredAt = deleteField();
+        baseUpdate.deliveryDeliveredAt = deleteField();
+      }
+
+      batch.update(doc(db, 'orders', orderDocId), baseUpdate);
+
+      if (isPreDispatch && existingOrder.delivery_agent_id) {
         batch.set(
           doc(db, 'delivery_agents', existingOrder.delivery_agent_id),
           {
@@ -1771,10 +1965,20 @@ export default function App() {
       applyOrderLocalUpdate(orderDocId, order => ({
         ...order,
         status: normalizedStatus,
-        delivery_agent_id: '',
-        delivery_agent_name: '',
-        delivery_agent_phone: '',
-        delivery_assigned_at: '',
+        ...(isPreDispatch
+          ? {
+              delivery_agent_id: '',
+              delivery_agent_name: '',
+              delivery_agent_phone: '',
+              delivery_agent_email: '',
+              delivery_agent_vehicle: '',
+              delivery_assigned_at: '',
+              delivery_picked_at: '',
+              delivery_out_for_delivery_at: '',
+              delivery_delivered_at: '',
+            }
+          : {}),
+        ...localTimestampUpdates,
       }));
       setNewOrderDocIds(prev => prev.filter(id => id !== orderDocId));
     } catch (error) {
@@ -1899,6 +2103,31 @@ export default function App() {
       }
 
       await setDoc(doc(db, 'users', currentUserId), payload, { merge: true });
+
+      if (role === 'agent') {
+        const normalizedEmail = (staffProfileDraft.email || currentUserEmail || '').trim().toLowerCase();
+        const matchedAgent = deliveryAgents.find(agent => agent.email?.toLowerCase() === normalizedEmail);
+        const agentDocId = matchedAgent?.id || normalizedEmail || DEFAULT_DELIVERY_AGENT.id;
+        const agentStatusValue = staffProfileDraft.status === 'Offline' ? 'offline' : 'available';
+        const agentPayload: Record<string, unknown> = {
+          name: staffProfileDraft.name.trim(),
+          phone: formatPhoneWithPrefix(staffProfileDraft.phone),
+          email: normalizedEmail,
+          vehicleType: staffProfileDraft.vehicleType,
+          status: agentStatusValue,
+          isActive: agentStatusValue !== 'offline',
+          role: 'delivery',
+          accessOnly: false,
+          updatedAt: serverTimestamp(),
+        };
+
+        if (!matchedAgent) {
+          agentPayload.createdAt = serverTimestamp();
+        }
+
+        await setDoc(doc(db, 'delivery_agents', agentDocId), agentPayload, { merge: true });
+      }
+
       setIsStaffProfileSavedToastVisible(true);
     } catch (error) {
       console.error('Failed to save staff profile', error);
@@ -2885,6 +3114,7 @@ export default function App() {
         const orderItemRef = doc(collection(db, 'order_items'));
         batch.set(orderItemRef, {
           orderId: draft.orderId,
+          orderDocId: orderRef.id,
           itemId: item.id,
           name: item.name,
           quantity: item.quantity,

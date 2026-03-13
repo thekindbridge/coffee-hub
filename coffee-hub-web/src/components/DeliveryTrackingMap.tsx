@@ -55,6 +55,7 @@ const MAP_OPTIONS: google.maps.MapOptions = {
 
 export interface DeliveryTrackingMapProps {
   orderId: string;
+  agentId?: string;
   coffeeShopLocation: DeliveryLocation;
   customerLocation: DeliveryLocation;
   className?: string;
@@ -190,6 +191,7 @@ const MapMessage = ({
 
 export default function DeliveryTrackingMap({
   orderId,
+  agentId,
   coffeeShopLocation,
   customerLocation,
   className,
@@ -198,6 +200,7 @@ export default function DeliveryTrackingMap({
   onRouteMetricsChange,
 }: DeliveryTrackingMapProps) {
   const normalizedOrderId = orderId.trim().toUpperCase();
+  const normalizedAgentId = agentId?.trim() || '';
   const apiKey = (import.meta.env.VITE_GOOGLE_MAP_KEY || '').trim();
   const mapRef = useRef<google.maps.Map | null>(null);
   const animationFrameRef = useRef<number | null>(null);
@@ -246,7 +249,7 @@ export default function DeliveryTrackingMap({
 
   useEffect(() => {
     hasInitializedViewportRef.current = false;
-  }, [normalizedOrderId]);
+  }, [normalizedAgentId, normalizedOrderId]);
 
   useEffect(() => {
     if (!normalizedCustomerLocation) {
@@ -334,7 +337,7 @@ export default function DeliveryTrackingMap({
   }, [isLoaded, isMapReady, animatedAgentLocation, agentMarkerIcon]);
 
   useEffect(() => {
-    if (!normalizedOrderId) {
+    if (!normalizedAgentId && !normalizedOrderId) {
       setAgentLocation(null);
       setAnimatedAgentLocation(null);
       setAnimatedRoutePath([]);
@@ -343,8 +346,12 @@ export default function DeliveryTrackingMap({
       return undefined;
     }
 
+    const targetDoc = normalizedAgentId
+      ? doc(db, 'delivery_agents', normalizedAgentId)
+      : doc(db, 'agent_locations', normalizedOrderId);
+
     const unsubscribe = onSnapshot(
-      doc(db, 'agent_locations', normalizedOrderId),
+      targetDoc,
       snapshot => {
         if (!snapshot.exists()) {
           setAgentLocation(null);
@@ -355,7 +362,11 @@ export default function DeliveryTrackingMap({
           return;
         }
 
-        const nextLocation = normalizeLocationRecord(snapshot.data());
+        const snapshotData = snapshot.data() as Record<string, unknown>;
+        const locationRecord = normalizedAgentId
+          ? snapshotData.currentLocation ?? snapshotData.lastLocation
+          : snapshotData;
+        const nextLocation = normalizeLocationRecord(locationRecord);
         if (!nextLocation) {
           setAgentLocation(null);
           setAnimatedAgentLocation(null);
@@ -381,7 +392,7 @@ export default function DeliveryTrackingMap({
     return () => {
       unsubscribe();
     };
-  }, [normalizedOrderId, onRouteMetricsChange]);
+  }, [normalizedAgentId, normalizedOrderId, onRouteMetricsChange]);
 
   useEffect(() => {
     if (animationFrameRef.current !== null) {
