@@ -6,3 +6,9 @@ coverage/
 *.log
 .env*
 !.env.example
+
+coffee-hub-android/android.keystore
+coffee-hub-android/app-release-signed.apk
+coffee-hub-android/Coffee Hub.apk
+coffee-hub-android/app/build/
+coffee-hub-android/.gradle/
