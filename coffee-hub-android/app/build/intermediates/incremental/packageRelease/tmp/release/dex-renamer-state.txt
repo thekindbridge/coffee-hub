@@ -1,0 +1,4 @@
+#Fri Mar 13 10:06:33 IST 2026
+base.0=D\:\\Coffee-Hub\\coffee-hub-android\\app\\build\\intermediates\\dex\\release\\minifyReleaseWithR8\\classes.dex
+renamed.0=classes.dex
+path.0=classes.dex

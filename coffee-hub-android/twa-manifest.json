@@ -1,0 +1,48 @@
+{
+  "packageId": "com.coffeehub.inkollu",
+  "host": "coffee-hub-inkollu.vercel.app",
+  "name": "Coffee Hub",
+  "launcherName": "CoffeeHub",
+  "display": "standalone",
+  "themeColor": "#000000",
+  "themeColorDark": "#000000",
+  "navigationColor": "#000000",
+  "navigationColorDark": "#000000",
+  "navigationDividerColor": "#000000",
+  "navigationDividerColorDark": "#000000",
+  "backgroundColor": "#FFFFFF",
+  "enableNotifications": true,
+  "startUrl": "/",
+  "iconUrl": "https://res.cloudinary.com/ddfhaqeme/image/upload/v1773253679/grok-image-42302cf0-204b-482e-9159-1e3e5307f1f7_nsgzp9.jpg",
+  "maskableIconUrl": null,
+  "monochromeIconUrl": null,
+  "splashScreenFadeOutDuration": 300,
+  "signingKey": {
+    "path": "D:\\Coffee-Hub\\coffee-hub-android\\android.keystore",
+    "alias": "coffeehub"
+  },
+  "appVersionName": "2",
+  "appVersionCode": 2,
+  "shortcuts": [],
+  "generatorApp": "bubblewrap-cli",
+  "webManifestUrl": "https://coffee-hub-inkollu.vercel.app/manifest.json",
+  "fallbackType": "customtabs",
+  "features": {
+    "locationDelegation": {
+      "enabled": true
+    }
+  },
+  "alphaDependencies": {
+    "enabled": false
+  },
+  "enableSiteSettingsShortcut": true,
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "minSdkVersion": 21,
+  "orientation": "default",
+  "fingerprints": [],
+  "additionalTrustedOrigins": [],
+  "retainedBundles": [],
+  "displayOverride": [],
+  "appVersion": "2"
+}
