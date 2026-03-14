@@ -4,6 +4,11 @@ on:
   push:
     branches:
       - main
+    paths:
+      - 'coffee-hub-android/**'
+      - '.github/workflows/build-android.yml'
+
+  workflow_dispatch:
 
 jobs:
   build-apk:
@@ -19,15 +24,15 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Grant execute permission
+      - name: Grant execute permission for Gradle
         run: chmod +x coffee-hub-android/gradlew
 
-      - name: Build APK
+      - name: Build Android APK
         run: |
           cd coffee-hub-android
           ./gradlew assembleRelease
 
-      - name: Upload APK
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: CoffeeHub-APK
