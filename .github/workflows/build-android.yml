@@ -13,27 +13,22 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 18
-
-      - name: Install Bubblewrap
-        run: npm install -g @bubblewrap/cli
-
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
 
-      - name: Build Android APK
+      - name: Grant execute permission
+        run: chmod +x coffee-hub-android/gradlew
+
+      - name: Build APK
         run: |
           cd coffee-hub-android
-          bubblewrap build
+          ./gradlew assembleRelease
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: CoffeeHub-APK
-          path: coffee-hub-android/app-release-signed.apk
+          path: coffee-hub-android/app/build/outputs/apk/release/*.apk
