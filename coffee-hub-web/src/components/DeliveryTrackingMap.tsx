@@ -6,6 +6,7 @@ import {
 } from '@react-google-maps/api';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { Bike, MapPin, Store } from 'lucide-react';
+import { SHOP_LOCATION } from '../config/shopLocation';
 import { db } from '../firebase';
 import type { DeliveryLocation, DeliveryRouteMetrics } from '../types';
 
@@ -13,10 +14,6 @@ const GOOGLE_MAPS_SCRIPT_ID = 'coffee-hub-premium-delivery-tracking-map';
 const DEFAULT_AGENT_ICON_URL = '/assets/icons/delivery-scooter.png';
 const SHOP_ICON_URL = '/assets/icons/coffee-shop.png';
 const CUSTOMER_ICON_URL = '/assets/icons/customer-home.png';
-const COFFEE_SHOP_LOCATION: DeliveryLocation = {
-  lat: 15.5057,
-  lng: 80.0499,
-};
 const MAP_CONTAINER_STYLE = {
   width: '100%',
   height: '100%',
@@ -224,7 +221,10 @@ export default function DeliveryTrackingMap({
     [customerLocation],
   );
   const resolvedCoffeeShopLocation = useMemo(
-    () => normalizeLocationRecord(coffeeShopLocation) ?? COFFEE_SHOP_LOCATION,
+    () => normalizeLocationRecord(coffeeShopLocation) ?? {
+      lat: SHOP_LOCATION.lat,
+      lng: SHOP_LOCATION.lng,
+    },
     [coffeeShopLocation],
   );
 
@@ -278,7 +278,7 @@ export default function DeliveryTrackingMap({
         map,
         position: resolvedCoffeeShopLocation,
         icon: shopMarkerIcon,
-        title: 'Coffee Hub',
+        title: SHOP_LOCATION.name,
       });
     } else {
       shopMarkerRef.current.setMap(map);
@@ -652,7 +652,7 @@ export default function DeliveryTrackingMap({
               }
             }}
             options={MAP_OPTIONS}
-            zoom={15}
+            zoom={17}
           >
             {animatedRoutePath.length > 1 && (
               <PolylineF

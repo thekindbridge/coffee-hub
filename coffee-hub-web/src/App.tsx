@@ -84,6 +84,7 @@ import {
   type AgentTrackerPermissionState,
   type AgentTrackerStatus,
 } from './agent/agentTracker';
+import { SHOP_LOCATION } from './config/shopLocation';
 import AdminDashboard from './components/AdminDashboard';
 import AgentDashboard from './components/AgentDashboard';
 import MyOrders from './components/MyOrders';
@@ -102,10 +103,6 @@ const ADMIN_EMAIL = (import.meta.env.VITE_ADMIN_EMAIL || '').trim().toLowerCase(
 const CURRENCY_SYMBOL = '\u20B9';
 const STANDARD_DELIVERY_FEE = 50;
 const AUTH_BACKGROUND_IMAGE = 'url(https://res.cloudinary.com/ddfhaqeme/image/upload/v1772713816/5f272fcd-02a1-4f33-b91c-9ff009e08610_z4faz2.jpg)';
-const COFFEE_SHOP_LOCATION: DeliveryLocation = {
-  lat: 15.5057,
-  lng: 80.0499,
-};
 const CHECKOUT_PAYMENT_OPTIONS: CheckoutPaymentOption[] = ['Pay Online', 'Cash on Delivery'];
 const RAZORPAY_KEY_ID = (import.meta.env.VITE_RAZORPAY_KEY_ID || '').trim();
 const DEFAULT_TRACKER_STATUS: AgentTrackerStatus = {
@@ -3581,7 +3578,7 @@ export default function App() {
         </div>
       ) : (
         <OrderTrackingPage
-          coffeeShopLocation={COFFEE_SHOP_LOCATION}
+          coffeeShopLocation={SHOP_LOCATION}
           onBackToOrders={() => setActiveTab('orders')}
           onClearTracking={() => {
             setOrderStatus(null);
