@@ -99,7 +99,6 @@ const ORDER_STATUSES: Order['status'][] = [
 ];
 const ORDER_ITEMS_IN_QUERY_LIMIT = 10;
 const ADMIN_EMAIL = (import.meta.env.VITE_ADMIN_EMAIL || '').trim().toLowerCase();
-const DELIVERY_AGENT_EMAIL = (import.meta.env.VITE_DELIVERY_AGENT_EMAIL || '').trim().toLowerCase();
 const CURRENCY_SYMBOL = '\u20B9';
 const STANDARD_DELIVERY_FEE = 50;
 const AUTH_BACKGROUND_IMAGE = 'url(https://res.cloudinary.com/ddfhaqeme/image/upload/v1772713816/5f272fcd-02a1-4f33-b91c-9ff009e08610_z4faz2.jpg)';
@@ -172,42 +171,6 @@ const mapDeliveryAgentDocToAgent = (snapshot: QueryDocumentSnapshot): DeliveryAg
     current_location: currentLocation,
     last_location: currentLocation ?? mapLocationRecord(data.lastLocation),
   };
-};
-
-const getDeliveryAgentKey = (agent: DeliveryAgent) => (
-  (agent.email || agent.id).trim().toLowerCase()
-);
-
-const getDeliveryAgentProfileScore = (agent: DeliveryAgent) => {
-  let score = 0;
-  const normalizedName = agent.name.trim().toLowerCase();
-
-  if (agent.phone) score += 4;
-  if (agent.vehicle_type) score += 4;
-  if (agent.status) score += 2;
-  if (agent.current_order_id) score += 1;
-  if (normalizedName && normalizedName !== 'delivery partner' && normalizedName !== 'inkollu delivery agent') {
-    score += 3;
-  }
-  if (agent.id.trim().toLowerCase() === getDeliveryAgentKey(agent)) {
-    score += 2;
-  }
-
-  return score;
-};
-
-const dedupeDeliveryAgents = (agents: DeliveryAgent[]) => {
-  const dedupedAgents = new Map<string, DeliveryAgent>();
-
-  agents.forEach(agent => {
-    const key = getDeliveryAgentKey(agent);
-    const existingAgent = dedupedAgents.get(key);
-    if (!existingAgent || getDeliveryAgentProfileScore(agent) > getDeliveryAgentProfileScore(existingAgent)) {
-      dedupedAgents.set(key, agent);
-    }
-  });
-
-  return Array.from(dedupedAgents.values()).sort((left, right) => left.name.localeCompare(right.name));
 };
 
 const mapDeliverySessionDocToSession = (snapshot: QueryDocumentSnapshot): DeliverySession => {
@@ -1368,29 +1331,6 @@ export default function App() {
   }, [isAdmin, isDeliveryAgent]);
 
   useEffect(() => {
-    const shouldSeedDeliveryAccess =
-      Boolean(DELIVERY_AGENT_EMAIL) &&
-      (isAdmin || isDeliveryAgent || normalizedCurrentEmail === DELIVERY_AGENT_EMAIL);
-    if (!shouldSeedDeliveryAccess) {
-      return;
-    }
-
-    void setDoc(
-      doc(db, 'delivery_agents', DELIVERY_AGENT_EMAIL),
-      {
-        email: DELIVERY_AGENT_EMAIL,
-        role: 'delivery',
-        accessOnly: true,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true },
-    ).catch(error => {
-      console.error('Failed to seed delivery agent access', error);
-    });
-  }, [isAdmin, isDeliveryAgent, normalizedCurrentEmail]);
-
-  useEffect(() => {
     if (!isAdmin && !isDeliveryAgent) {
       setDeliveryAgents([]);
       return;
@@ -1402,7 +1342,7 @@ export default function App() {
         const mappedAgents = snapshot.docs
           .filter(docSnapshot => (docSnapshot.data() as Record<string, unknown>).accessOnly !== true)
           .map(mapDeliveryAgentDocToAgent);
-        setDeliveryAgents(dedupeDeliveryAgents(mappedAgents));
+        setDeliveryAgents(mappedAgents);
       },
       error => {
         console.error('Failed to subscribe to delivery agents', error);
@@ -2124,8 +2064,9 @@ export default function App() {
           throw new Error('Agent email is required');
         }
 
-        const matchedAgent = deliveryAgents.find(agent => agent.email?.toLowerCase() === normalizedEmail);
-        const agentDocId = matchedAgent?.id || normalizedEmail;
+        const existingAgentProfile = deliveryAgents.find(agent =>
+          agent.id === normalizedEmail || agent.email?.toLowerCase() === normalizedEmail,
+        );
         const agentStatusValue = staffProfileDraft.status === 'Offline' ? 'offline' : 'available';
         const agentPayload: Record<string, unknown> = {
           name: staffProfileDraft.name.trim(),
@@ -2139,11 +2080,10 @@ export default function App() {
           updatedAt: serverTimestamp(),
         };
 
-        if (!matchedAgent) {
+        if (!existingAgentProfile) {
           agentPayload.createdAt = serverTimestamp();
         }
-
-        await setDoc(doc(db, 'delivery_agents', agentDocId), agentPayload, { merge: true });
+        await setDoc(doc(db, 'delivery_agents', normalizedEmail), agentPayload, { merge: true });
       }
 
       setIsStaffProfileSavedToastVisible(true);
@@ -2283,11 +2223,6 @@ export default function App() {
   const handleRemoveDeliveryAccess = async (entry: AccessEntry) => {
     if (!isMainAdmin) {
       setDeliveryAccessError('Only the main admin can remove delivery agents.');
-      return;
-    }
-
-    if (entry.email === DELIVERY_AGENT_EMAIL) {
-      setDeliveryAccessError('Default delivery agent access cannot be removed.');
       return;
     }
 
@@ -2556,7 +2491,6 @@ export default function App() {
                         <p className="text-sm text-ink-muted">No delivery agents added yet.</p>
                       ) : (
                         deliveryAccessEntries.map(entry => {
-                          const isProtected = entry.email === DELIVERY_AGENT_EMAIL;
                           return (
                             <div
                               key={entry.id}
@@ -2568,14 +2502,10 @@ export default function App() {
                               {isMainAdmin ? (
                                 <button
                                   onClick={() => void handleRemoveDeliveryAccess(entry)}
-                                  disabled={isProtected || deliveryAccessRemovingId === entry.id}
+                                  disabled={deliveryAccessRemovingId === entry.id}
                                   className="rounded-full border border-white/12 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-muted transition hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
                                 >
-                                  {isProtected
-                                    ? 'Default'
-                                    : deliveryAccessRemovingId === entry.id
-                                      ? 'Removing'
-                                      : 'Remove'}
+                                  {deliveryAccessRemovingId === entry.id ? 'Removing' : 'Remove'}
                                 </button>
                               ) : (
                                 <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-muted">

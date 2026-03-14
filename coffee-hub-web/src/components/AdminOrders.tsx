@@ -79,6 +79,10 @@ export default function AdminOrders({
   const [assigningOrderDocId, setAssigningOrderDocId] = useState('');
   const [optimisticStatuses, setOptimisticStatuses] = useState<Record<string, Order['status']>>({});
   const [toastMessage, setToastMessage] = useState('');
+  const availableAgents = useMemo(
+    () => deliveryAgents.filter(agent => getAgentStatus(agent) === 'available'),
+    [deliveryAgents],
+  );
 
   const sortedOrders = useMemo(
     () => [...orders].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()),
@@ -124,7 +128,7 @@ export default function AdminOrders({
       return;
     }
 
-    const selectedAgent = deliveryAgents.find(agent => agent.id === agentId);
+    const selectedAgent = availableAgents.find(agent => agent.id === agentId);
     if (!selectedAgent) {
       alert('Selected delivery agent does not exist.');
       return;
@@ -368,12 +372,12 @@ export default function AdminOrders({
 
               {isExpanded && !isAssigned && (
                 <div className="space-y-2">
-                  {deliveryAgents.length === 0 ? (
+                  {availableAgents.length === 0 ? (
                     <div className="rounded-[18px] border border-white/8 bg-white/5 px-4 py-3 text-sm text-ink-muted">
-                      No delivery agents available.
+                      No available delivery agents.
                     </div>
                   ) : (
-                    deliveryAgents.map(agent => {
+                    availableAgents.map(agent => {
                       const statusValue = getAgentStatus(agent);
                       const statusLabel = formatAgentStatusLabel(statusValue);
                       const isAgentUnavailable = statusValue === 'offline' || statusValue === 'busy';
