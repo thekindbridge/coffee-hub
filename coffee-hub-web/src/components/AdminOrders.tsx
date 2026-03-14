@@ -18,9 +18,6 @@ interface AdminOrdersProps {
 const STATUS_BADGE_CLASS: Record<Order['status'], string> = {
   Pending: 'border border-amber-300/30 bg-amber-400/18 text-amber-300',
   Preparing: 'border border-sky-300/30 bg-sky-400/18 text-sky-300',
-  'Ready for Pickup': 'border border-violet-300/30 bg-violet-400/18 text-violet-300',
-  'Assigned to Agent': 'border border-indigo-300/30 bg-indigo-400/18 text-indigo-300',
-  'Picked Up': 'border border-cyan-300/30 bg-cyan-400/18 text-cyan-300',
   'Out for Delivery': 'border border-orange-300/30 bg-orange-400/18 text-orange-300',
   Delivered: 'border border-emerald-300/30 bg-emerald-400/18 text-emerald-300',
 };
@@ -63,16 +60,13 @@ const resolveAgentDistance = (agent: DeliveryAgent, order: Order) => {
   return formatDistance(meters);
 };
 
-const formatOrderTime = (value?: string) => {
-  if (!value) {
-    return '--';
-  }
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return '--';
-  }
-  return parsed.toLocaleTimeString();
-};
+const getAgentStatus = (agent: DeliveryAgent) => (
+  agent.status ?? (agent.is_active ? 'available' : 'offline')
+);
+
+const formatAgentStatusLabel = (status: DeliveryAgent['status'] | 'available' | 'offline' | 'busy') => (
+  `${status.charAt(0).toUpperCase()}${status.slice(1)}`
+);
 
 export default function AdminOrders({
   orders,
@@ -136,9 +130,9 @@ export default function AdminOrders({
       return;
     }
 
-    const selectedAgentStatus = selectedAgent.status ?? (selectedAgent.is_active ? 'available' : 'offline');
-    if (!selectedAgent.is_active || selectedAgentStatus === 'offline') {
-      alert('Selected delivery agent is not active.');
+    const selectedAgentStatus = getAgentStatus(selectedAgent);
+    if (!selectedAgent.is_active || selectedAgentStatus === 'offline' || selectedAgentStatus === 'busy') {
+      alert('Selected delivery agent is not available.');
       return;
     }
 
@@ -179,8 +173,8 @@ export default function AdminOrders({
         const agentStatusValue = typeof agentData.status === 'string' ? agentData.status.toLowerCase() : '';
         const isAgentActive = agentData.isActive === true || (agentStatusValue ? agentStatusValue !== 'offline' : false);
 
-        if (!isAgentActive) {
-          throw new Error('Selected delivery agent is not active');
+        if (!isAgentActive || agentStatusValue === 'busy') {
+          throw new Error('Selected delivery agent is not available');
         }
 
         if ((orderData.status as string) === 'Delivered') {
@@ -205,9 +199,11 @@ export default function AdminOrders({
           deliveryAgentPhone: agentPhone,
           deliveryAgentEmail: agentEmail,
           deliveryAgentVehicle: agentVehicle,
-          status: 'Assigned to Agent',
+          status: 'Out for Delivery',
           assignedAt: serverTimestamp(),
           deliveryAssignedAt: serverTimestamp(),
+          outForDeliveryAt: serverTimestamp(),
+          deliveryOutForDeliveryAt: serverTimestamp(),
         });
 
         transaction.set(
@@ -218,6 +214,7 @@ export default function AdminOrders({
             name: agentName,
             phone: agentPhone,
             email: agentEmail,
+            status: 'busy',
             vehicleType: agentVehicle,
             updatedAt: serverTimestamp(),
           },
@@ -229,6 +226,7 @@ export default function AdminOrders({
             doc(db, 'delivery_agents', previousAgentId),
             {
               currentOrderId: '',
+              status: 'available',
               updatedAt: serverTimestamp(),
             },
             { merge: true },
@@ -258,7 +256,7 @@ export default function AdminOrders({
 
       setOptimisticStatuses(previousStatuses => ({
         ...previousStatuses,
-        [orderDocId]: 'Assigned to Agent',
+        [orderDocId]: 'Out for Delivery',
       }));
       setToastMessage('Agent assigned successfully');
       setExpandedOrderId('');
@@ -292,12 +290,19 @@ export default function AdminOrders({
 
       {sortedOrders.map(order => {
         const effectiveStatus = optimisticStatuses[order.doc_id] || order.status;
-        const isAssigned =
-          effectiveStatus === 'Assigned to Agent' ||
-          effectiveStatus === 'Picked Up' ||
-          effectiveStatus === 'Out for Delivery' ||
-          effectiveStatus === 'Delivered';
+        const isAssigned = effectiveStatus === 'Out for Delivery' || effectiveStatus === 'Delivered';
         const isExpanded = expandedOrderId === order.doc_id;
+        const assignedAgentProfile = order.delivery_agent_id
+          ? deliveryAgents.find(agent => agent.id === order.delivery_agent_id) || null
+          : null;
+        const assignedAgentName = assignedAgentProfile?.name || order.delivery_agent_name || 'Agent not assigned';
+        const assignedAgentPhone = assignedAgentProfile?.phone || order.delivery_agent_phone || '--';
+        const assignedAgentVehicle = assignedAgentProfile?.vehicle_type || order.delivery_agent_vehicle || '--';
+        const assignedAgentStatus = assignedAgentProfile
+          ? formatAgentStatusLabel(getAgentStatus(assignedAgentProfile))
+          : effectiveStatus === 'Out for Delivery'
+            ? 'Busy'
+            : '--';
 
         return (
           <article
@@ -344,9 +349,9 @@ export default function AdminOrders({
 
             <div className="mt-4 space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <label className="text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-muted">
-                  Assign Delivery Partner
-                </label>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-muted">
+                  Assign Agent
+                </p>
                 <button
                   onClick={() => {
                     if (isAssigned) {
@@ -355,9 +360,9 @@ export default function AdminOrders({
                     setExpandedOrderId(prev => (prev === order.doc_id ? '' : order.doc_id));
                   }}
                   disabled={isAssigned}
-                  className="rounded-full border border-white/12 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-muted transition hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-full bg-primary px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {isAssigned ? 'Assigned' : isExpanded ? 'Hide agents' : 'Assign Delivery Partner'}
+                  {isAssigned ? 'Assigned' : isExpanded ? 'Hide Agents' : 'Assign Agent'}
                 </button>
               </div>
 
@@ -369,17 +374,24 @@ export default function AdminOrders({
                     </div>
                   ) : (
                     deliveryAgents.map(agent => {
-                      const statusLabel = agent.status ?? (agent.is_active ? 'available' : 'offline');
-                      const isAgentOffline = statusLabel === 'offline';
+                      const statusValue = getAgentStatus(agent);
+                      const statusLabel = formatAgentStatusLabel(statusValue);
+                      const isAgentUnavailable = statusValue === 'offline' || statusValue === 'busy';
                       return (
                         <div
                           key={agent.id}
-                          className="grid gap-3 rounded-[18px] border border-white/8 bg-white/5 p-3 sm:grid-cols-[1.3fr,0.6fr,auto] sm:items-center"
+                          className="grid gap-3 rounded-[18px] border border-white/8 bg-white/5 p-4 sm:grid-cols-[1.3fr,0.7fr,auto] sm:items-center"
                         >
-                          <div>
+                          <div className="space-y-1">
                             <p className="text-sm font-semibold text-accent">{agent.name}</p>
-                            <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-ink-muted">
-                              {agent.vehicle_type || 'Vehicle TBD'} · {statusLabel}
+                            <p className="text-sm text-ink-muted">
+                              {agent.vehicle_type || 'Vehicle not added'}
+                            </p>
+                            <p className="text-sm text-ink-muted">
+                              {agent.phone || 'Phone not added'}
+                            </p>
+                            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-secondary">
+                              {statusLabel}
                             </p>
                           </div>
                           <div>
@@ -392,7 +404,7 @@ export default function AdminOrders({
                             onClick={() => {
                               void assignAgentToOrder(order.doc_id, agent.id);
                             }}
-                            disabled={isAgentOffline || assigningOrderDocId === order.doc_id}
+                            disabled={isAgentUnavailable || assigningOrderDocId === order.doc_id}
                             className="inline-flex min-h-10 items-center justify-center rounded-full bg-primary px-4 text-xs font-semibold uppercase tracking-[0.18em] text-white disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             {assigningOrderDocId === order.doc_id ? 'Assigning...' : 'Assign'}
@@ -405,39 +417,27 @@ export default function AdminOrders({
               )}
             </div>
 
-            {(order.delivery_agent_name || order.delivery_agent_phone || order.delivery_agent_vehicle) && (
+            {(order.delivery_agent_id || order.delivery_agent_name || order.delivery_agent_phone || order.delivery_agent_vehicle) && (
               <div className="mt-3 space-y-3 rounded-[18px] border border-white/8 bg-white/5 px-4 py-3 text-sm text-ink-muted">
                 <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-secondary">Assigned rider</p>
-                  <p className="mt-1 font-semibold text-accent">
-                    {order.delivery_agent_name || 'Delivery Partner'}
-                  </p>
-                  {order.delivery_agent_phone && <p className="mt-1">{order.delivery_agent_phone}</p>}
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-secondary">Assigned Agent</p>
                 </div>
-                <div className="grid grid-cols-2 gap-3 text-[11px]">
+                <div className="grid gap-3 sm:grid-cols-2">
                   <div>
-                    <p className="font-semibold uppercase tracking-[0.16em] text-ink-muted">Vehicle</p>
-                    <p className="mt-1 text-sm font-semibold text-ink">
-                      {order.delivery_agent_vehicle || '---'}
-                    </p>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-ink-muted">Name</p>
+                    <p className="mt-1 text-sm font-semibold text-accent">{assignedAgentName}</p>
                   </div>
                   <div>
-                    <p className="font-semibold uppercase tracking-[0.16em] text-ink-muted">Assigned Time</p>
-                    <p className="mt-1 text-sm font-semibold text-ink">
-                      {formatOrderTime(order.delivery_assigned_at)}
-                    </p>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-ink-muted">Phone</p>
+                    <p className="mt-1 text-sm font-semibold text-ink">{assignedAgentPhone}</p>
                   </div>
                   <div>
-                    <p className="font-semibold uppercase tracking-[0.16em] text-ink-muted">Pickup Time</p>
-                    <p className="mt-1 text-sm font-semibold text-ink">
-                      {formatOrderTime(order.delivery_picked_at)}
-                    </p>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-ink-muted">Vehicle</p>
+                    <p className="mt-1 text-sm font-semibold text-ink">{assignedAgentVehicle}</p>
                   </div>
                   <div>
-                    <p className="font-semibold uppercase tracking-[0.16em] text-ink-muted">Delivery Time</p>
-                    <p className="mt-1 text-sm font-semibold text-ink">
-                      {formatOrderTime(order.delivery_delivered_at)}
-                    </p>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-ink-muted">Status</p>
+                    <p className="mt-1 text-sm font-semibold text-ink">{assignedAgentStatus}</p>
                   </div>
                 </div>
               </div>

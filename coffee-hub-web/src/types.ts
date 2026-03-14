@@ -81,7 +81,7 @@ export interface Order {
   delivery_fee?: number;
   coupon_code?: string;
   final_total?: number;
-  status: 'Pending' | 'Preparing' | 'Ready for Pickup' | 'Assigned to Agent' | 'Picked Up' | 'Out for Delivery' | 'Delivered';
+  status: 'Pending' | 'Preparing' | 'Out for Delivery' | 'Delivered';
   payment_method: string;
   payment_status?: OrderPaymentStatus;
   created_at: string;

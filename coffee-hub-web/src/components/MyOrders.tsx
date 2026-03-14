@@ -13,9 +13,6 @@ interface MyOrdersProps {
 const ORDER_FLOW: Order['status'][] = [
   'Pending',
   'Preparing',
-  'Ready for Pickup',
-  'Assigned to Agent',
-  'Picked Up',
   'Out for Delivery',
   'Delivered',
 ];
@@ -24,9 +21,6 @@ const CURRENCY_SYMBOL = '\u20B9';
 const STATUS_BADGE_CLASS: Record<Order['status'], string> = {
   Pending: 'border border-white/12 bg-white/6 text-ink-muted',
   Preparing: 'border border-amber-400/30 bg-amber-400/14 text-amber-300',
-  'Ready for Pickup': 'border border-violet-400/30 bg-violet-400/14 text-violet-300',
-  'Assigned to Agent': 'border border-indigo-400/30 bg-indigo-400/14 text-indigo-300',
-  'Picked Up': 'border border-cyan-400/30 bg-cyan-400/14 text-cyan-300',
   'Out for Delivery': 'border border-sky-400/30 bg-sky-400/14 text-sky-300',
   Delivered: 'border border-emerald-400/30 bg-emerald-400/14 text-emerald-300',
 };
@@ -67,25 +61,22 @@ export default function MyOrders({ orders, isLoading, onBrowseMenu, onTrackOrder
     const progressPercent = currentStatusIndex <= 0
       ? 0
       : (currentStatusIndex / (ORDER_FLOW.length - 1)) * 100;
-    const progressWidth = progressPercent === 0
-      ? '0%'
-      : `calc(${progressPercent}% - 12px)`;
 
     return (
-      <div className="mt-3">
+      <div className="mt-4 rounded-[30px] border border-white/10 bg-white/5 px-4 py-4">
         <div className="relative">
-          <div className="absolute left-3 right-3 top-[10px] h-[2px] rounded-full bg-white/10" />
+          <div className="absolute left-0 right-0 top-3 h-1.5 rounded-full bg-white/10" />
           <div
-            className="absolute left-3 top-[10px] h-[2px] rounded-full bg-secondary"
-            style={{ width: progressWidth }}
+            className="absolute left-0 top-3 h-1.5 rounded-full bg-secondary"
+            style={{ width: `${progressPercent}%` }}
           />
-          <div className="flex items-start justify-between gap-2">
+          <div className="grid grid-cols-4 gap-2">
             {ORDER_FLOW.map((step, index) => {
               const isReached = index <= currentStatusIndex;
               const isCurrent = index === currentStatusIndex;
 
               return (
-                <div key={step} className="flex min-w-0 flex-1 flex-col items-center gap-2 text-center">
+                <div key={step} className="flex min-w-0 flex-col items-center gap-2 text-center">
                   <div
                     className={`h-2.5 w-2.5 rounded-full border ${
                       isReached
@@ -95,7 +86,7 @@ export default function MyOrders({ orders, isLoading, onBrowseMenu, onTrackOrder
                   />
                   <span
                     className={`text-[9px] font-semibold uppercase tracking-[0.12em] leading-4 sm:text-[10px] ${
-                      isReached ? 'text-accent' : 'text-ink-muted'
+                      isCurrent ? 'text-accent' : isReached ? 'text-[#f5ede3]' : 'text-ink-muted'
                     }`}
                   >
                     {step}

@@ -71,11 +71,7 @@ export default function AdminDashboard({
     [orders],
   );
   const outForDeliveryCount = useMemo(
-    () => orders.filter(order =>
-      order.status === 'Assigned to Agent' ||
-      order.status === 'Picked Up' ||
-      order.status === 'Out for Delivery',
-    ).length,
+    () => orders.filter(order => order.status === 'Out for Delivery').length,
     [orders],
   );
 

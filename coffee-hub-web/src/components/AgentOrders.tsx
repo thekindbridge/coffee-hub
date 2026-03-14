@@ -11,9 +11,6 @@ const CURRENCY_SYMBOL = '\u20B9';
 const STATUS_BADGE_CLASS: Record<Order['status'], string> = {
   Pending: 'border border-amber-300/30 bg-amber-400/20 text-amber-300',
   Preparing: 'border border-sky-300/30 bg-sky-400/20 text-sky-300',
-  'Ready for Pickup': 'border border-violet-300/30 bg-violet-400/20 text-violet-300',
-  'Assigned to Agent': 'border border-indigo-300/30 bg-indigo-400/20 text-indigo-300',
-  'Picked Up': 'border border-cyan-300/30 bg-cyan-400/20 text-cyan-300',
   'Out for Delivery': 'border border-orange-300/30 bg-orange-400/20 text-orange-300',
   Delivered: 'border border-emerald-300/30 bg-emerald-400/20 text-emerald-300',
 };
@@ -27,11 +24,7 @@ const normalizePhoneForTel = (phone: string) => phone.replace(/\s+/g, '');
 export default function AgentOrders({ orders, onMarkDelivered }: AgentOrdersProps) {
   const activeOrders = useMemo(
     () => orders
-      .filter(order =>
-        order.status === 'Assigned to Agent' ||
-        order.status === 'Picked Up' ||
-        order.status === 'Out for Delivery',
-      )
+      .filter(order => order.status === 'Out for Delivery')
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()),
     [orders],
   );
