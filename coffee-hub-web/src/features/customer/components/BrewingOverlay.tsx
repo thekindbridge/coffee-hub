@@ -38,7 +38,7 @@ export const BrewingOverlay = ({ visible }: BrewingOverlayProps) => (
             Warming up checkout
           </h3>
           <p className="mt-2 text-sm leading-6 text-ink-muted">
-            Preparing your cart, payment flow, and confirmation in one smooth pour.
+            Preparing your cart, COD order request, and confirmation in one smooth pour.
           </p>
           <div className="mt-5 overflow-hidden rounded-full border border-white/10 bg-white/6 p-1">
             <motion.div

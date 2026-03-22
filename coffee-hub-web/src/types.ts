@@ -15,8 +15,7 @@ export interface CartItem extends MenuItem {
   quantity: number;
 }
 
-export type CheckoutPaymentOption = 'Cash on Delivery' | 'Pay Online';
-export type OrderPaymentStatus = 'pending' | 'paid' | 'failed';
+export type OrderPaymentStatus = 'pending' | 'paid';
 export type DeliverySessionStatus = 'assigned' | 'active' | 'completed';
 export type DeliveryAgentStatus = 'available' | 'offline' | 'busy';
 
@@ -86,9 +85,6 @@ export interface Order {
   payment_status?: OrderPaymentStatus;
   created_at: string;
   user_id: string;
-  razorpay_order_id?: string;
-  razorpay_payment_id?: string;
-  razorpay_signature?: string;
   customer_location?: DeliveryLocation | null;
   delivery_agent_id?: string;
   delivery_agent_name?: string;
@@ -135,7 +131,6 @@ export interface CheckoutCustomerDetails {
   phone: string;
   address: string;
   location: DeliveryLocation | null;
-  payment: CheckoutPaymentOption;
 }
 
 export interface CheckoutOrderItemPayload {
@@ -147,7 +142,7 @@ export interface CheckoutOrderItemPayload {
 
 export interface CheckoutOrderDraft {
   orderId: string;
-  customer: Omit<CheckoutCustomerDetails, 'payment'>;
+  customer: CheckoutCustomerDetails;
   items: CheckoutOrderItemPayload[];
   subtotal: number;
   discount: number;
@@ -156,15 +151,6 @@ export interface CheckoutOrderDraft {
   finalTotal: number;
 }
 
-export interface RazorpayOrderResponse {
-  orderId: string;
-  razorpayOrderId: string;
-  amount: number;
-  currency: string;
-  finalTotal: number;
-  deliveryCharge: number;
-}
-
-export interface RazorpayVerificationResponse {
+export interface CreateOrderResponse {
   order: Order;
 }

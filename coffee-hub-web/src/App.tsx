@@ -60,7 +60,6 @@ export default function App() {
 
   const checkout = useCheckoutFlow({
     currentUserId: appData.currentUserId,
-    currentUserEmail: appData.currentUserEmail,
     profileSaved: appData.profileSaved,
     findActiveOfferByCode,
     onBrowseMenu: () => setActiveTab('menu'),

@@ -290,19 +290,3 @@ export const parseCreateOrderBody = (body: unknown) => {
     orderDraft: parseOrderDraft(payload.orderDraft),
   };
 };
-
-export const parseVerifyPaymentBody = (body: unknown) => {
-  const payload = parseObjectPayload(body, 'Verification payload is invalid.');
-
-  return {
-    razorpayOrderId: ensureString(payload.razorpay_order_id ?? payload.razorpayOrderId, 'Razorpay order ID'),
-    razorpayPaymentId: ensureString(
-      payload.razorpay_payment_id ?? payload.razorpayPaymentId,
-      'Razorpay payment ID',
-    ),
-    razorpaySignature: ensureString(
-      payload.razorpay_signature ?? payload.razorpaySignature,
-      'Razorpay signature',
-    ),
-  };
-};

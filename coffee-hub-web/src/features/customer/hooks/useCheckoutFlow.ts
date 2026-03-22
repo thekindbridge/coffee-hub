@@ -2,7 +2,7 @@
  * useCheckoutFlow — thin composer hook.
  *
  * Composes useCart (cart state + coupon + totals) and
- * usePaymentFlow (checkout steps + address selection + order placement)
+ * usePaymentFlow (checkout steps + address selection + COD order placement)
  * into a single API, preserving full backward compatibility.
  */
 import { useCart } from './useCart';
@@ -12,7 +12,6 @@ import type { CustomerProfile } from '../../app/types';
 
 type UseCheckoutFlowParams = {
   currentUserId: string;
-  currentUserEmail: string;
   profileSaved: CustomerProfile;
   findActiveOfferByCode: (couponCode: string) => Promise<Offer | null>;
   onBrowseMenu: () => void;
@@ -21,7 +20,6 @@ type UseCheckoutFlowParams = {
 
 export const useCheckoutFlow = ({
   currentUserId,
-  currentUserEmail,
   profileSaved,
   findActiveOfferByCode,
   onBrowseMenu,
@@ -29,9 +27,8 @@ export const useCheckoutFlow = ({
 }: UseCheckoutFlowParams) => {
   const cart = useCart({ findActiveOfferByCode });
 
-  const payment = usePaymentFlow({
+  const orderFlow = usePaymentFlow({
     currentUserId,
-    currentUserEmail,
     profileSaved,
     cart: cart.cart,
     cartTotal: cart.cartTotal,
@@ -74,30 +71,30 @@ export const useCheckoutFlow = ({
     handleRemoveCoupon: cart.handleRemoveCoupon,
 
     // Payment / checkout flow
-    isCartOpen: payment.isCartOpen,
-    setIsCartOpen: payment.setIsCartOpen,
-    checkoutStep: payment.checkoutStep,
-    setCheckoutStep: payment.setCheckoutStep,
-    customerDetails: payment.customerDetails,
-    setCustomerDetails: payment.setCustomerDetails,
-    selectedAddressIndex: payment.selectedAddressIndex,
-    setSelectedAddressIndex: payment.setSelectedAddressIndex,
-    isCheckoutAddressListOpen: payment.isCheckoutAddressListOpen,
-    setIsCheckoutAddressListOpen: payment.setIsCheckoutAddressListOpen,
-    checkoutError: payment.checkoutError,
-    setCheckoutError: payment.setCheckoutError,
-    isLocatingCustomer: payment.isLocatingCustomer,
-    customerLocationError: payment.customerLocationError,
-    isPlacingOrder: payment.isPlacingOrder,
-    draftOrderId: payment.draftOrderId,
-    setDraftOrderId: payment.setDraftOrderId,
-    savedAddressOptions: payment.savedAddressOptions,
-    selectedAddressLabel: payment.selectedAddressLabel,
-    checkoutAddressSummary: payment.checkoutAddressSummary,
-    checkoutPrimaryActionLabel: payment.checkoutPrimaryActionLabel,
-    hasCheckoutAddressSelectionRef: payment.hasCheckoutAddressSelectionRef,
-    handleBrowseMenu: payment.handleBrowseMenu,
-    handleCaptureCustomerLocation: payment.handleCaptureCustomerLocation,
-    handlePlaceOrder: payment.handlePlaceOrder,
+    isCartOpen: orderFlow.isCartOpen,
+    setIsCartOpen: orderFlow.setIsCartOpen,
+    checkoutStep: orderFlow.checkoutStep,
+    setCheckoutStep: orderFlow.setCheckoutStep,
+    customerDetails: orderFlow.customerDetails,
+    setCustomerDetails: orderFlow.setCustomerDetails,
+    selectedAddressIndex: orderFlow.selectedAddressIndex,
+    setSelectedAddressIndex: orderFlow.setSelectedAddressIndex,
+    isCheckoutAddressListOpen: orderFlow.isCheckoutAddressListOpen,
+    setIsCheckoutAddressListOpen: orderFlow.setIsCheckoutAddressListOpen,
+    checkoutError: orderFlow.checkoutError,
+    setCheckoutError: orderFlow.setCheckoutError,
+    isLocatingCustomer: orderFlow.isLocatingCustomer,
+    customerLocationError: orderFlow.customerLocationError,
+    isPlacingOrder: orderFlow.isPlacingOrder,
+    draftOrderId: orderFlow.draftOrderId,
+    setDraftOrderId: orderFlow.setDraftOrderId,
+    savedAddressOptions: orderFlow.savedAddressOptions,
+    selectedAddressLabel: orderFlow.selectedAddressLabel,
+    checkoutAddressSummary: orderFlow.checkoutAddressSummary,
+    checkoutPrimaryActionLabel: orderFlow.checkoutPrimaryActionLabel,
+    hasCheckoutAddressSelectionRef: orderFlow.hasCheckoutAddressSelectionRef,
+    handleBrowseMenu: orderFlow.handleBrowseMenu,
+    handleCaptureCustomerLocation: orderFlow.handleCaptureCustomerLocation,
+    handlePlaceOrder: orderFlow.handlePlaceOrder,
   };
 };

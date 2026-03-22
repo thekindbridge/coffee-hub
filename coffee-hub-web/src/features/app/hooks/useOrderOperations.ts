@@ -83,13 +83,30 @@ export const useOrderOperations = ({
     accuracy: location.accuracy ?? null,
   });
 
+  const toStoredOrderStatus = (status: Order['status']) => {
+    if (status === 'Preparing') {
+      return 'PREPARING';
+    }
+
+    if (status === 'Out for Delivery') {
+      return 'OUT_FOR_DELIVERY';
+    }
+
+    if (status === 'Delivered') {
+      return 'DELIVERED';
+    }
+
+    return 'PLACED';
+  };
+
   const markOrderDelivered = async (
     order: Order,
     finalLocation?: DeliveryLocation | null,
   ) => {
     const batch = writeBatch(db);
     batch.update(doc(db, 'orders', order.doc_id), {
-      status: 'Delivered',
+      orderStatus: 'DELIVERED',
+      status: deleteField(),
       deliveredAt: serverTimestamp(),
       deliveryDeliveredAt: serverTimestamp(),
     });
@@ -207,7 +224,8 @@ export const useOrderOperations = ({
 
     const nowIso = new Date().toISOString();
     const orderDeliveryUpdate: Record<string, unknown> = {
-      status: 'Out for Delivery',
+      orderStatus: 'OUT_FOR_DELIVERY',
+      status: deleteField(),
       outForDeliveryAt: serverTimestamp(),
       deliveryOutForDeliveryAt: serverTimestamp(),
     };
@@ -337,7 +355,8 @@ export const useOrderOperations = ({
       }
 
       const baseUpdate: Record<string, unknown> = {
-        status: normalizedStatus,
+        orderStatus: toStoredOrderStatus(normalizedStatus),
+        status: deleteField(),
         ...timestampUpdates,
       };
 

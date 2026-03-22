@@ -1,52 +1,146 @@
 import { FieldValue } from 'firebase-admin/firestore';
+import type { Firestore } from 'firebase-admin/firestore';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import Razorpay from 'razorpay';
 
 import { ApiError } from './_lib/errors.js';
 import { getAdminDb, verifyRequestUser } from './_lib/firebaseAdmin.js';
-import { assertPricingMatches, parseCreateOrderBody, recalculatePricing } from './_lib/orderPricing.js';
+import {
+  assertPricingMatches,
+  parseCreateOrderBody,
+  recalculatePricing,
+  type SanitizedOrderDraft,
+  type ValidatedPricing,
+} from './_lib/orderPricing.js';
 
-interface PaymentSessionRecord {
-  orderId: string;
-  userId: string;
-  razorpayOrderId: string;
-  customer: {
-    name: string;
-    phone: string;
-    address: string;
-    location: {
-      lat: number;
-      lng: number;
-    };
-  };
-  pricing: {
-    finalTotal: number;
-    deliveryFee: number;
-  };
-  status: 'created' | 'paid' | 'failed';
+interface StoredOrderItem {
+  itemId: string;
+  name: string;
+  quantity: number;
+  price: number;
 }
 
-const getRazorpayClient = () => {
-  const keyId = process.env.RAZORPAY_KEY_ID?.trim();
-  const keySecret = process.env.RAZORPAY_KEY_SECRET?.trim();
-  if (!keyId || !keySecret) {
-    throw new Error('Razorpay server credentials are not configured.');
+interface StoredOrderRecord {
+  orderId: string;
+  userId: string;
+  name: string;
+  phone: string;
+  address: string;
+  customerLocation: {
+    lat: number;
+    lng: number;
+  };
+  items: StoredOrderItem[];
+  subtotal: number;
+  discount: number;
+  deliveryFee: number;
+  couponCode: string;
+  totalAmount: number;
+  paymentMode: 'COD';
+  paymentStatus: 'PENDING' | 'PAID';
+  orderStatus: 'PLACED' | 'PREPARING' | 'OUT_FOR_DELIVERY' | 'DELIVERED';
+  createdAt?: {
+    toDate?: () => Date;
+  };
+}
+
+const mapStoredStatusToResponse = (value: unknown) => {
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === 'preparing') {
+      return 'Preparing' as const;
+    }
+
+    if (normalized === 'out_for_delivery' || normalized === 'out for delivery') {
+      return 'Out for Delivery' as const;
+    }
+
+    if (normalized === 'delivered') {
+      return 'Delivered' as const;
+    }
   }
 
-  return new Razorpay({
-    key_id: keyId,
-    key_secret: keySecret,
-  });
+  return 'Pending' as const;
 };
 
-const buildExistingSessionResponse = (session: PaymentSessionRecord) => ({
-  orderId: session.orderId,
-  razorpayOrderId: session.razorpayOrderId,
-  amount: Math.round(session.pricing.finalTotal * 100),
-  currency: 'INR',
-  finalTotal: session.pricing.finalTotal,
-  deliveryCharge: session.pricing.deliveryFee,
+const mapStoredPaymentStatusToResponse = (value: unknown) => {
+  if (typeof value === 'string' && value.trim().toLowerCase() === 'paid') {
+    return 'paid' as const;
+  }
+
+  return 'pending' as const;
+};
+
+const mapStoredItemsToResponse = (orderId: string, items: StoredOrderItem[] = []) =>
+  items.map((item, index) => ({
+    id: `${item.itemId || 'item'}-${index + 1}`,
+    order_id: orderId,
+    menu_item_id: item.itemId,
+    name: item.name,
+    quantity: item.quantity,
+    price: item.price,
+  }));
+
+const buildStoredOrderRecord = (
+  orderDraft: SanitizedOrderDraft,
+  pricing: ValidatedPricing,
+  userId: string,
+): StoredOrderRecord => ({
+  orderId: orderDraft.orderId,
+  userId,
+  name: orderDraft.customer.name,
+  phone: orderDraft.customer.phone,
+  address: orderDraft.customer.address,
+  customerLocation: orderDraft.customer.location,
+  items: pricing.items.map(item => ({
+    itemId: item.id,
+    name: item.name,
+    quantity: item.quantity,
+    price: item.price,
+  })),
+  subtotal: pricing.subtotal,
+  discount: pricing.discount,
+  deliveryFee: pricing.deliveryFee,
+  couponCode: pricing.couponCode,
+  totalAmount: pricing.finalTotal,
+  paymentMode: 'COD',
+  paymentStatus: 'PENDING',
+  orderStatus: 'PLACED',
 });
+
+const buildOrderResponse = (orderDocId: string, storedOrder: StoredOrderRecord) => ({
+  order: {
+    id: storedOrder.orderId,
+    doc_id: orderDocId,
+    customer_name: storedOrder.name,
+    phone: storedOrder.phone,
+    address: storedOrder.address,
+    customer_location: storedOrder.customerLocation,
+    total_amount: Number(storedOrder.totalAmount || 0),
+    subtotal: Number(storedOrder.subtotal || 0),
+    discount: Number(storedOrder.discount || 0),
+    delivery_fee: Number(storedOrder.deliveryFee || 0),
+    coupon_code: (storedOrder.couponCode || '').toUpperCase(),
+    final_total: Number(storedOrder.totalAmount || 0),
+    status: mapStoredStatusToResponse(storedOrder.orderStatus),
+    payment_method: storedOrder.paymentMode || 'COD',
+    payment_status: mapStoredPaymentStatusToResponse(storedOrder.paymentStatus),
+    created_at: storedOrder.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+    user_id: storedOrder.userId,
+    items: mapStoredItemsToResponse(storedOrder.orderId, storedOrder.items),
+  },
+});
+
+const loadExistingOrder = async (db: Firestore, orderId: string) => {
+  const orderDoc = await db.collection('orders').doc(orderId).get();
+  if (!orderDoc.exists) {
+    return null;
+  }
+
+  return {
+    docId: orderDoc.id,
+    data: orderDoc.data() as StoredOrderRecord,
+  };
+};
 
 const sendError = (response: VercelResponse, error: unknown) => {
   if (error instanceof ApiError) {
@@ -55,7 +149,7 @@ const sendError = (response: VercelResponse, error: unknown) => {
   }
 
   console.error('Unhandled create-order error', error);
-  response.status(500).json({ error: 'Unable to create payment order right now.' });
+  response.status(500).json({ error: 'Unable to create the order right now.' });
 };
 
 export default async function handler(request: VercelRequest, response: VercelResponse) {
@@ -70,64 +164,34 @@ export default async function handler(request: VercelRequest, response: VercelRe
     await verifyRequestUser(request, userId);
 
     const adminDb = getAdminDb();
-    const pricing = await recalculatePricing(adminDb, orderDraft);
-    assertPricingMatches(orderDraft, pricing);
-
-    const paymentSessionRef = adminDb.collection('payment_sessions').doc(orderDraft.orderId);
-    const [existingOrderSnapshot, existingSessionSnapshot] = await Promise.all([
-      adminDb.collection('orders').where('orderId', '==', orderDraft.orderId).limit(1).get(),
-      paymentSessionRef.get(),
-    ]);
-
-    if (!existingOrderSnapshot.empty) {
-      throw new ApiError(409, 'An order with this receipt already exists. Please refresh checkout and try again.');
-    }
-
-    if (existingSessionSnapshot.exists) {
-      const existingSession = existingSessionSnapshot.data() as PaymentSessionRecord;
-
-      if (existingSession.userId !== userId) {
+    const existingOrder = await loadExistingOrder(adminDb, orderDraft.orderId);
+    if (existingOrder) {
+      if (existingOrder.data.userId !== userId) {
         throw new ApiError(403, 'An order with this receipt already exists for another user.');
       }
 
-      if (existingSession.status !== 'created') {
-        throw new ApiError(409, 'This payment session has already been processed. Please refresh checkout.');
-      }
-
-      response.status(200).json(buildExistingSessionResponse(existingSession));
+      response.status(200).json(buildOrderResponse(existingOrder.docId, existingOrder.data));
       return;
     }
 
-    const razorpayOrder = await getRazorpayClient().orders.create({
-      amount: Math.round(pricing.finalTotal * 100),
-      currency: 'INR',
-      receipt: orderDraft.orderId,
-      notes: {
-        orderId: orderDraft.orderId,
-        userId,
-      },
-    });
+    const pricing = await recalculatePricing(adminDb, orderDraft);
+    assertPricingMatches(orderDraft, pricing);
 
-    await paymentSessionRef.set({
-      orderId: orderDraft.orderId,
-      userId,
-      razorpayOrderId: razorpayOrder.id,
-      items: pricing.items,
-      customer: orderDraft.customer,
-      pricing,
-      status: 'created',
+    const storedOrder = buildStoredOrderRecord(orderDraft, pricing, userId);
+    const orderRef = adminDb.collection('orders').doc(orderDraft.orderId);
+
+    await orderRef.set({
+      ...storedOrder,
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     });
 
-    response.status(200).json({
-      orderId: orderDraft.orderId,
-      razorpayOrderId: razorpayOrder.id,
-      amount: razorpayOrder.amount,
-      currency: razorpayOrder.currency,
-      finalTotal: pricing.finalTotal,
-      deliveryCharge: pricing.deliveryFee,
-    });
+    const createdOrder = await loadExistingOrder(adminDb, orderDraft.orderId);
+    if (!createdOrder) {
+      throw new Error('Order was created, but could not be loaded afterwards.');
+    }
+
+    response.status(200).json(buildOrderResponse(createdOrder.docId, createdOrder.data));
   } catch (error) {
     sendError(response, error);
   }

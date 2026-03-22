@@ -93,7 +93,7 @@ export const useOrdersData = (
             if (adminOrdersSnapshotVersionRef.current !== snapshotVersion) return;
             setAdminOrders(mappedOrders.map(order => ({
               ...order,
-              items: orderItemsMap.get(order.id) || [],
+              items: orderItemsMap.get(order.id) || order.items || [],
             })));
           } catch (error) {
             console.error('Failed to load order items for admin orders', error);
@@ -196,7 +196,7 @@ export const useOrdersData = (
               if (userOrdersSnapshotVersionRef.current !== snapshotVersion) return;
               setUserOrders(sortedOrders.map(order => ({
                 ...order,
-                items: orderItemsMap.get(order.id) || [],
+                items: orderItemsMap.get(order.id) || order.items || [],
               })));
             } catch (error) {
               console.error('Failed to load order items for user orders', error);

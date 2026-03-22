@@ -5,7 +5,6 @@ import {
   CheckCircle2,
   Clock,
   Coffee,
-  CreditCard,
   MapPin,
   Minus,
   Plus,
@@ -13,7 +12,7 @@ import {
   Wallet,
   X,
 } from 'lucide-react';
-import { CURRENCY_SYMBOL, CHECKOUT_PAYMENT_OPTIONS } from '../../app/lib/constants';
+import { CURRENCY_SYMBOL } from '../../app/lib/constants';
 import type {
   CheckoutCustomerDetails,
   Order,
@@ -496,26 +495,16 @@ export const CartDrawer = ({
                 </div>
                 <div>
                   <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.22em] text-ink-muted">Payment Method</label>
-                  <div className="grid grid-cols-2 gap-3">
-                    {CHECKOUT_PAYMENT_OPTIONS.map(method => (
-                      <button
-                        key={method}
-                        onClick={() => {
-                          setCheckoutError('');
-                          setCustomerDetails(prev => ({ ...prev, payment: method }));
-                        }}
-                        className={`rounded-[24px] border px-4 py-4 text-left transition-all ${
-                          customerDetails.payment === method
-                            ? 'border-secondary/40 bg-[linear-gradient(135deg,rgba(111,78,55,0.52),rgba(62,39,35,0.96))] text-white shadow-[0_16px_32px_rgba(62,39,35,0.24)]'
-                            : 'border-white/10 bg-white/5 text-ink-muted'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2">
-                          {method === 'Pay Online' ? <CreditCard size={17} className="text-highlight" /> : <Wallet size={17} className="text-secondary" />}
-                          <p className="text-sm font-semibold">{method}</p>
-                        </div>
-                      </button>
-                    ))}
+                  <div className="rounded-[24px] border border-secondary/30 bg-[linear-gradient(135deg,rgba(111,78,55,0.22),rgba(62,39,35,0.78))] px-4 py-4 shadow-[0_16px_32px_rgba(62,39,35,0.18)]">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/10 text-secondary">
+                        <Wallet size={18} />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-accent">Cash on Delivery</p>
+                        <p className="mt-1 text-xs text-ink-muted">Pay when your order arrives at your doorstep.</p>
+                      </div>
+                    </div>
                   </div>
                 </div>
                 {checkoutError && (
@@ -542,9 +531,7 @@ export const CartDrawer = ({
                 </div>
                 <h2 className="mt-5 text-[1.75rem] font-semibold text-accent">Order confirmed</h2>
                 <p className="mt-2 text-sm leading-6 text-ink-muted">Your order #{orderStatus?.id} is being prepared.</p>
-                <p className="mt-2 text-sm font-semibold text-secondary">
-                  {orderStatus?.payment_status === 'paid' ? 'Payment received successfully.' : 'Cash on delivery selected.'}
-                </p>
+                <p className="mt-2 text-sm font-semibold text-secondary">Cash on delivery selected.</p>
                 <button onClick={onTrackOrder} className="coffee-btn-primary mt-8 w-full">
                   <Clock size={16} />
                   Track order

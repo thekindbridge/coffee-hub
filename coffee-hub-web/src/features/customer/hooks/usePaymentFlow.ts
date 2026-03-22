@@ -1,32 +1,24 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import {
-  collection,
   doc,
   runTransaction,
-  serverTimestamp,
-  writeBatch,
 } from 'firebase/firestore';
 import { auth, db } from '../../../services/firebase';
-import { loadRazorpayCheckout } from '../../../utils/loadRazorpayCheckout';
-import { postPaymentApi } from '../../../utils/paymentApi';
+import { postApi } from '../../../utils/apiClient';
 import { calculateDiscount } from '../../../utils/calculateDiscount';
 import type {
   CartItem,
   CheckoutCustomerDetails,
+  CreateOrderResponse,
   CheckoutOrderDraft,
   CheckoutOrderItemPayload,
   Offer,
   Order,
-  RazorpayOrderResponse,
-  RazorpayVerificationResponse,
 } from '../../../types';
 import {
-  CURRENCY_SYMBOL,
-  RAZORPAY_KEY_ID,
   STANDARD_DELIVERY_FEE,
 } from '../../app/lib/constants';
-import { buildLocalOrderState } from '../../app/lib/firestoreMappers';
 import type {
   CheckoutStep,
   CustomerProfile,
@@ -36,7 +28,6 @@ import type {
 
 type UsePaymentFlowParams = {
   currentUserId: string;
-  currentUserEmail: string;
   profileSaved: CustomerProfile;
   cart: CartItem[];
   cartTotal: number;
@@ -73,7 +64,6 @@ export type PaymentFlowState = {
   savedAddressOptions: SavedAddressOption[];
   selectedAddressLabel: string;
   checkoutAddressSummary: string;
-  isPayOnlineSelected: boolean;
   checkoutPrimaryActionLabel: string;
   hasCheckoutAddressSelectionRef: React.MutableRefObject<boolean>;
   handleBrowseMenu: () => void;
@@ -122,12 +112,11 @@ const getNextOrderId = async (): Promise<string> => {
 
 /**
  * Manages checkout step flow, address selection, geolocation capture,
- * and order placement (COD + Razorpay online payment).
+ * and COD order placement through the backend API.
  * Extracted from useCheckoutFlow for single-responsibility.
  */
 export const usePaymentFlow = ({
   currentUserId,
-  currentUserEmail,
   profileSaved,
   cart,
   cartTotal,
@@ -149,7 +138,6 @@ export const usePaymentFlow = ({
     phone: '',
     address: '',
     location: null,
-    payment: 'Pay Online',
   });
   const [selectedAddressIndex, setSelectedAddressIndex] = useState<SelectedAddressIndex>('new');
   const [isCheckoutAddressListOpen, setIsCheckoutAddressListOpen] = useState(false);
@@ -188,10 +176,9 @@ export const usePaymentFlow = ({
       ? customerDetails.address
       : selectedSavedAddress || customerDetails.address || primaryAddressOption?.value || '';
 
-  const isPayOnlineSelected = customerDetails.payment === 'Pay Online';
   const checkoutPrimaryActionLabel = isPlacingOrder
-    ? (isPayOnlineSelected ? 'Opening payment...' : 'Placing order...')
-    : (isPayOnlineSelected ? 'Pay online' : 'Confirm order');
+    ? 'Placing order...'
+    : 'Place order';
 
   // Auto-select saved address on first load
   useEffect(() => {
@@ -360,144 +347,24 @@ export const usePaymentFlow = ({
     setIsPlacingOrder(true);
     setCheckoutError('');
     try {
-      const orderRef = doc(collection(db, 'orders'));
-      const batch = writeBatch(db);
-      batch.set(orderRef, {
-        orderId: draft.orderId,
-        userId: currentUserId,
-        name: draft.customer.name,
-        phone: draft.customer.phone,
-        address: draft.customer.address,
-        customerLocation: draft.customer.location,
-        paymentMethod: 'Cash on Delivery',
-        paymentStatus: 'pending',
-        status: 'Pending',
-        subtotal: draft.subtotal,
-        discount: draft.discount,
-        deliveryFee: draft.deliveryFee,
-        couponCode: draft.couponCode,
-        finalTotal: draft.finalTotal,
-        total: draft.finalTotal,
-        createdAt: serverTimestamp(),
-      });
-      for (const item of draft.items) {
-        const itemRef = doc(collection(db, 'order_items'));
-        batch.set(itemRef, {
-          orderId: draft.orderId,
-          orderDocId: orderRef.id,
-          itemId: item.id,
-          name: item.name,
-          quantity: item.quantity,
-          price: item.price,
-        });
-      }
-      await batch.commit();
-      resetAfterSuccess(buildLocalOrderState({
-        docId: orderRef.id,
-        orderId: draft.orderId,
-        customer: draft.customer,
-        paymentMethod: 'Cash on Delivery',
-        paymentStatus: 'pending',
-        userId: currentUserId,
-        subtotal: draft.subtotal,
-        discount: draft.discount,
-        deliveryFee: draft.deliveryFee,
-        couponCode: draft.couponCode,
-        finalTotal: draft.finalTotal,
-        items: draft.items,
-      }));
-    } catch (error) {
-      console.error('Failed to place cash on delivery order', error);
-      setCheckoutError('Unable to place your order right now. Please try again.');
-    } finally {
-      setIsPlacingOrder(false);
-    }
-  };
-
-  const startOnlinePayment = async (draft: CheckoutOrderDraft) => {
-    if (!RAZORPAY_KEY_ID) {
-      setCheckoutError('Razorpay key is missing. Add VITE_RAZORPAY_KEY_ID to your frontend environment.');
-      return;
-    }
-    setIsPlacingOrder(true);
-    setCheckoutError('');
-    try {
       const idToken = await auth.currentUser?.getIdToken(true);
       if (!idToken) {
-        setCheckoutError('Please sign in again before starting payment.');
-        setIsPlacingOrder(false);
+        setCheckoutError('Please sign in again before placing your order.');
         return;
       }
 
-      const didLoad = await loadRazorpayCheckout();
-      if (!didLoad || !window.Razorpay) {
-        setCheckoutError('Unable to load Razorpay checkout right now. Please try again.');
-        setDraftOrderId('');
-        setIsPlacingOrder(false);
-        return;
-      }
-
-      const paymentOrder = await postPaymentApi<RazorpayOrderResponse>(
+      const orderResponse = await postApi<CreateOrderResponse>(
         '/api/create-order',
         { orderDraft: draft, userId: currentUserId },
         idToken,
       );
 
-      const razorpay = new window.Razorpay({
-        key: RAZORPAY_KEY_ID,
-        amount: paymentOrder.amount,
-        currency: paymentOrder.currency,
-        name: 'Coffee HUB',
-        description: 'Food Order Payment',
-        order_id: paymentOrder.razorpayOrderId,
-        prefill: { name: draft.customer.name, email: currentUserEmail, contact: draft.customer.phone },
-        notes: { orderId: draft.orderId },
-        theme: { color: '#8b4a20' },
-        handler: async response => {
-          setIsPlacingOrder(true);
-          try {
-            const verificationToken = await auth.currentUser?.getIdToken(true);
-            if (!verificationToken) throw new Error('Please sign in again before verifying payment.');
-            const verificationResult = await postPaymentApi<RazorpayVerificationResponse>(
-              '/api/verify-payment',
-              {
-                razorpay_order_id: response.razorpay_order_id,
-                razorpay_payment_id: response.razorpay_payment_id,
-                razorpay_signature: response.razorpay_signature,
-              },
-              verificationToken,
-            );
-            resetAfterSuccess(verificationResult.order);
-          } catch (error) {
-            console.error('Failed to verify Razorpay payment', error);
-            setCheckoutError('Payment was captured, but verification failed. Please contact support if the order is not visible.');
-            setDraftOrderId('');
-          } finally {
-            setIsPlacingOrder(false);
-          }
-        },
-        modal: {
-          ondismiss: () => {
-            setCheckoutError('Payment was cancelled before completion.');
-            setDraftOrderId('');
-            setIsPlacingOrder(false);
-          },
-        },
-      });
-
-      razorpay.on('payment.failed', (response: { error?: { description?: string } }) => {
-        setCheckoutError(response.error?.description || 'Payment failed. Please try again.');
-        setDraftOrderId('');
-        setIsPlacingOrder(false);
-      });
-
-      setIsPlacingOrder(false);
-      razorpay.open();
+      resetAfterSuccess(orderResponse.order);
     } catch (error) {
-      console.error('Failed to start online payment', error);
+      console.error('Failed to place COD order', error);
       const typedError = error as Error;
-      setCheckoutError(typedError.message || 'Unable to start online payment right now. Please try again.');
-      setDraftOrderId('');
+      setCheckoutError(typedError.message || 'Unable to place your order right now. Please try again.');
+    } finally {
       setIsPlacingOrder(false);
     }
   };
@@ -505,10 +372,6 @@ export const usePaymentFlow = ({
   const handlePlaceOrder = async () => {
     const preparedOrder = await buildDraft();
     if (!preparedOrder) return;
-    if (customerDetails.payment === 'Pay Online') {
-      await startOnlinePayment(preparedOrder.order);
-      return;
-    }
     await placeCodOrder(preparedOrder.order);
   };
 
@@ -533,7 +396,6 @@ export const usePaymentFlow = ({
     savedAddressOptions,
     selectedAddressLabel,
     checkoutAddressSummary,
-    isPayOnlineSelected,
     checkoutPrimaryActionLabel,
     hasCheckoutAddressSelectionRef,
     handleBrowseMenu,

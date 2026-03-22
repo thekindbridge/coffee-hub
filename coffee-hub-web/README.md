@@ -7,7 +7,7 @@ COFFE HUB is now a frontend-only React + Vite + Tailwind app powered by Firebase
 - React + TypeScript + Vite
 - Tailwind CSS + Motion
 - Firebase Authentication (Phone Number OTP)
-- Cloud Firestore (menu, orders, order_items)
+- Cloud Firestore (menu, orders)
 
 ## Setup
 
@@ -18,7 +18,6 @@ COFFE HUB is now a frontend-only React + Vite + Tailwind app powered by Firebase
 4. Create Firestore collections:
    - `menu_items`
    - `orders`
-   - `order_items`
 5. Start development server:
    `npm run dev`
 
@@ -57,21 +56,18 @@ You can override this using `VITE_ADMIN_PHONE`.
   "name": "Customer Name",
   "phone": "9876543210",
   "address": "Inkollu, Andhra Pradesh",
-  "paymentMethod": "UPI",
-  "status": "Placed",
-  "total": 420,
+  "items": [
+    {
+      "itemId": "menu_item_doc_id",
+      "name": "Chicken Noodles",
+      "quantity": 2,
+      "price": 180
+    }
+  ],
+  "paymentMode": "COD",
+  "paymentStatus": "PENDING",
+  "orderStatus": "PLACED",
+  "totalAmount": 420,
   "createdAt": "serverTimestamp"
-}
-```
-
-### order_items
-
-```json
-{
-  "orderId": "COF1001",
-  "itemId": "menu_item_doc_id",
-  "name": "Chicken Noodles",
-  "quantity": 2,
-  "price": 180
 }
 ```

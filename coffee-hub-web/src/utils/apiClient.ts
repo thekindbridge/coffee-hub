@@ -1,4 +1,4 @@
-export const postPaymentApi = async <TResponse>(
+export const postApi = async <TResponse>(
   path: string,
   body: unknown,
   idToken: string,
@@ -14,7 +14,7 @@ export const postPaymentApi = async <TResponse>(
 
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    const errorMessage = typeof payload?.error === 'string' ? payload.error : 'Payment request failed.';
+    const errorMessage = typeof payload?.error === 'string' ? payload.error : 'Request failed.';
     throw new Error(errorMessage);
   }
 

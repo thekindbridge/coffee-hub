@@ -7,8 +7,6 @@ import {
 import type { QueryDocumentSnapshot, Timestamp } from 'firebase/firestore';
 import { db } from '../../../services/firebase';
 import type {
-  CheckoutCustomerDetails,
-  CheckoutOrderItemPayload,
   DeliveryAgent,
   DeliveryLocation,
   DeliverySession,
@@ -106,7 +104,7 @@ export const mapDeliverySessionDocToSession = (
 
 export const normalizeOrderStatus = (status: unknown): Order['status'] => {
   if (typeof status === 'string') {
-    const normalized = status.trim().toLowerCase();
+    const normalized = status.trim().toLowerCase().replace(/_/g, ' ');
     if (normalized === 'placed' || normalized === 'pending') {
       return 'Pending';
     }
@@ -135,6 +133,51 @@ export const normalizeOrderStatus = (status: unknown): Order['status'] => {
   }
 
   return 'Pending';
+};
+
+const normalizePaymentMethod = (value: unknown) => {
+  if (typeof value !== 'string') {
+    return 'COD';
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (!normalized || normalized === 'cash on delivery' || normalized === 'cod') {
+    return 'COD';
+  }
+
+  return value.trim();
+};
+
+const normalizePaymentStatus = (value: unknown): Order['payment_status'] => {
+  if (typeof value === 'string' && value.trim().toLowerCase() === 'paid') {
+    return 'paid';
+  }
+
+  return 'pending';
+};
+
+const mapEmbeddedOrderItems = (orderId: string, value: unknown): OrderItem[] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.flatMap((item, index) => {
+    if (!item || typeof item !== 'object') {
+      return [];
+    }
+
+    const itemData = item as Record<string, unknown>;
+    const itemId = ((itemData.itemId as string) || (itemData.id as string) || '').trim();
+
+    return [{
+      id: `${itemId || 'item'}-${index + 1}`,
+      order_id: orderId,
+      menu_item_id: itemId,
+      name: (itemData.name as string) || 'Item',
+      quantity: Number(itemData.quantity || 0),
+      price: Number(itemData.price || 0),
+    }];
+  });
 };
 
 export const EMPTY_PROFILE: CustomerProfile = {
@@ -257,10 +300,13 @@ export const mapMenuDocToMenuItem = (snapshot: QueryDocumentSnapshot): MenuItem 
 export const mapOrderDocToOrder = (snapshot: QueryDocumentSnapshot): Order => {
   const data = snapshot.data() as Record<string, unknown>;
   const createdAtValue = data.createdAt as Timestamp | undefined;
-  const subtotal = Number(data.subtotal ?? data.total ?? 0);
+  const orderId = ((data.orderId as string) || snapshot.id).toUpperCase();
+  const subtotal = Number(data.subtotal ?? data.totalAmount ?? data.finalTotal ?? data.total ?? 0);
   const discount = Number(data.discount || 0);
   const deliveryFee = Number(data.deliveryFee || 0);
-  const finalTotal = Number(data.finalTotal ?? data.total ?? Math.max(0, subtotal - discount));
+  const finalTotal = Number(
+    data.totalAmount ?? data.finalTotal ?? data.total ?? Math.max(0, subtotal - discount),
+  );
   const assignedAt = mapTimestampToIsoString(data.assignedAt ?? data.deliveryAssignedAt ?? data.delivery_assigned_at);
   const pickedAt = mapTimestampToIsoString(data.pickedAt ?? data.deliveryPickedAt ?? data.delivery_picked_at);
   const outForDeliveryAt = mapTimestampToIsoString(
@@ -274,11 +320,12 @@ export const mapOrderDocToOrder = (snapshot: QueryDocumentSnapshot): Order => {
   const agentPhone = (data.agentPhone as string) || (data.deliveryAgentPhone as string) || (data.delivery_agent_phone as string) || '';
   const agentVehicle = (data.agentVehicle as string) || (data.deliveryAgentVehicle as string) || (data.delivery_agent_vehicle as string) || '';
   const agentEmail = (data.agentEmail as string) || (data.deliveryAgentEmail as string) || (data.delivery_agent_email as string) || '';
+  const embeddedItems = mapEmbeddedOrderItems(orderId, data.items);
 
   return {
-    id: ((data.orderId as string) || snapshot.id).toUpperCase(),
+    id: orderId,
     doc_id: snapshot.id,
-    customer_name: (data.name as string) || '',
+    customer_name: (data.name as string) || (data.customerName as string) || '',
     phone: (data.phone as string) || '',
     address: (data.address as string) || '',
     customer_location: mapLocationRecord(data.customerLocation),
@@ -288,14 +335,11 @@ export const mapOrderDocToOrder = (snapshot: QueryDocumentSnapshot): Order => {
     delivery_fee: deliveryFee,
     coupon_code: ((data.couponCode as string) || '').toUpperCase(),
     final_total: finalTotal,
-    status: normalizeOrderStatus(data.status),
-    payment_method: (data.paymentMethod as string) || 'Cash on Delivery',
-    payment_status: (data.paymentStatus as Order['payment_status']) || 'pending',
+    status: normalizeOrderStatus(data.orderStatus ?? data.status),
+    payment_method: normalizePaymentMethod(data.paymentMode ?? data.paymentMethod),
+    payment_status: normalizePaymentStatus(data.paymentStatus),
     created_at: createdAtValue?.toDate()?.toISOString() || new Date().toISOString(),
     user_id: (data.userId as string) || '',
-    razorpay_order_id: (data.razorpayOrderId as string) || '',
-    razorpay_payment_id: (data.razorpayPaymentId as string) || '',
-    razorpay_signature: (data.razorpaySignature as string) || '',
     delivery_agent_id: agentId,
     delivery_agent_name: agentName,
     delivery_agent_phone: agentPhone,
@@ -307,67 +351,9 @@ export const mapOrderDocToOrder = (snapshot: QueryDocumentSnapshot): Order => {
     delivery_delivered_at: deliveredAt,
     preparing_at: preparingAt,
     ready_for_pickup_at: readyAt,
+    items: embeddedItems,
   };
 };
-
-export const buildLocalOrderState = (params: {
-  docId: string;
-  orderId: string;
-  customer: Omit<CheckoutCustomerDetails, 'payment'>;
-  paymentMethod: string;
-  paymentStatus?: Order['payment_status'];
-  userId: string;
-  subtotal: number;
-  discount: number;
-  deliveryFee: number;
-  couponCode: string;
-  finalTotal: number;
-  items: CheckoutOrderItemPayload[];
-  razorpayOrderId?: string;
-  razorpayPaymentId?: string;
-  razorpaySignature?: string;
-  createdAt?: string;
-}): Order => ({
-  id: params.orderId,
-  doc_id: params.docId,
-  customer_name: params.customer.name,
-  phone: params.customer.phone,
-  address: params.customer.address,
-  customer_location: params.customer.location,
-  total_amount: params.finalTotal,
-  subtotal: params.subtotal,
-  discount: params.discount,
-  delivery_fee: params.deliveryFee,
-  coupon_code: params.couponCode,
-  final_total: params.finalTotal,
-  status: 'Pending',
-  payment_method: params.paymentMethod,
-  payment_status: params.paymentStatus || 'pending',
-  created_at: params.createdAt || new Date().toISOString(),
-  user_id: params.userId,
-  razorpay_order_id: params.razorpayOrderId || '',
-  razorpay_payment_id: params.razorpayPaymentId || '',
-  razorpay_signature: params.razorpaySignature || '',
-  delivery_agent_id: '',
-  delivery_agent_name: '',
-  delivery_agent_phone: '',
-  delivery_agent_email: '',
-  delivery_agent_vehicle: '',
-  delivery_assigned_at: '',
-  delivery_picked_at: '',
-  delivery_out_for_delivery_at: '',
-  delivery_delivered_at: '',
-  preparing_at: '',
-  ready_for_pickup_at: '',
-  items: params.items.map(item => ({
-    id: item.id,
-    order_id: params.orderId,
-    menu_item_id: item.id,
-    name: item.name,
-    quantity: item.quantity,
-    price: item.price,
-  })),
-});
 
 const chunkValues = <T,>(values: T[], size: number): T[][] => {
   const chunks: T[][] = [];

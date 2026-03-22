@@ -173,7 +173,7 @@ export const HomePage = ({
               <ShieldCheck size={20} />
             </div>
             <h3 className="mt-4 text-sm font-semibold text-accent">Fresh & safe</h3>
-            <p className="mt-1 text-xs leading-5 text-ink-muted">Secure payments, clean prep, and order tracking from one drawer.</p>
+            <p className="mt-1 text-xs leading-5 text-ink-muted">Quick COD checkout, clean prep, and order tracking from one drawer.</p>
           </div>
         </div>
 
