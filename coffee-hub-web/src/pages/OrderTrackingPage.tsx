@@ -7,7 +7,7 @@ import {
 import { doc, onSnapshot } from 'firebase/firestore';
 import { motion } from 'motion/react';
 import DeliveryTrackingMap from '../components/DeliveryTrackingMap';
-import { db } from '../firebase';
+import { db } from '../services/firebase';
 import type {
   DeliveryAgent,
   DeliveryLocation,

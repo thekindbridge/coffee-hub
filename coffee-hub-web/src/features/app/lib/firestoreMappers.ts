@@ -5,7 +5,7 @@ import {
   where,
 } from 'firebase/firestore';
 import type { QueryDocumentSnapshot, Timestamp } from 'firebase/firestore';
-import { db } from '../../../firebase';
+import { db } from '../../../services/firebase';
 import type {
   CheckoutCustomerDetails,
   CheckoutOrderItemPayload,

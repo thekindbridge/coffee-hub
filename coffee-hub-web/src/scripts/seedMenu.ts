@@ -43,7 +43,7 @@ const loadEnvFile = (fileName: string) => {
 loadEnvFile('.env.local');
 loadEnvFile('.env');
 
-const { db } = await import('../firebase.ts');
+const { db } = await import('../services/firebase');
 
 async function seedMenuToFirestore() {
   let addedCount = 0;

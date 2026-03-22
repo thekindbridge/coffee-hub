@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { doc, runTransaction, serverTimestamp } from 'firebase/firestore';
 
-import { db } from '../firebase';
+import { db } from '../services/firebase';
 import type { DeliveryAgent, DeliveryLocation, Order } from '../types';
 import { calculateDistanceMeters } from '../agent/agentTracker';
 

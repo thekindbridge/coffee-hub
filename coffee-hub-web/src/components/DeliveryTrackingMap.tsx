@@ -7,7 +7,7 @@ import {
 import { doc, onSnapshot } from 'firebase/firestore';
 import { Bike, MapPin, Store } from 'lucide-react';
 import { SHOP_LOCATION } from '../config/shopLocation';
-import { db } from '../firebase';
+import { db } from '../services/firebase';
 import type { DeliveryLocation, DeliveryRouteMetrics } from '../types';
 
 const GOOGLE_MAPS_SCRIPT_ID = 'coffee-hub-premium-delivery-tracking-map';

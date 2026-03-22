@@ -36,7 +36,7 @@ const loadEnvFile = (fileName: string) => {
 loadEnvFile('.env.local');
 loadEnvFile('.env');
 
-const { db } = await import('../firebase');
+const { db } = await import('../services/firebase');
 
 async function uploadMenu() {
   let addedCount = 0;

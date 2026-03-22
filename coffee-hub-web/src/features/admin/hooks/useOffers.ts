@@ -19,7 +19,7 @@ import {
   where,
 } from 'firebase/firestore';
 import type { DocumentData, QueryDocumentSnapshot, Timestamp } from 'firebase/firestore';
-import { db } from '../../../firebase';
+import { db } from '../../../services/firebase';
 import type { Offer, OfferInput } from '../../../types';
 
 const OFFERS_COLLECTION = 'offers';

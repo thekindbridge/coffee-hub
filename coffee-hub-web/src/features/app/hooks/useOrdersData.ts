@@ -8,7 +8,7 @@ import {
   query,
   where,
 } from 'firebase/firestore';
-import { db } from '../../../firebase';
+import { db } from '../../../services/firebase';
 import type { Order } from '../../../types';
 import {
   fetchOrderItemsMap,

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
-import { db } from '../../../firebase';
+import { db } from '../../../services/firebase';
 import { ADMIN_EMAIL } from '../lib/constants';
 import type { AccessEntry } from '../types';
 

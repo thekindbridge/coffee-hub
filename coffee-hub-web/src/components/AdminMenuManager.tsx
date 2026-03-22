@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { addDoc, collection, deleteDoc, doc, onSnapshot, orderBy, query, updateDoc } from 'firebase/firestore';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
 
-import { db } from '../firebase';
+import { db } from '../services/firebase';
 
 interface AdminMenuItem {
   id: string;

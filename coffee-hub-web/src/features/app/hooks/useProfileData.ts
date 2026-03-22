@@ -6,7 +6,7 @@ import {
   serverTimestamp,
   setDoc,
 } from 'firebase/firestore';
-import { db } from '../../../firebase';
+import { db } from '../../../services/firebase';
 import type { CustomerProfile, StaffProfile, StaffRole } from '../types';
 import {
   EMPTY_PROFILE,

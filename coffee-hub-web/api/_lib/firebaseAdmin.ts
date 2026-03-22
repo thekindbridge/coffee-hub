@@ -53,6 +53,7 @@ const getAdminApp = () => {
     credential: cert({
       projectId: getRequiredEnv('FIREBASE_ADMIN_PROJECT_ID', [
         process.env.FIREBASE_PROJECT_ID || '',
+        process.env.VITE_PROJECT_ID || '',
         process.env.VITE_FIREBASE_PROJECT_ID || '',
       ]),
       clientEmail: getRequiredEnv('FIREBASE_ADMIN_CLIENT_EMAIL'),

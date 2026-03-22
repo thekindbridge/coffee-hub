@@ -3,7 +3,7 @@ import {
   serverTimestamp,
   setDoc,
 } from 'firebase/firestore';
-import { db } from '../firebase';
+import { db } from '../services/firebase';
 import type { DeliveryLocation } from '../types';
 
 export type AgentTrackerPermissionState =

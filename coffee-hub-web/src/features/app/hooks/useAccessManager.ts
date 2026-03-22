@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { deleteDoc, doc, serverTimestamp, setDoc } from 'firebase/firestore';
-import { db } from '../../../firebase';
+import { db } from '../../../services/firebase';
 import type { AccessEntry } from '../types';
 
 type UseAccessManagerParams = {
