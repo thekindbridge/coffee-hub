@@ -9,8 +9,6 @@ import {
   Tag,
   User,
 } from 'lucide-react';
-import { deleteDoc, doc, serverTimestamp, setDoc } from 'firebase/firestore';
-import { db } from './firebase';
 import { loginWithGoogle } from './auth';
 import type { MenuItem, Offer, Order } from './types';
 import { useOffers } from './hooks/useOffers';
@@ -18,23 +16,11 @@ import AdminDashboard from './components/AdminDashboard';
 import AgentDashboard from './components/AgentDashboard';
 import MyOrders from './components/MyOrders';
 import { CURRENCY_SYMBOL, ORDER_STATUSES } from './features/app/lib/constants';
-import {
-  buildProfileDraft,
-  buildStaffProfileDraft,
-  EMPTY_PROFILE,
-  EMPTY_STAFF_PROFILE,
-  ensureProfileAddresses,
-  formatPhoneWithPrefix,
-} from './features/app/lib/firestoreMappers';
 import { useRealtimeAppData } from './features/app/hooks/useRealtimeAppData';
 import { useOrderOperations } from './features/app/hooks/useOrderOperations';
-import type {
-  AccessEntry,
-  CustomerProfile,
-  CustomerTab,
-  StaffProfile,
-  StaffRole,
-} from './features/app/types';
+import { useProfileManager } from './features/app/hooks/useProfileManager';
+import { useAccessManager } from './features/app/hooks/useAccessManager';
+import type { CustomerTab } from './features/app/types';
 import { useCheckoutFlow } from './features/customer/hooks/useCheckoutFlow';
 import { AuthLoadingPage } from './features/customer/pages/AuthLoadingPage';
 import { LoginPage } from './features/customer/pages/LoginPage';
@@ -57,29 +43,9 @@ export default function App() {
   const [isTrackingOrder, setIsTrackingOrder] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
-  const [isProfileOpen, setIsProfileOpen] = useState(false);
-  const [profileDraft, setProfileDraft] = useState<CustomerProfile>(EMPTY_PROFILE);
-  const [isProfileAddressExpanded, setIsProfileAddressExpanded] = useState(false);
-  const [profileError, setProfileError] = useState('');
-  const [isProfileSaving, setIsProfileSaving] = useState(false);
-  const [isProfileSavedToastVisible, setIsProfileSavedToastVisible] = useState(false);
-  const [isStaffProfileOpen, setIsStaffProfileOpen] = useState(false);
-  const [staffProfileDraft, setStaffProfileDraft] = useState<StaffProfile>(EMPTY_STAFF_PROFILE);
-  const [staffProfileError, setStaffProfileError] = useState('');
-  const [isStaffProfileSaving, setIsStaffProfileSaving] = useState(false);
-  const [isStaffProfileSavedToastVisible, setIsStaffProfileSavedToastVisible] = useState(false);
-  const [adminAccessInput, setAdminAccessInput] = useState('');
-  const [deliveryAccessInput, setDeliveryAccessInput] = useState('');
-  const [adminAccessError, setAdminAccessError] = useState('');
-  const [deliveryAccessError, setDeliveryAccessError] = useState('');
-  const [adminAccessSuccess, setAdminAccessSuccess] = useState('');
-  const [deliveryAccessSuccess, setDeliveryAccessSuccess] = useState('');
-  const [isAdminAccessSaving, setIsAdminAccessSaving] = useState(false);
-  const [isDeliveryAccessSaving, setIsDeliveryAccessSaving] = useState(false);
-  const [adminAccessRemovingId, setAdminAccessRemovingId] = useState('');
-  const [deliveryAccessRemovingId, setDeliveryAccessRemovingId] = useState('');
 
   const appData = useRealtimeAppData();
+
   const {
     offers,
     activeOffers,
@@ -125,6 +91,23 @@ export default function App() {
     onAfterLogout: () => setActiveTab('home'),
   });
 
+  const profileManager = useProfileManager({
+    currentUserId: appData.currentUserId,
+    currentUserEmail: appData.currentUserEmail,
+    isAdmin: appData.isAdmin,
+    isDeliveryAgent: appData.isDeliveryAgent,
+    profileSaved: appData.profileSaved,
+    staffProfileSaved: appData.staffProfileSaved,
+    deliveryAgents: appData.deliveryAgents,
+  });
+
+  const accessManager = useAccessManager({
+    isMainAdmin: appData.isMainAdmin,
+    adminAccessEntries: appData.adminAccessEntries,
+    deliveryAccessEntries: appData.deliveryAccessEntries,
+  });
+
+  // Reset customer-facing state on logout
   useEffect(() => {
     if (!appData.isLoggedIn) {
       setActiveTab('home');
@@ -134,129 +117,40 @@ export default function App() {
     }
   }, [appData.isLoggedIn]);
 
+  // Keep displayed order status in sync with live Firestore data
   useEffect(() => {
-    if (!orderStatus) {
-      return;
-    }
-
-    const syncedOrder = appData.userOrders.find(order => order.id === orderStatus.id);
-    if (!syncedOrder) {
-      return;
-    }
+    if (!orderStatus) return;
+    const syncedOrder = appData.userOrders.find(o => o.id === orderStatus.id);
+    if (!syncedOrder) return;
 
     setOrderStatus(prev => {
-      if (!prev || prev.id !== syncedOrder.id) {
-        return prev;
-      }
-
+      if (!prev || prev.id !== syncedOrder.id) return prev;
       const mergedItems =
-        syncedOrder.items && syncedOrder.items.length > 0
-          ? syncedOrder.items
-          : prev.items;
-
+        syncedOrder.items && syncedOrder.items.length > 0 ? syncedOrder.items : prev.items;
       const isSameStatus = prev.status === syncedOrder.status;
       const isSameTotal = prev.total_amount === syncedOrder.total_amount;
       const isSameAddress = prev.address === syncedOrder.address;
-      const isSameCustomerLocation =
+      const isSameLocation =
         prev.customer_location?.lat === syncedOrder.customer_location?.lat &&
         prev.customer_location?.lng === syncedOrder.customer_location?.lng;
       const isSameItemsRef = prev.items === mergedItems;
-
-      if (isSameStatus && isSameTotal && isSameAddress && isSameCustomerLocation && isSameItemsRef) {
+      if (isSameStatus && isSameTotal && isSameAddress && isSameLocation && isSameItemsRef) {
         return prev;
       }
-
-      return {
-        ...syncedOrder,
-        items: mergedItems,
-      };
+      return { ...syncedOrder, items: mergedItems };
     });
   }, [appData.userOrders, orderStatus]);
 
+  // Navigate to tracking after successful checkout
   useEffect(() => {
-    if (!isProfileOpen) {
-      setProfileDraft(buildProfileDraft(appData.profileSaved));
-      setIsProfileAddressExpanded(false);
-    }
-  }, [appData.profileSaved, isProfileOpen]);
-
-  useEffect(() => {
-    if (!isStaffProfileOpen) {
-      setStaffProfileDraft(buildStaffProfileDraft(appData.staffProfileSaved));
-      setStaffProfileError('');
-      setIsStaffProfileSavedToastVisible(false);
-    }
-  }, [appData.staffProfileSaved, isStaffProfileOpen]);
-
-  useEffect(() => {
-    if (!isProfileSavedToastVisible) {
-      return;
-    }
-
-    const timeoutId = window.setTimeout(() => {
-      setIsProfileSavedToastVisible(false);
-    }, 1800);
-
-    return () => {
-      window.clearTimeout(timeoutId);
-    };
-  }, [isProfileSavedToastVisible]);
-
-  useEffect(() => {
-    if (!isStaffProfileOpen) {
-      document.body.style.overflow = 'auto';
-      return;
-    }
-
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = 'auto';
-    };
-  }, [isStaffProfileOpen]);
-
-  useEffect(() => {
-    if (!adminAccessSuccess) {
-      return;
-    }
-
-    const timeoutId = window.setTimeout(() => {
-      setAdminAccessSuccess('');
-    }, 2500);
-
-    return () => {
-      window.clearTimeout(timeoutId);
-    };
-  }, [adminAccessSuccess]);
-
-  useEffect(() => {
-    if (!deliveryAccessSuccess) {
-      return;
-    }
-
-    const timeoutId = window.setTimeout(() => {
-      setDeliveryAccessSuccess('');
-    }, 2500);
-
-    return () => {
-      window.clearTimeout(timeoutId);
-    };
-  }, [deliveryAccessSuccess]);
-
-  useEffect(() => {
-    if (checkout.checkoutStep !== 'success' || !orderStatus) {
-      return;
-    }
-
-    const timeoutId = window.setTimeout(() => {
+    if (checkout.checkoutStep !== 'success' || !orderStatus) return;
+    const id = window.setTimeout(() => {
       checkout.setIsCartOpen(false);
       checkout.setCheckoutStep('cart');
       setActiveTab('tracking');
       checkout.setDraftOrderId('');
     }, 1800);
-
-    return () => {
-      window.clearTimeout(timeoutId);
-    };
+    return () => window.clearTimeout(id);
   }, [
     checkout.checkoutStep,
     checkout.setCheckoutStep,
@@ -273,8 +167,7 @@ export default function App() {
     () =>
       appData.menu.filter(item => {
         const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase());
-        const matchesCategory =
-          selectedCategory === 'All' || item.category === selectedCategory;
+        const matchesCategory = selectedCategory === 'All' || item.category === selectedCategory;
         return matchesSearch && matchesCategory;
       }),
     [appData.menu, searchQuery, selectedCategory],
@@ -286,18 +179,15 @@ export default function App() {
       setTrackingError('Enter your order ID to track it.');
       return;
     }
-
     setTrackingError('');
     setIsTrackingOrder(true);
-
-    const matchedOrder = appData.userOrders.find(order => order.id === orderId);
+    const matchedOrder = appData.userOrders.find(o => o.id === orderId);
     if (!matchedOrder) {
       setOrderStatus(null);
       setTrackingError('Order not found. Please check the ID.');
       setIsTrackingOrder(false);
       return;
     }
-
     setOrderStatus(matchedOrder);
     setTrackingOrderId(matchedOrder.id);
     setIsTrackingOrder(false);
@@ -311,288 +201,55 @@ export default function App() {
     setActiveTab('tracking');
   };
 
-  const handleOpenProfile = () => {
-    setProfileDraft(buildProfileDraft(appData.profileSaved));
-    setIsProfileAddressExpanded(false);
-    setProfileError('');
-    setIsProfileSavedToastVisible(false);
-    setIsProfileOpen(true);
-    checkout.setIsCartOpen(false);
+  // --- Shared StaffProfileDrawer props ---
+  const staffDrawerProps = {
+    isOpen: profileManager.isStaffProfileOpen,
+    isAdmin: appData.isAdmin,
+    isDeliveryAgent: appData.isDeliveryAgent,
+    isMainAdmin: appData.isMainAdmin,
+    staffProfileDraft: profileManager.staffProfileDraft,
+    staffProfileError: profileManager.staffProfileError,
+    isStaffProfileSaving: profileManager.isStaffProfileSaving,
+    isStaffProfileSavedToastVisible: profileManager.isStaffProfileSavedToastVisible,
+    adminAccessEntries: appData.adminAccessEntries,
+    deliveryAccessEntries: appData.deliveryAccessEntries,
+    adminAccessInput: accessManager.adminAccessInput,
+    deliveryAccessInput: accessManager.deliveryAccessInput,
+    adminAccessError: accessManager.adminAccessError,
+    deliveryAccessError: accessManager.deliveryAccessError,
+    adminAccessSuccess: accessManager.adminAccessSuccess,
+    deliveryAccessSuccess: accessManager.deliveryAccessSuccess,
+    isAdminAccessSaving: accessManager.isAdminAccessSaving,
+    isDeliveryAccessSaving: accessManager.isDeliveryAccessSaving,
+    adminAccessRemovingId: accessManager.adminAccessRemovingId,
+    deliveryAccessRemovingId: accessManager.deliveryAccessRemovingId,
+    onClose: () => profileManager.setIsStaffProfileOpen(false),
+    onLogout: () => {
+      profileManager.setIsStaffProfileOpen(false);
+      void orderOperations.handleLogout();
+    },
+    onSave: () => void profileManager.handleSaveStaffProfile(),
+    onStaffProfileDraftChange: profileManager.setStaffProfileDraft,
+    onAdminAccessInputChange: (value: string) => {
+      accessManager.setAdminAccessInput(value);
+      if (accessManager.adminAccessError) accessManager.setAdminAccessError('');
+      if (accessManager.adminAccessSuccess) accessManager.setAdminAccessSuccess('');
+    },
+    onDeliveryAccessInputChange: (value: string) => {
+      accessManager.setDeliveryAccessInput(value);
+      if (accessManager.deliveryAccessError) accessManager.setDeliveryAccessError('');
+      if (accessManager.deliveryAccessSuccess) accessManager.setDeliveryAccessSuccess('');
+    },
+    onAddAdminAccess: () => void accessManager.handleAddAdminAccess(),
+    onRemoveAdminAccess: accessManager.handleRemoveAdminAccess,
+    onAddDeliveryAccess: () => void accessManager.handleAddDeliveryAccess(),
+    onRemoveDeliveryAccess: accessManager.handleRemoveDeliveryAccess,
   };
 
-  const handleOpenStaffProfile = () => {
-    const role: StaffRole = appData.isAdmin ? 'admin' : 'agent';
-    const seededEmail = appData.staffProfileSaved.email || appData.currentUserEmail;
-    setStaffProfileDraft(
-      buildStaffProfileDraft({
-        ...appData.staffProfileSaved,
-        role,
-        email: seededEmail,
-      }),
-    );
-    setStaffProfileError('');
-    setIsStaffProfileSavedToastVisible(false);
-    setAdminAccessError('');
-    setDeliveryAccessError('');
-    setAdminAccessSuccess('');
-    setDeliveryAccessSuccess('');
-    setIsStaffProfileOpen(true);
-  };
+  // --- Early returns for loading / auth / role views ---
 
-  const handleSaveProfile = async () => {
-    if (!appData.currentUserId) {
-      setProfileError('Please sign in to save your profile.');
-      return;
-    }
-
-    setIsProfileSaving(true);
-    setProfileError('');
-    try {
-      const trimmedAddresses = ensureProfileAddresses(profileDraft.addresses).map(address =>
-        address.trim(),
-      );
-      await setDoc(
-        doc(db, 'users', appData.currentUserId),
-        {
-          name: profileDraft.name.trim(),
-          phone: formatPhoneWithPrefix(profileDraft.phone),
-          email: profileDraft.email.trim(),
-          addresses: {
-            address1: trimmedAddresses[0] || '',
-            address2: trimmedAddresses[1] || '',
-            address3: trimmedAddresses[2] || '',
-          },
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true },
-      );
-      setIsProfileSavedToastVisible(true);
-    } catch (error) {
-      console.error('Failed to save customer profile', error);
-      setProfileError('Unable to save profile right now.');
-    } finally {
-      setIsProfileSaving(false);
-    }
-  };
-
-  const handleSaveStaffProfile = async () => {
-    if (!appData.currentUserId) {
-      setStaffProfileError('Please sign in to save your profile.');
-      return;
-    }
-
-    const role: StaffRole = appData.isAdmin ? 'admin' : 'agent';
-    setIsStaffProfileSaving(true);
-    setStaffProfileError('');
-    try {
-      const payload: Record<string, unknown> = {
-        role,
-        name: staffProfileDraft.name.trim(),
-        phone: formatPhoneWithPrefix(staffProfileDraft.phone),
-        email: staffProfileDraft.email.trim(),
-        updatedAt: serverTimestamp(),
-      };
-
-      if (role === 'admin') {
-        payload.adminLocation = staffProfileDraft.adminLocation.trim();
-      }
-
-      if (role === 'agent') {
-        payload.vehicleType = staffProfileDraft.vehicleType;
-        payload.status = staffProfileDraft.status;
-      }
-
-      await setDoc(doc(db, 'users', appData.currentUserId), payload, { merge: true });
-
-      if (role === 'agent') {
-        const normalizedEmail = (staffProfileDraft.email || appData.currentUserEmail || '')
-          .trim()
-          .toLowerCase();
-        if (!normalizedEmail) {
-          throw new Error('Agent email is required');
-        }
-
-        const existingAgentProfile = appData.deliveryAgents.find(agent =>
-          agent.id === normalizedEmail || agent.email?.toLowerCase() === normalizedEmail,
-        );
-        const agentStatusValue =
-          staffProfileDraft.status === 'Offline' ? 'offline' : 'available';
-        const agentPayload: Record<string, unknown> = {
-          name: staffProfileDraft.name.trim(),
-          phone: formatPhoneWithPrefix(staffProfileDraft.phone),
-          email: normalizedEmail,
-          vehicleType: staffProfileDraft.vehicleType,
-          status: agentStatusValue,
-          isActive: agentStatusValue !== 'offline',
-          role: 'delivery',
-          accessOnly: false,
-          updatedAt: serverTimestamp(),
-        };
-
-        if (!existingAgentProfile) {
-          agentPayload.createdAt = serverTimestamp();
-        }
-        await setDoc(doc(db, 'delivery_agents', normalizedEmail), agentPayload, {
-          merge: true,
-        });
-      }
-
-      setIsStaffProfileSavedToastVisible(true);
-    } catch (error) {
-      console.error('Failed to save staff profile', error);
-      setStaffProfileError('Unable to save profile right now.');
-    } finally {
-      setIsStaffProfileSaving(false);
-    }
-  };
-
-  const normalizeAccessEmail = (value: string) => value.trim().toLowerCase();
-
-  const validateAccessEmail = (email: string) => {
-    if (!email) {
-      return 'Enter an email address.';
-    }
-
-    const isValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-    if (!isValid) {
-      return 'Enter a valid email address.';
-    }
-
-    return '';
-  };
-
-  const handleAddAdminAccess = async () => {
-    if (!appData.isMainAdmin) {
-      setAdminAccessError('Only the main admin can add new admins.');
-      return;
-    }
-
-    const normalizedEmail = normalizeAccessEmail(adminAccessInput);
-    const validationError = validateAccessEmail(normalizedEmail);
-    if (validationError) {
-      setAdminAccessError(validationError);
-      return;
-    }
-
-    if (appData.adminAccessEntries.some(entry => entry.email === normalizedEmail)) {
-      setAdminAccessError('This admin already has access.');
-      return;
-    }
-
-    setIsAdminAccessSaving(true);
-    setAdminAccessError('');
-    setAdminAccessSuccess('');
-    try {
-      await setDoc(
-        doc(db, 'admin_access', normalizedEmail),
-        {
-          email: normalizedEmail,
-          role: 'admin',
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true },
-      );
-      setAdminAccessInput('');
-      setAdminAccessSuccess('Admin access added.');
-    } catch (error) {
-      console.error('Failed to add admin access', error);
-      setAdminAccessError('Unable to add admin right now.');
-    } finally {
-      setIsAdminAccessSaving(false);
-    }
-  };
-
-  const handleRemoveAdminAccess = async (entry: AccessEntry) => {
-    if (!appData.isMainAdmin) {
-      setAdminAccessError('Only the main admin can remove admins.');
-      return;
-    }
-
-    setAdminAccessRemovingId(entry.id);
-    setAdminAccessError('');
-    setAdminAccessSuccess('');
-    try {
-      await deleteDoc(doc(db, 'admin_access', entry.id));
-      setAdminAccessSuccess('Admin access removed.');
-    } catch (error) {
-      console.error('Failed to remove admin access', error);
-      setAdminAccessError('Unable to remove admin right now.');
-    } finally {
-      setAdminAccessRemovingId('');
-    }
-  };
-
-  const handleAddDeliveryAccess = async () => {
-    if (!appData.isMainAdmin) {
-      setDeliveryAccessError('Only the main admin can add delivery agents.');
-      return;
-    }
-
-    const normalizedEmail = normalizeAccessEmail(deliveryAccessInput);
-    const validationError = validateAccessEmail(normalizedEmail);
-    if (validationError) {
-      setDeliveryAccessError(validationError);
-      return;
-    }
-
-    if (appData.deliveryAccessEntries.some(entry => entry.email === normalizedEmail)) {
-      setDeliveryAccessError('This delivery agent already has access.');
-      return;
-    }
-
-    setIsDeliveryAccessSaving(true);
-    setDeliveryAccessError('');
-    setDeliveryAccessSuccess('');
-    try {
-      await setDoc(
-        doc(db, 'delivery_agents', normalizedEmail),
-        {
-          email: normalizedEmail,
-          role: 'delivery',
-          accessOnly: true,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true },
-      );
-      setDeliveryAccessInput('');
-      setDeliveryAccessSuccess('Delivery agent access added.');
-    } catch (error) {
-      console.error('Failed to add delivery agent access', error);
-      setDeliveryAccessError('Unable to add delivery agent right now.');
-    } finally {
-      setIsDeliveryAccessSaving(false);
-    }
-  };
-
-  const handleRemoveDeliveryAccess = async (entry: AccessEntry) => {
-    if (!appData.isMainAdmin) {
-      setDeliveryAccessError('Only the main admin can remove delivery agents.');
-      return;
-    }
-
-    setDeliveryAccessRemovingId(entry.id);
-    setDeliveryAccessError('');
-    setDeliveryAccessSuccess('');
-    try {
-      await deleteDoc(doc(db, 'delivery_agents', entry.id));
-      setDeliveryAccessSuccess('Delivery agent access removed.');
-    } catch (error) {
-      console.error('Failed to remove delivery agent access', error);
-      setDeliveryAccessError('Unable to remove delivery agent right now.');
-    } finally {
-      setDeliveryAccessRemovingId('');
-    }
-  };
-
-  if (!appData.isAuthReady) {
-    return <AuthLoadingPage />;
-  }
-
-  if (!appData.isLoggedIn) {
-    return <LoginPage onLogin={loginWithGoogle} />;
-  }
+  if (!appData.isAuthReady) return <AuthLoadingPage />;
+  if (!appData.isLoggedIn) return <LoginPage onLogin={loginWithGoogle} />;
 
   if (appData.isAdmin) {
     return (
@@ -608,7 +265,7 @@ export default function App() {
                 <p className="mt-1 text-sm font-semibold text-accent">Coffee HUB operations</p>
               </div>
             </div>
-            <button onClick={handleOpenStaffProfile} className="coffee-icon-btn" aria-label="Profile">
+            <button onClick={profileManager.handleOpenStaffProfile} className="coffee-icon-btn" aria-label="Profile">
               <User size={18} />
             </button>
           </div>
@@ -633,49 +290,7 @@ export default function App() {
           />
         </main>
 
-        <StaffProfileDrawer
-          isOpen={isStaffProfileOpen}
-          isAdmin={appData.isAdmin}
-          isDeliveryAgent={appData.isDeliveryAgent}
-          isMainAdmin={appData.isMainAdmin}
-          staffProfileDraft={staffProfileDraft}
-          staffProfileError={staffProfileError}
-          isStaffProfileSaving={isStaffProfileSaving}
-          isStaffProfileSavedToastVisible={isStaffProfileSavedToastVisible}
-          adminAccessEntries={appData.adminAccessEntries}
-          deliveryAccessEntries={appData.deliveryAccessEntries}
-          adminAccessInput={adminAccessInput}
-          deliveryAccessInput={deliveryAccessInput}
-          adminAccessError={adminAccessError}
-          deliveryAccessError={deliveryAccessError}
-          adminAccessSuccess={adminAccessSuccess}
-          deliveryAccessSuccess={deliveryAccessSuccess}
-          isAdminAccessSaving={isAdminAccessSaving}
-          isDeliveryAccessSaving={isDeliveryAccessSaving}
-          adminAccessRemovingId={adminAccessRemovingId}
-          deliveryAccessRemovingId={deliveryAccessRemovingId}
-          onClose={() => setIsStaffProfileOpen(false)}
-          onLogout={() => {
-            setIsStaffProfileOpen(false);
-            void orderOperations.handleLogout();
-          }}
-          onSave={() => void handleSaveStaffProfile()}
-          onStaffProfileDraftChange={setStaffProfileDraft}
-          onAdminAccessInputChange={value => {
-            setAdminAccessInput(value);
-            if (adminAccessError) setAdminAccessError('');
-            if (adminAccessSuccess) setAdminAccessSuccess('');
-          }}
-          onDeliveryAccessInputChange={value => {
-            setDeliveryAccessInput(value);
-            if (deliveryAccessError) setDeliveryAccessError('');
-            if (deliveryAccessSuccess) setDeliveryAccessSuccess('');
-          }}
-          onAddAdminAccess={() => void handleAddAdminAccess()}
-          onRemoveAdminAccess={entry => void handleRemoveAdminAccess(entry)}
-          onAddDeliveryAccess={() => void handleAddDeliveryAccess()}
-          onRemoveDeliveryAccess={entry => void handleRemoveDeliveryAccess(entry)}
-        />
+        <StaffProfileDrawer {...staffDrawerProps} />
       </div>
     );
   }
@@ -694,7 +309,7 @@ export default function App() {
                 <p className="mt-1 text-sm font-semibold text-accent">Orders on the move</p>
               </div>
             </div>
-            <button onClick={handleOpenStaffProfile} className="coffee-icon-btn" aria-label="Profile">
+            <button onClick={profileManager.handleOpenStaffProfile} className="coffee-icon-btn" aria-label="Profile">
               <User size={18} />
             </button>
           </div>
@@ -709,56 +324,19 @@ export default function App() {
             isTracking={appData.isAgentTracking}
             lastTrackedLocation={appData.agentLastTrackedLocation}
             orders={appData.adminOrders}
-            onEndDelivery={orderDocId => {
-              void orderOperations.handleEndDelivery(orderDocId);
-            }}
-            onStartDelivery={() => {
-              void orderOperations.handleStartDelivery();
-            }}
+            onEndDelivery={orderDocId => { void orderOperations.handleEndDelivery(orderDocId); }}
+            onStartDelivery={() => { void orderOperations.handleStartDelivery(); }}
             permissionState={appData.agentPermissionState}
             trackerStatus={appData.agentTrackerStatus}
           />
         </main>
 
-        <StaffProfileDrawer
-          isOpen={isStaffProfileOpen}
-          isAdmin={appData.isAdmin}
-          isDeliveryAgent={appData.isDeliveryAgent}
-          isMainAdmin={appData.isMainAdmin}
-          staffProfileDraft={staffProfileDraft}
-          staffProfileError={staffProfileError}
-          isStaffProfileSaving={isStaffProfileSaving}
-          isStaffProfileSavedToastVisible={isStaffProfileSavedToastVisible}
-          adminAccessEntries={appData.adminAccessEntries}
-          deliveryAccessEntries={appData.deliveryAccessEntries}
-          adminAccessInput={adminAccessInput}
-          deliveryAccessInput={deliveryAccessInput}
-          adminAccessError={adminAccessError}
-          deliveryAccessError={deliveryAccessError}
-          adminAccessSuccess={adminAccessSuccess}
-          deliveryAccessSuccess={deliveryAccessSuccess}
-          isAdminAccessSaving={isAdminAccessSaving}
-          isDeliveryAccessSaving={isDeliveryAccessSaving}
-          adminAccessRemovingId={adminAccessRemovingId}
-          deliveryAccessRemovingId={deliveryAccessRemovingId}
-          onClose={() => setIsStaffProfileOpen(false)}
-          onLogout={() => {
-            setIsStaffProfileOpen(false);
-            void orderOperations.handleLogout();
-          }}
-          onSave={() => void handleSaveStaffProfile()}
-          onStaffProfileDraftChange={setStaffProfileDraft}
-          onAdminAccessInputChange={setAdminAccessInput}
-          onDeliveryAccessInputChange={setDeliveryAccessInput}
-          onAddAdminAccess={() => void handleAddAdminAccess()}
-          onRemoveAdminAccess={entry => void handleRemoveAdminAccess(entry)}
-          onAddDeliveryAccess={() => void handleAddDeliveryAccess()}
-          onRemoveDeliveryAccess={entry => void handleRemoveDeliveryAccess(entry)}
-        />
+        <StaffProfileDrawer {...staffDrawerProps} />
       </div>
     );
   }
 
+  // --- Customer view ---
   return (
     <div className="app-shell">
       <header className="fixed left-0 right-0 top-0 z-50 border-b border-white/6 bg-[#120d0b]/78 px-4 py-3 backdrop-blur-xl sm:px-6">
@@ -772,12 +350,11 @@ export default function App() {
               <p className="mt-1 text-sm font-semibold text-accent">Fresh food, brewed fast</p>
             </div>
           </button>
-
           <div className="flex items-center gap-2">
             <div className="hidden rounded-full border border-white/10 bg-white/5 px-3 py-2 text-[11px] font-medium text-ink-muted sm:block">
               {appData.currentUserEmail}
             </div>
-            <button onClick={handleOpenProfile} className="coffee-icon-btn" aria-label="Profile">
+            <button onClick={profileManager.handleOpenProfile} className="coffee-icon-btn" aria-label="Profile">
               <User size={18} />
             </button>
           </div>
@@ -843,6 +420,7 @@ export default function App() {
         {activeTab === 'about' && <AboutPage />}
         {activeTab === 'contact' && <ContactPage />}
       </main>
+
       {activeTab === 'home' && (
         <footer className="mt-12 border-t border-white/5 px-6 pb-32 pt-12">
           <div className="mb-12 grid grid-cols-2 gap-8">
@@ -913,24 +491,22 @@ export default function App() {
       </nav>
 
       <CustomerProfileDrawer
-        isOpen={isProfileOpen}
-        profileDraft={profileDraft}
-        profileError={profileError}
-        isProfileSaving={isProfileSaving}
-        isProfileSavedToastVisible={isProfileSavedToastVisible}
-        isProfileAddressExpanded={isProfileAddressExpanded}
+        isOpen={profileManager.isProfileOpen}
+        profileDraft={profileManager.profileDraft}
+        profileError={profileManager.profileError}
+        isProfileSaving={profileManager.isProfileSaving}
+        isProfileSavedToastVisible={profileManager.isProfileSavedToastVisible}
+        isProfileAddressExpanded={profileManager.isProfileAddressExpanded}
         onClose={() => {
-          setIsProfileOpen(false);
-          setProfileError('');
-          setIsProfileSavedToastVisible(false);
+          profileManager.setIsProfileOpen(false);
         }}
         onLogout={() => {
-          setIsProfileOpen(false);
+          profileManager.setIsProfileOpen(false);
           void orderOperations.handleLogout();
         }}
-        onSave={() => void handleSaveProfile()}
-        onProfileDraftChange={setProfileDraft}
-        onProfileAddressExpandedChange={setIsProfileAddressExpanded}
+        onSave={() => void profileManager.handleSaveProfile()}
+        onProfileDraftChange={profileManager.setProfileDraft}
+        onProfileAddressExpandedChange={profileManager.setIsProfileAddressExpanded}
       />
 
       <CartDrawer
