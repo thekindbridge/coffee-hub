@@ -7,12 +7,13 @@
  */
 import { useCart } from './useCart';
 import { usePaymentFlow } from './usePaymentFlow';
-import type { Offer, Order } from '../../../types';
+import type { Offer, Order, ShopTiming } from '../../../types';
 import type { CustomerProfile } from '../../app/types';
 
 type UseCheckoutFlowParams = {
   currentUserId: string;
   profileSaved: CustomerProfile;
+  shopTiming: ShopTiming;
   findActiveOfferByCode: (couponCode: string) => Promise<Offer | null>;
   onBrowseMenu: () => void;
   onOrderPlaced: (order: Order) => void;
@@ -21,6 +22,7 @@ type UseCheckoutFlowParams = {
 export const useCheckoutFlow = ({
   currentUserId,
   profileSaved,
+  shopTiming,
   findActiveOfferByCode,
   onBrowseMenu,
   onOrderPlaced,
@@ -30,6 +32,7 @@ export const useCheckoutFlow = ({
   const orderFlow = usePaymentFlow({
     currentUserId,
     profileSaved,
+    shopTiming,
     cart: cart.cart,
     cartTotal: cart.cartTotal,
     hasCartItems: cart.hasCartItems,
@@ -89,6 +92,9 @@ export const useCheckoutFlow = ({
     draftOrderId: orderFlow.draftOrderId,
     setDraftOrderId: orderFlow.setDraftOrderId,
     savedAddressOptions: orderFlow.savedAddressOptions,
+    isShopOpen: orderFlow.isShopOpen,
+    shopTimingRangeLabel: orderFlow.shopTimingRangeLabel,
+    shopStatusMessage: orderFlow.shopStatusMessage,
     selectedAddressLabel: orderFlow.selectedAddressLabel,
     checkoutAddressSummary: orderFlow.checkoutAddressSummary,
     checkoutPrimaryActionLabel: orderFlow.checkoutPrimaryActionLabel,

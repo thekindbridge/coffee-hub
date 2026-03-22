@@ -12,6 +12,8 @@ let cachedAdminApp: App | null = null;
 let cachedAdminAuth: Auth | null = null;
 let cachedAdminDb: Firestore | null = null;
 
+const normalizeEmail = (value: string) => value.trim().toLowerCase();
+
 const getRequiredEnv = (key: string, fallbacks: string[] = []) => {
   for (const candidate of [process.env[key], ...fallbacks]) {
     if (typeof candidate !== 'string') {
@@ -153,6 +155,9 @@ const toAuthApiError = (error: unknown) => {
   return null;
 };
 
+const getConfiguredAdminEmail = () =>
+  normalizeEmail(process.env.ADMIN_EMAIL || process.env.VITE_ADMIN_EMAIL || '');
+
 export const verifyRequestUser = async (
   request: VercelRequest,
   expectedUserId?: string,
@@ -177,4 +182,24 @@ export const verifyRequestUser = async (
     console.error('Firebase Admin token verification failed', error);
     throw new ApiError(401, 'Invalid Firebase authentication token.');
   }
+};
+
+export const verifyAdminRequest = async (request: VercelRequest) => {
+  const decodedToken = await verifyRequestUser(request);
+  const normalizedEmail = normalizeEmail(decodedToken.email || '');
+
+  if (!normalizedEmail) {
+    throw new ApiError(403, 'Admin access requires an email-backed account.');
+  }
+
+  if (normalizedEmail === getConfiguredAdminEmail()) {
+    return decodedToken;
+  }
+
+  const adminAccessDoc = await getAdminDb().collection('admin_access').doc(normalizedEmail).get();
+  if (!adminAccessDoc.exists) {
+    throw new ApiError(403, 'Admin access required.');
+  }
+
+  return decodedToken;
 };

@@ -20,6 +20,7 @@ import { useRealtimeAppData } from './features/app/hooks/useRealtimeAppData';
 import { useOrderOperations } from './features/app/hooks/useOrderOperations';
 import { useProfileManager } from './features/app/hooks/useProfileManager';
 import { useAccessManager } from './features/app/hooks/useAccessManager';
+import { useShopTimingManager } from './features/app/hooks/useShopTimingManager';
 import type { CustomerTab } from './features/app/types';
 import { useCheckoutFlow } from './features/customer/hooks/useCheckoutFlow';
 import { AuthLoadingPage } from './features/customer/pages/AuthLoadingPage';
@@ -61,6 +62,7 @@ export default function App() {
   const checkout = useCheckoutFlow({
     currentUserId: appData.currentUserId,
     profileSaved: appData.profileSaved,
+    shopTiming: appData.shopTiming,
     findActiveOfferByCode,
     onBrowseMenu: () => setActiveTab('menu'),
     onOrderPlaced: nextOrder => {
@@ -104,6 +106,12 @@ export default function App() {
     isMainAdmin: appData.isMainAdmin,
     adminAccessEntries: appData.adminAccessEntries,
     deliveryAccessEntries: appData.deliveryAccessEntries,
+  });
+
+  const shopTimingManager = useShopTimingManager({
+    isAdmin: appData.isAdmin,
+    isDrawerOpen: profileManager.isStaffProfileOpen,
+    shopTiming: appData.shopTiming,
   });
 
   // Reset customer-facing state on logout
@@ -210,6 +218,11 @@ export default function App() {
     staffProfileError: profileManager.staffProfileError,
     isStaffProfileSaving: profileManager.isStaffProfileSaving,
     isStaffProfileSavedToastVisible: profileManager.isStaffProfileSavedToastVisible,
+    shopTiming: appData.shopTiming,
+    shopTimingDraft: shopTimingManager.shopTimingDraft,
+    shopTimingError: shopTimingManager.shopTimingError,
+    shopTimingSuccess: shopTimingManager.shopTimingSuccess,
+    isShopTimingSaving: shopTimingManager.isShopTimingSaving,
     adminAccessEntries: appData.adminAccessEntries,
     deliveryAccessEntries: appData.deliveryAccessEntries,
     adminAccessInput: accessManager.adminAccessInput,
@@ -229,6 +242,8 @@ export default function App() {
     },
     onSave: () => void profileManager.handleSaveStaffProfile(),
     onStaffProfileDraftChange: profileManager.setStaffProfileDraft,
+    onShopTimingDraftChange: shopTimingManager.handleShopTimingDraftChange,
+    onSaveShopTiming: () => void shopTimingManager.handleSaveShopTiming(),
     onAdminAccessInputChange: (value: string) => {
       accessManager.setAdminAccessInput(value);
       if (accessManager.adminAccessError) accessManager.setAdminAccessError('');
@@ -524,6 +539,9 @@ export default function App() {
         selectedAddressIndex={checkout.selectedAddressIndex}
         setSelectedAddressIndex={checkout.setSelectedAddressIndex}
         savedAddressOptions={checkout.savedAddressOptions}
+        isShopOpen={checkout.isShopOpen}
+        shopTimingRangeLabel={checkout.shopTimingRangeLabel}
+        shopStatusMessage={checkout.shopStatusMessage}
         selectedAddressLabel={checkout.selectedAddressLabel}
         checkoutAddressSummary={checkout.checkoutAddressSummary}
         isCheckoutAddressListOpen={checkout.isCheckoutAddressListOpen}

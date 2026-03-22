@@ -18,6 +18,7 @@ import { useMenuData } from './useMenuData';
 import { useOrdersData } from './useOrdersData';
 import { useProfileData } from './useProfileData';
 import { useDeliveryData } from './useDeliveryData';
+import { useShopTiming } from './useShopTiming';
 import { ADMIN_EMAIL } from '../lib/constants';
 
 export const useRealtimeAppData = () => {
@@ -28,6 +29,8 @@ export const useRealtimeAppData = () => {
   const menu = useMenuData(auth.isLoggedIn);
 
   const orders = useOrdersData(roles.isAdmin, roles.isDeliveryAgent, auth.currentUserId);
+
+  const shopTiming = useShopTiming(auth.isLoggedIn);
 
   const profiles = useProfileData(
     auth.currentUserId,
@@ -62,6 +65,10 @@ export const useRealtimeAppData = () => {
     // Menu
     menu: menu.menu,
     isMenuLoading: menu.isMenuLoading,
+
+    // Shop timing
+    shopTiming: shopTiming.shopTiming,
+    isShopTimingLoading: shopTiming.isShopTimingLoading,
 
     // Orders
     adminOrders: orders.adminOrders,

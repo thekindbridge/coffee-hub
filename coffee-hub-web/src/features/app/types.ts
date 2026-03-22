@@ -35,6 +35,11 @@ export type AccessEntry = {
   accessOnly?: boolean;
 };
 
+export type ShopTimingDraft = {
+  openTime: string;
+  closeTime: string;
+};
+
 export type CheckoutStep = 'cart' | 'details' | 'success';
 export type SelectedAddressIndex = number | 'new';
 

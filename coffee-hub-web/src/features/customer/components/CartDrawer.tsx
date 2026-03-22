@@ -40,6 +40,9 @@ type CartDrawerProps = {
   selectedAddressIndex: SelectedAddressIndex;
   setSelectedAddressIndex: Dispatch<SetStateAction<SelectedAddressIndex>>;
   savedAddressOptions: SavedAddressOption[];
+  isShopOpen: boolean;
+  shopTimingRangeLabel: string;
+  shopStatusMessage: string;
   selectedAddressLabel: string;
   checkoutAddressSummary: string;
   isCheckoutAddressListOpen: boolean;
@@ -86,6 +89,9 @@ export const CartDrawer = ({
   selectedAddressIndex,
   setSelectedAddressIndex,
   savedAddressOptions,
+  isShopOpen,
+  shopTimingRangeLabel,
+  shopStatusMessage,
   selectedAddressLabel,
   checkoutAddressSummary,
   isCheckoutAddressListOpen,
@@ -152,6 +158,27 @@ export const CartDrawer = ({
           </div>
 
           <div className="flex-grow space-y-5 overflow-y-auto px-5 pb-5 pt-4">
+            <div
+              className={`rounded-[22px] border px-4 py-3 text-sm ${
+                isShopOpen
+                  ? 'border-emerald-400/20 bg-emerald-500/10 text-emerald-200'
+                  : 'border-primary/25 bg-primary/10 text-primary'
+              }`}
+            >
+              <div className="flex items-start gap-3">
+                <Clock size={16} className="mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="font-semibold">
+                    {isShopOpen ? 'Shop open now' : 'Shop closed right now'}
+                  </p>
+                  <p className="mt-1 text-xs leading-5 opacity-90">{shopStatusMessage}</p>
+                  <p className="mt-1 text-xs leading-5 opacity-75">
+                    Current timing: {shopTimingRangeLabel}
+                  </p>
+                </div>
+              </div>
+            </div>
+
             {checkoutStep === 'cart' && (
               <>
                 {!hasCartItems ? (
@@ -569,7 +596,7 @@ export const CartDrawer = ({
                   </button>
                   <button
                     onClick={onPlaceOrder}
-                    disabled={isPlacingOrder || !hasCartItems}
+                    disabled={isPlacingOrder || !hasCartItems || !isShopOpen}
                     className="coffee-btn-primary flex-grow justify-center disabled:opacity-70"
                   >
                     {checkoutPrimaryActionLabel}

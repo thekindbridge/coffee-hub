@@ -4,6 +4,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 import { ApiError } from './_lib/errors.js';
 import { getAdminDb, verifyRequestUser } from './_lib/firebaseAdmin.js';
+import { assertShopIsOpen } from './_lib/shopTiming.js';
 import {
   assertPricingMatches,
   parseCreateOrderBody,
@@ -174,6 +175,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
       return;
     }
 
+    await assertShopIsOpen(adminDb);
     const pricing = await recalculatePricing(adminDb, orderDraft);
     assertPricingMatches(orderDraft, pricing);
 

@@ -1,3 +1,7 @@
+import type { ShopTiming } from '../shared/shopTiming';
+
+export type { ShopTiming } from '../shared/shopTiming';
+
 export interface MenuItem {
   id: string;
   name: string;
@@ -153,4 +157,9 @@ export interface CheckoutOrderDraft {
 
 export interface CreateOrderResponse {
   order: Order;
+}
+
+export interface UpdateShopTimingResponse {
+  message: string;
+  shopTiming: ShopTiming;
 }

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { Dispatch, SetStateAction } from 'react';
+import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import {
   doc,
   runTransaction,
@@ -15,6 +15,7 @@ import type {
   CheckoutOrderItemPayload,
   Offer,
   Order,
+  ShopTiming,
 } from '../../../types';
 import {
   STANDARD_DELIVERY_FEE,
@@ -25,10 +26,16 @@ import type {
   SavedAddressOption,
   SelectedAddressIndex,
 } from '../../app/types';
+import {
+  buildShopClosedMessage,
+  formatShopTimingRange,
+  isShopOpen,
+} from '../../../../shared/shopTiming';
 
 type UsePaymentFlowParams = {
   currentUserId: string;
   profileSaved: CustomerProfile;
+  shopTiming: ShopTiming;
   cart: CartItem[];
   cartTotal: number;
   hasCartItems: boolean;
@@ -62,16 +69,17 @@ export type PaymentFlowState = {
   draftOrderId: string;
   setDraftOrderId: Dispatch<SetStateAction<string>>;
   savedAddressOptions: SavedAddressOption[];
+  isShopOpen: boolean;
+  shopTimingRangeLabel: string;
+  shopStatusMessage: string;
   selectedAddressLabel: string;
   checkoutAddressSummary: string;
   checkoutPrimaryActionLabel: string;
-  hasCheckoutAddressSelectionRef: React.MutableRefObject<boolean>;
+  hasCheckoutAddressSelectionRef: MutableRefObject<boolean>;
   handleBrowseMenu: () => void;
   handleCaptureCustomerLocation: () => Promise<void>;
   handlePlaceOrder: () => Promise<void>;
 };
-
-import type React from 'react';
 
 const getCurrentBrowserLocation = () =>
   new Promise<CheckoutCustomerDetails['location']>((resolve, reject) => {
@@ -118,6 +126,7 @@ const getNextOrderId = async (): Promise<string> => {
 export const usePaymentFlow = ({
   currentUserId,
   profileSaved,
+  shopTiming,
   cart,
   cartTotal,
   hasCartItems,
@@ -146,6 +155,7 @@ export const usePaymentFlow = ({
   const [customerLocationError, setCustomerLocationError] = useState('');
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [draftOrderId, setDraftOrderId] = useState('');
+  const [currentTime, setCurrentTime] = useState(() => Date.now());
   const hasCheckoutAddressSelectionRef = useRef(false);
 
   // Derived address options from saved profile
@@ -176,9 +186,25 @@ export const usePaymentFlow = ({
       ? customerDetails.address
       : selectedSavedAddress || customerDetails.address || primaryAddressOption?.value || '';
 
+  const shopTimingRangeLabel = useMemo(
+    () => formatShopTimingRange(shopTiming.openTime, shopTiming.closeTime),
+    [shopTiming.closeTime, shopTiming.openTime],
+  );
+
+  const isShopOpenNow = useMemo(
+    () => isShopOpen(shopTiming.openTime, shopTiming.closeTime, new Date(currentTime)),
+    [currentTime, shopTiming.closeTime, shopTiming.openTime],
+  );
+
+  const shopStatusMessage = isShopOpenNow
+    ? `Orders accepted between ${shopTimingRangeLabel}.`
+    : buildShopClosedMessage(shopTiming.openTime, shopTiming.closeTime);
+
   const checkoutPrimaryActionLabel = isPlacingOrder
     ? 'Placing order...'
-    : 'Place order';
+    : isShopOpenNow
+      ? 'Place order'
+      : 'Shop closed';
 
   // Auto-select saved address on first load
   useEffect(() => {
@@ -225,6 +251,14 @@ export const usePaymentFlow = ({
     setDraftOrderId('');
     setCheckoutError('');
   }, [cart.length, checkoutStep]);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 60000);
+
+    return () => window.clearInterval(intervalId);
+  }, []);
 
   const captureLocation = async () => {
     setIsLocatingCustomer(true);
@@ -354,7 +388,7 @@ export const usePaymentFlow = ({
       }
 
       const orderResponse = await postApi<CreateOrderResponse>(
-        '/api/create-order',
+        '/api/orders/create',
         { orderDraft: draft, userId: currentUserId },
         idToken,
       );
@@ -370,6 +404,11 @@ export const usePaymentFlow = ({
   };
 
   const handlePlaceOrder = async () => {
+    if (!isShopOpenNow) {
+      setCheckoutError(buildShopClosedMessage(shopTiming.openTime, shopTiming.closeTime));
+      return;
+    }
+
     const preparedOrder = await buildDraft();
     if (!preparedOrder) return;
     await placeCodOrder(preparedOrder.order);
@@ -394,6 +433,9 @@ export const usePaymentFlow = ({
     draftOrderId,
     setDraftOrderId,
     savedAddressOptions,
+    isShopOpen: isShopOpenNow,
+    shopTimingRangeLabel,
+    shopStatusMessage,
     selectedAddressLabel,
     checkoutAddressSummary,
     checkoutPrimaryActionLabel,
