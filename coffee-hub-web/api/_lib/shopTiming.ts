@@ -2,8 +2,8 @@ import type { Firestore } from 'firebase-admin/firestore';
 import { ApiError } from './errors.js';
 import {
   DEFAULT_SHOP_TIMING,
-  SHOP_TIMEZONE,
   buildShopClosedMessage,
+  getCurrentShopHour,
   isShopOpenAtHour,
   sanitizeShopTiming,
   type ShopTiming,
@@ -38,25 +38,9 @@ export const loadShopTiming = async (db: Firestore): Promise<ShopTiming> => {
   });
 };
 
-export const getCurrentIstHour = (currentDate: Date = new Date()) => {
-  const formatter = new Intl.DateTimeFormat('en-IN', {
-    hour: 'numeric',
-    hour12: false,
-    hourCycle: 'h23',
-    timeZone: SHOP_TIMEZONE,
-  });
-  const hourPart = formatter
-    .formatToParts(currentDate)
-    .find(part => part.type === 'hour')
-    ?.value;
-  const hour = Number(hourPart);
-
-  return Number.isInteger(hour) ? hour : currentDate.getUTCHours();
-};
-
 export const assertShopIsOpen = async (db: Firestore, currentDate: Date = new Date()) => {
   const shopTiming = await loadShopTiming(db);
-  const currentHour = getCurrentIstHour(currentDate);
+  const currentHour = getCurrentShopHour(currentDate);
 
   if (!isShopOpenAtHour(currentHour, shopTiming.openTime, shopTiming.closeTime)) {
     throw new ApiError(

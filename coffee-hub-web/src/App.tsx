@@ -34,7 +34,9 @@ import { ContactPage } from './features/customer/pages/ContactPage';
 import { CustomerProfileDrawer } from './features/customer/components/CustomerProfileDrawer';
 import { CartDrawer } from './features/customer/components/CartDrawer';
 import { BrewingOverlay } from './features/customer/components/BrewingOverlay';
+import { ShopStatusBanner } from './features/customer/components/ShopStatusBanner';
 import { StaffProfileDrawer } from './features/staff/components/StaffProfileDrawer';
+import { buildShopAvailabilityMessage } from '../shared/shopTiming';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<CustomerTab>('home');
@@ -179,6 +181,11 @@ export default function App() {
       }),
     [appData.menu, searchQuery, selectedCategory],
   );
+  const shopAvailabilityMessage = useMemo(
+    () => buildShopAvailabilityMessage(appData.shopTiming.openTime),
+    [appData.shopTiming.openTime],
+  );
+  const shouldShowShopClosedBanner = !appData.isShopTimingLoading && !checkout.isShopOpen;
 
   const handleTrackOrderLookup = () => {
     const orderId = trackingOrderId.trim().toUpperCase();
@@ -376,12 +383,23 @@ export default function App() {
       </header>
 
       <main className="mx-auto max-w-screen-md">
+        {shouldShowShopClosedBanner && (
+          <div className="px-4 pb-1 pt-20 sm:px-6">
+            <ShopStatusBanner
+              openTime={appData.shopTiming.openTime}
+              closeTime={appData.shopTiming.closeTime}
+            />
+          </div>
+        )}
+
         {activeTab === 'home' && (
           <HomePage
             menu={appData.menu as MenuItem[]}
             activeOffers={activeOffers}
             isMenuLoading={appData.isMenuLoading}
             cartQuantityById={checkout.cartQuantityById}
+            isShopOpen={checkout.isShopOpen}
+            shopAvailabilityMessage={shopAvailabilityMessage}
             onAddToCart={checkout.handleAddToCart}
             onOpenMenu={() => setActiveTab('menu')}
             onOpenOffers={() => setActiveTab('offers')}
@@ -395,6 +413,8 @@ export default function App() {
             isMenuLoading={appData.isMenuLoading}
             filteredMenu={filteredMenu}
             cartQuantityById={checkout.cartQuantityById}
+            isShopOpen={checkout.isShopOpen}
+            shopAvailabilityMessage={shopAvailabilityMessage}
             onCategoryChange={setSelectedCategory}
             onSearchChange={setSearchQuery}
             onAddToCart={checkout.handleAddToCart}

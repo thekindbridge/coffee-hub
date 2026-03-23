@@ -162,18 +162,18 @@ export const CartDrawer = ({
               className={`rounded-[22px] border px-4 py-3 text-sm ${
                 isShopOpen
                   ? 'border-emerald-400/20 bg-emerald-500/10 text-emerald-200'
-                  : 'border-primary/25 bg-primary/10 text-primary'
+                  : 'border-[#f4c16e]/24 bg-[linear-gradient(135deg,rgba(244,193,110,0.14),rgba(68,45,28,0.82))] text-[#fff0d5]'
               }`}
             >
               <div className="flex items-start gap-3">
                 <Clock size={16} className="mt-0.5 flex-shrink-0" />
                 <div>
                   <p className="font-semibold">
-                    {isShopOpen ? 'Shop open now' : 'Shop closed right now'}
+                    {isShopOpen ? 'Shop open now' : 'Orders paused for now'}
                   </p>
                   <p className="mt-1 text-xs leading-5 opacity-90">{shopStatusMessage}</p>
                   <p className="mt-1 text-xs leading-5 opacity-75">
-                    Current timing: {shopTimingRangeLabel}
+                    Ordering hours: {shopTimingRangeLabel}
                   </p>
                 </div>
               </div>
@@ -302,6 +302,13 @@ export const CartDrawer = ({
 
             {checkoutStep === 'details' && (
               <div className="space-y-5">
+                {!isShopOpen && (
+                  <div className="rounded-[24px] border border-[#f4c16e]/24 bg-[linear-gradient(135deg,rgba(244,193,110,0.12),rgba(65,43,26,0.74))] px-4 py-3 text-sm text-[#fff0d5]">
+                    <p className="font-semibold text-accent">Ordering update</p>
+                    <p className="mt-1 text-xs leading-5 text-[#f5ddbb]">{shopStatusMessage}</p>
+                  </div>
+                )}
+
                 <div className="coffee-surface-soft rounded-[26px] p-4">
                   <div className="flex items-center justify-between">
                     <div>

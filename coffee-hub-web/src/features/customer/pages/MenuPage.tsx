@@ -10,6 +10,8 @@ type MenuPageProps = {
   isMenuLoading: boolean;
   filteredMenu: MenuItem[];
   cartQuantityById: Map<string, number>;
+  isShopOpen: boolean;
+  shopAvailabilityMessage: string;
   onCategoryChange: (category: string) => void;
   onSearchChange: (value: string) => void;
   onAddToCart: (item: MenuItem, delta: number) => void;
@@ -22,6 +24,8 @@ export const MenuPage = ({
   isMenuLoading,
   filteredMenu,
   cartQuantityById,
+  isShopOpen,
+  shopAvailabilityMessage,
   onCategoryChange,
   onSearchChange,
   onAddToCart,
@@ -76,6 +80,8 @@ export const MenuPage = ({
                 key={item.id}
                 item={item}
                 cartQuantity={cartQuantityById.get(item.id) || 0}
+                isShopOpen={isShopOpen}
+                shopAvailabilityMessage={shopAvailabilityMessage}
                 onAdd={onAddToCart}
               />
             ))}

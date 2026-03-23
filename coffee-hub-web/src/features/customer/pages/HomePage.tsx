@@ -23,6 +23,8 @@ type HomePageProps = {
   activeOffers: Offer[];
   isMenuLoading: boolean;
   cartQuantityById: Map<string, number>;
+  isShopOpen: boolean;
+  shopAvailabilityMessage: string;
   onAddToCart: (item: MenuItem, delta: number) => void;
   onOpenMenu: () => void;
   onOpenOffers: () => void;
@@ -33,6 +35,8 @@ export const HomePage = ({
   activeOffers,
   isMenuLoading,
   cartQuantityById,
+  isShopOpen,
+  shopAvailabilityMessage,
   onAddToCart,
   onOpenMenu,
   onOpenOffers,
@@ -82,9 +86,9 @@ export const HomePage = ({
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
-            <button onClick={onOpenMenu} className="coffee-btn-primary">
+            <button onClick={onOpenMenu} className={isShopOpen ? 'coffee-btn-primary' : 'coffee-btn-secondary'}>
               <ShoppingBag size={16} />
-              <span>Order now</span>
+              <span>{isShopOpen ? 'Order now' : 'Browse menu'}</span>
             </button>
             <button onClick={onOpenOffers} className="coffee-btn-secondary">
               <BadgePercent size={16} />
@@ -154,6 +158,8 @@ export const HomePage = ({
                   <MenuItemCard
                     item={item}
                     cartQuantity={cartQuantityById.get(item.id) || 0}
+                    isShopOpen={isShopOpen}
+                    shopAvailabilityMessage={shopAvailabilityMessage}
                     onAdd={onAddToCart}
                   />
                 </div>

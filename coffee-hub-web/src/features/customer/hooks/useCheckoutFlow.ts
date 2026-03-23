@@ -7,7 +7,7 @@
  */
 import { useCart } from './useCart';
 import { usePaymentFlow } from './usePaymentFlow';
-import type { Offer, Order, ShopTiming } from '../../../types';
+import type { MenuItem, Offer, Order, ShopTiming } from '../../../types';
 import type { CustomerProfile } from '../../app/types';
 
 type UseCheckoutFlowParams = {
@@ -47,6 +47,14 @@ export const useCheckoutFlow = ({
     onOrderPlaced,
   });
 
+  const handleAddToCart = (item: MenuItem, delta: number) => {
+    if (delta > 0 && !orderFlow.isShopOpen) {
+      return;
+    }
+
+    cart.handleAddToCart(item, delta);
+  };
+
   return {
     // Cart
     cart: cart.cart,
@@ -68,7 +76,7 @@ export const useCheckoutFlow = ({
     discountAmount: cart.discountAmount,
     deliveryFee: cart.deliveryFee,
     payableCartTotal: cart.payableCartTotal,
-    handleAddToCart: cart.handleAddToCart,
+    handleAddToCart,
     handleRemoveFromCart: cart.handleRemoveFromCart,
     handleApplyCoupon: cart.handleApplyCoupon,
     handleRemoveCoupon: cart.handleRemoveCoupon,

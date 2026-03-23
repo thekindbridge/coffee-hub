@@ -18,6 +18,13 @@ const timeFormatter = new Intl.DateTimeFormat('en-IN', {
   timeZone: 'UTC',
 });
 
+const shopHourFormatter = new Intl.DateTimeFormat('en-IN', {
+  hour: 'numeric',
+  hour12: false,
+  hourCycle: 'h23',
+  timeZone: SHOP_TIMEZONE,
+});
+
 const isValidHour = (value: unknown): value is number =>
   typeof value === 'number' &&
   Number.isInteger(value) &&
@@ -71,7 +78,26 @@ export const formatShopTimingRange = (openTime: number, closeTime: number) => {
 };
 
 export const buildShopClosedMessage = (openTime: number, closeTime: number) =>
-  `We are closed. Please order between ${formatShopTimingRange(openTime, closeTime)}.`;
+  `Our shop is currently closed. Please place your order between ${formatShopTimingRange(openTime, closeTime)}.`;
+
+export const buildShopClosedBannerMessage = (openTime: number) =>
+  `Dear Customer, our shop is currently closed. We will reopen at ${formatShopHour(openTime)}. Thank you for your patience.`;
+
+export const buildCheckoutClosedMessage = (openTime: number) =>
+  `Shop is currently closed. Orders will be accepted after ${formatShopHour(openTime)}.`;
+
+export const buildShopAvailabilityMessage = (openTime: number) =>
+  `Available after ${formatShopHour(openTime)}`;
+
+export const getCurrentShopHour = (currentDate: Date = new Date()) => {
+  const hourPart = shopHourFormatter
+    .formatToParts(currentDate)
+    .find(part => part.type === 'hour')
+    ?.value;
+  const hour = Number(hourPart);
+
+  return Number.isInteger(hour) ? hour : currentDate.getUTCHours();
+};
 
 export const isShopOpenAtHour = (currentHour: number, openTime: number, closeTime: number) => {
   if (!Number.isInteger(currentHour) || currentHour < 0 || currentHour > 23) {
@@ -86,4 +112,4 @@ export const isShopOpen = (
   openTime: number,
   closeTime: number,
   currentDate: Date = new Date(),
-) => isShopOpenAtHour(currentDate.getHours(), openTime, closeTime);
+) => isShopOpenAtHour(getCurrentShopHour(currentDate), openTime, closeTime);

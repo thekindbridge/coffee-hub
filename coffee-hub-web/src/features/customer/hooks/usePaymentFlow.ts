@@ -27,7 +27,9 @@ import type {
   SelectedAddressIndex,
 } from '../../app/types';
 import {
-  buildShopClosedMessage,
+  buildCheckoutClosedMessage,
+  buildShopAvailabilityMessage,
+  formatShopHour,
   formatShopTimingRange,
   isShopOpen,
 } from '../../../../shared/shopTiming';
@@ -197,14 +199,14 @@ export const usePaymentFlow = ({
   );
 
   const shopStatusMessage = isShopOpenNow
-    ? `Orders accepted between ${shopTimingRangeLabel}.`
-    : buildShopClosedMessage(shopTiming.openTime, shopTiming.closeTime);
+    ? `Now accepting orders until ${formatShopHour(shopTiming.closeTime)}.`
+    : buildCheckoutClosedMessage(shopTiming.openTime);
 
   const checkoutPrimaryActionLabel = isPlacingOrder
     ? 'Placing order...'
     : isShopOpenNow
       ? 'Place order'
-      : 'Shop closed';
+      : buildShopAvailabilityMessage(shopTiming.openTime);
 
   // Auto-select saved address on first load
   useEffect(() => {
@@ -405,7 +407,7 @@ export const usePaymentFlow = ({
 
   const handlePlaceOrder = async () => {
     if (!isShopOpenNow) {
-      setCheckoutError(buildShopClosedMessage(shopTiming.openTime, shopTiming.closeTime));
+      setCheckoutError(buildCheckoutClosedMessage(shopTiming.openTime));
       return;
     }
 
