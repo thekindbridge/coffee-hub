@@ -10,6 +10,7 @@ type MenuPageProps = {
   isMenuLoading: boolean;
   filteredMenu: MenuItem[];
   cartQuantityById: Map<string, number>;
+  hasStatusBanner: boolean;
   isShopOpen: boolean;
   shopAvailabilityMessage: string;
   onCategoryChange: (category: string) => void;
@@ -24,13 +25,19 @@ export const MenuPage = ({
   isMenuLoading,
   filteredMenu,
   cartQuantityById,
+  hasStatusBanner,
   isShopOpen,
   shopAvailabilityMessage,
   onCategoryChange,
   onSearchChange,
   onAddToCart,
 }: MenuPageProps) => (
-  <div id="menu-section" className="px-4 pb-28 pt-20 sm:px-6">
+  <div
+    id="menu-section"
+    className={`px-4 pb-28 sm:px-6 ${
+      hasStatusBanner ? 'pt-2 sm:pt-3' : 'pt-20'
+    }`}
+  >
     <div className="mx-auto max-w-screen-md">
       <div className="sticky top-[72px] z-30 rounded-[28px] border border-white/8 bg-[#0f0b09]/88 px-3 py-3 backdrop-blur-xl">
         <div className="relative mb-3">

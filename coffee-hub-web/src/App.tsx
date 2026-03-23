@@ -384,7 +384,7 @@ export default function App() {
 
       <main className="mx-auto max-w-screen-md">
         {shouldShowShopClosedBanner && (
-          <div className="px-4 pb-1 pt-20 sm:px-6">
+          <div className="px-4 pt-20 sm:px-6">
             <ShopStatusBanner
               openTime={appData.shopTiming.openTime}
               closeTime={appData.shopTiming.closeTime}
@@ -398,6 +398,7 @@ export default function App() {
             activeOffers={activeOffers}
             isMenuLoading={appData.isMenuLoading}
             cartQuantityById={checkout.cartQuantityById}
+            hasStatusBanner={shouldShowShopClosedBanner}
             isShopOpen={checkout.isShopOpen}
             shopAvailabilityMessage={shopAvailabilityMessage}
             onAddToCart={checkout.handleAddToCart}
@@ -413,6 +414,7 @@ export default function App() {
             isMenuLoading={appData.isMenuLoading}
             filteredMenu={filteredMenu}
             cartQuantityById={checkout.cartQuantityById}
+            hasStatusBanner={shouldShowShopClosedBanner}
             isShopOpen={checkout.isShopOpen}
             shopAvailabilityMessage={shopAvailabilityMessage}
             onCategoryChange={setSelectedCategory}

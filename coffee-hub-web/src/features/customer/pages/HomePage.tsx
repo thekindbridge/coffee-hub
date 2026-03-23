@@ -23,6 +23,7 @@ type HomePageProps = {
   activeOffers: Offer[];
   isMenuLoading: boolean;
   cartQuantityById: Map<string, number>;
+  hasStatusBanner: boolean;
   isShopOpen: boolean;
   shopAvailabilityMessage: string;
   onAddToCart: (item: MenuItem, delta: number) => void;
@@ -35,6 +36,7 @@ export const HomePage = ({
   activeOffers,
   isMenuLoading,
   cartQuantityById,
+  hasStatusBanner,
   isShopOpen,
   shopAvailabilityMessage,
   onAddToCart,
@@ -42,7 +44,11 @@ export const HomePage = ({
   onOpenOffers,
 }: HomePageProps) => (
   <div className="pb-12 sm:pb-16">
-    <section className="relative overflow-hidden px-4 pt-20 sm:px-6">
+    <section
+      className={`relative overflow-hidden px-4 sm:px-6 ${
+        hasStatusBanner ? 'pt-2 sm:pt-3' : 'pt-20'
+      }`}
+    >
       <motion.div
         initial={{ opacity: 0, y: 18 }}
         animate={{ opacity: 1, y: 0 }}
