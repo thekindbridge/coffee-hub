@@ -1,6 +1,5 @@
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import {
-  deleteField,
   doc,
   serverTimestamp,
   setDoc,
@@ -13,13 +12,19 @@ import {
   type AgentTrackerPermissionState,
   type AgentTrackerStatus,
 } from '../../../agent/agentTracker';
+import { postApi } from '../../../utils/apiClient';
+import {
+  getOrderStatusLabel,
+  normalizeOrderStatusCode,
+} from '../../../../shared/orderStatus';
 import type {
   DeliveryAgent,
   DeliveryLocation,
   Order,
+  OrderStatusCode,
+  UpdateOrderStatusResponse,
 } from '../../../types';
 import { DEFAULT_TRACKER_STATUS } from '../lib/constants';
-import { normalizeOrderStatus } from '../lib/firestoreMappers';
 
 type UseOrderOperationsParams = {
   adminOrders: Order[];
@@ -62,6 +67,23 @@ export const useOrderOperations = ({
   setAgentLastTrackedLocation,
   onAfterLogout,
 }: UseOrderOperationsParams) => {
+  const replaceOrderLocalState = (nextOrder: Order) => {
+    const mergeOrder = (order: Order) => (
+      order.doc_id === nextOrder.doc_id
+        ? {
+            ...nextOrder,
+            items: nextOrder.items && nextOrder.items.length > 0
+              ? nextOrder.items
+              : order.items,
+          }
+        : order
+    );
+
+    setAdminOrders(prev => prev.map(mergeOrder));
+    setUserOrders(prev => prev.map(mergeOrder));
+    setOrderStatus(prev => (prev && prev.doc_id === nextOrder.doc_id ? mergeOrder(prev) : prev));
+  };
+
   const applyOrderLocalUpdate = (
     orderDocId: string,
     updater: (order: Order) => Order,
@@ -83,32 +105,17 @@ export const useOrderOperations = ({
     accuracy: location.accuracy ?? null,
   });
 
-  const toStoredOrderStatus = (status: Order['status']) => {
-    if (status === 'Preparing') {
-      return 'PREPARING';
-    }
-
-    if (status === 'Out for Delivery') {
-      return 'OUT_FOR_DELIVERY';
-    }
-
-    if (status === 'Delivered') {
-      return 'DELIVERED';
-    }
-
-    return 'PLACED';
-  };
-
   const markOrderDelivered = async (
     order: Order,
     finalLocation?: DeliveryLocation | null,
   ) => {
     const batch = writeBatch(db);
     batch.update(doc(db, 'orders', order.doc_id), {
+      status: 'DELIVERED',
       orderStatus: 'DELIVERED',
-      status: deleteField(),
       deliveredAt: serverTimestamp(),
       deliveryDeliveredAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
     });
     batch.set(
       doc(db, 'delivery_sessions', order.id),
@@ -168,8 +175,11 @@ export const useOrderOperations = ({
     applyOrderLocalUpdate(order.doc_id, currentOrder => ({
       ...currentOrder,
       status: 'Delivered',
+      status_code: 'DELIVERED',
+      rejection_reason: '',
       delivery_delivered_at:
         currentOrder.delivery_delivered_at || new Date().toISOString(),
+      updated_at: new Date().toISOString(),
     }));
   };
 
@@ -224,10 +234,11 @@ export const useOrderOperations = ({
 
     const nowIso = new Date().toISOString();
     const orderDeliveryUpdate: Record<string, unknown> = {
+      status: 'OUT_FOR_DELIVERY',
       orderStatus: 'OUT_FOR_DELIVERY',
-      status: deleteField(),
       outForDeliveryAt: serverTimestamp(),
       deliveryOutForDeliveryAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
     };
     if (!currentDeliveryOrder.delivery_assigned_at) {
       orderDeliveryUpdate.assignedAt = serverTimestamp();
@@ -243,8 +254,11 @@ export const useOrderOperations = ({
     applyOrderLocalUpdate(currentDeliveryOrder.doc_id, order => ({
       ...order,
       status: 'Out for Delivery',
+      status_code: 'OUT_FOR_DELIVERY',
+      rejection_reason: '',
       delivery_assigned_at: order.delivery_assigned_at || nowIso,
       delivery_out_for_delivery_at: order.delivery_out_for_delivery_at || nowIso,
+      updated_at: nowIso,
     }));
 
     await setDoc(
@@ -292,134 +306,51 @@ export const useOrderOperations = ({
     }
   };
 
-  const updateOrderStatus = async (orderDocId: string, status: Order['status']) => {
-    const normalizedStatus = normalizeOrderStatus(status);
+  const updateOrderStatus = async ({
+    orderId,
+    status,
+    rejectionReason = '',
+  }: {
+    orderId: string;
+    status: OrderStatusCode;
+    rejectionReason?: string;
+  }) => {
     const existingOrder =
-      adminOrders.find(order => order.doc_id === orderDocId) ||
-      userOrders.find(order => order.doc_id === orderDocId) ||
-      (orderStatus?.doc_id === orderDocId ? orderStatus : null);
+      adminOrders.find(order => order.doc_id === orderId) ||
+      userOrders.find(order => order.doc_id === orderId) ||
+      (orderStatus?.doc_id === orderId ? orderStatus : null);
 
     if (!existingOrder) {
-      alert('Unable to find the order for this update.');
-      return;
+      throw new Error('Unable to find the order for this update.');
     }
 
+    const nextStatusLabel = getOrderStatusLabel(status);
     const requiresAgent =
-      normalizedStatus === 'Out for Delivery' ||
-      normalizedStatus === 'Delivered';
+      nextStatusLabel === 'Out for Delivery' ||
+      nextStatusLabel === 'Delivered';
 
     if (requiresAgent && !existingOrder.delivery_agent_id) {
-      alert('Assign an agent before updating this status.');
-      return;
+      throw new Error('Assign an agent before updating this status.');
     }
 
-    if (normalizedStatus === 'Delivered') {
-      try {
-        agentTrackerRef.current?.stop();
-        agentTrackerRef.current = null;
-        trackedOrderIdRef.current = '';
-        setIsAgentTracking(false);
-        await markOrderDelivered(existingOrder, agentLastTrackedLocation);
-      } catch (error) {
-        console.error('Failed to complete delivery', error);
-        alert('Unable to mark this order as delivered right now.');
-      }
-      return;
+    const idToken = await auth.currentUser?.getIdToken(true);
+    if (!idToken) {
+      throw new Error('Please sign in again before updating the order.');
     }
 
-    try {
-      const batch = writeBatch(db);
-      const nowIso = new Date().toISOString();
-      const isPreDispatch =
-        normalizedStatus === 'Pending' ||
-        normalizedStatus === 'Preparing';
+    const response = await postApi<UpdateOrderStatusResponse>(
+      '/api/orders/update-status',
+      {
+        orderId,
+        status: normalizeOrderStatusCode(status),
+        rejectionReason,
+      },
+      idToken,
+    );
 
-      const timestampUpdates: Record<string, unknown> = {};
-      const localTimestampUpdates: Partial<Order> = {};
-
-      if (normalizedStatus === 'Preparing' && !existingOrder.preparing_at) {
-        timestampUpdates.preparingAt = serverTimestamp();
-        localTimestampUpdates.preparing_at = nowIso;
-      }
-
-      if (normalizedStatus === 'Out for Delivery' && !existingOrder.delivery_assigned_at) {
-        timestampUpdates.assignedAt = serverTimestamp();
-        timestampUpdates.deliveryAssignedAt = serverTimestamp();
-        localTimestampUpdates.delivery_assigned_at = nowIso;
-      }
-
-      if (normalizedStatus === 'Out for Delivery' && !existingOrder.delivery_out_for_delivery_at) {
-        timestampUpdates.outForDeliveryAt = serverTimestamp();
-        timestampUpdates.deliveryOutForDeliveryAt = serverTimestamp();
-        localTimestampUpdates.delivery_out_for_delivery_at = nowIso;
-      }
-
-      const baseUpdate: Record<string, unknown> = {
-        orderStatus: toStoredOrderStatus(normalizedStatus),
-        status: deleteField(),
-        ...timestampUpdates,
-      };
-
-      if (isPreDispatch) {
-        baseUpdate.agentId = deleteField();
-        baseUpdate.agentName = deleteField();
-        baseUpdate.agentPhone = deleteField();
-        baseUpdate.agentEmail = deleteField();
-        baseUpdate.agentVehicle = deleteField();
-        baseUpdate.deliveryAgentId = deleteField();
-        baseUpdate.deliveryAgentName = deleteField();
-        baseUpdate.deliveryAgentPhone = deleteField();
-        baseUpdate.deliveryAgentEmail = deleteField();
-        baseUpdate.deliveryAgentVehicle = deleteField();
-        baseUpdate.assignedAt = deleteField();
-        baseUpdate.deliveryAssignedAt = deleteField();
-        baseUpdate.pickedAt = deleteField();
-        baseUpdate.deliveryPickedAt = deleteField();
-        baseUpdate.outForDeliveryAt = deleteField();
-        baseUpdate.deliveryOutForDeliveryAt = deleteField();
-        baseUpdate.deliveredAt = deleteField();
-        baseUpdate.deliveryDeliveredAt = deleteField();
-      }
-
-      batch.update(doc(db, 'orders', orderDocId), baseUpdate);
-
-      if (isPreDispatch && existingOrder.delivery_agent_id) {
-        batch.set(
-          doc(db, 'delivery_agents', existingOrder.delivery_agent_id),
-          {
-            currentOrderId: '',
-            status: 'available',
-            updatedAt: serverTimestamp(),
-          },
-          { merge: true },
-        );
-      }
-
-      await batch.commit();
-
-      applyOrderLocalUpdate(orderDocId, order => ({
-        ...order,
-        status: normalizedStatus,
-        ...(isPreDispatch
-          ? {
-              delivery_agent_id: '',
-              delivery_agent_name: '',
-              delivery_agent_phone: '',
-              delivery_agent_email: '',
-              delivery_agent_vehicle: '',
-              delivery_assigned_at: '',
-              delivery_picked_at: '',
-              delivery_out_for_delivery_at: '',
-              delivery_delivered_at: '',
-            }
-          : {}),
-        ...localTimestampUpdates,
-      }));
-      setNewOrderDocIds(prev => prev.filter(id => id !== orderDocId));
-    } catch (error) {
-      console.error('Failed to update order status', error);
-      alert('Unable to update order status right now.');
-    }
+    replaceOrderLocalState(response.order);
+    setNewOrderDocIds(prev => prev.filter(id => id !== response.order.doc_id));
+    return response.order;
   };
 
   const handleLogout = async () => {

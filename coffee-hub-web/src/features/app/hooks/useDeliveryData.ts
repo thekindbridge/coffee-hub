@@ -159,7 +159,9 @@ export const useDeliveryData = (
     const targetOrderId =
       currentDeliverySession?.order_id || currentDeliveryAgent?.current_order_id;
     if (targetOrderId) {
-      return adminOrders.find(o => o.id === targetOrderId) || null;
+      return adminOrders.find(
+        o => o.id === targetOrderId && o.status === 'Out for Delivery',
+      ) || null;
     }
 
     return adminOrders.find(

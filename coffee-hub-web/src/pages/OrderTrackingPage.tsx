@@ -7,7 +7,13 @@ import {
 import { doc, onSnapshot } from 'firebase/firestore';
 import { motion } from 'motion/react';
 import DeliveryTrackingMap from '../components/DeliveryTrackingMap';
+import { mapOrderRecordToOrder } from '../features/app/lib/firestoreMappers';
 import { db } from '../services/firebase';
+import {
+  getOrderStatusCustomerCopy,
+  ORDER_STATUS_DISPLAY,
+  ORDER_STATUS_PROGRESS_FLOW,
+} from '../../shared/orderStatus';
 import type {
   DeliveryAgent,
   DeliveryLocation,
@@ -16,12 +22,9 @@ import type {
   Order,
 } from '../types';
 
-const ORDER_FLOW: Order['status'][] = [
-  'Pending',
-  'Preparing',
-  'Out for Delivery',
-  'Delivered',
-];
+const ORDER_FLOW: Order['status'][] = ORDER_STATUS_PROGRESS_FLOW.map(
+  statusCode => ORDER_STATUS_DISPLAY[statusCode],
+);
 
 export interface OrderTrackingPageProps {
   order: Order;
@@ -84,9 +87,11 @@ const mapDeliverySession = (orderId: string, value: Record<string, unknown>): De
 
 const statusToneClass: Record<Order['status'], string> = {
   Pending: 'border-amber-300/25 bg-amber-300/10 text-amber-100',
+  Accepted: 'border-emerald-300/25 bg-emerald-300/10 text-emerald-100',
   Preparing: 'border-sky-300/25 bg-sky-300/10 text-sky-100',
   'Out for Delivery': 'border-orange-300/25 bg-orange-300/10 text-orange-100',
   Delivered: 'border-emerald-300/25 bg-emerald-300/10 text-emerald-100',
+  Rejected: 'border-rose-300/25 bg-rose-300/10 text-rose-100',
 };
 
 export default function OrderTrackingPage({
@@ -95,16 +100,50 @@ export default function OrderTrackingPage({
   onClearTracking,
   onBackToOrders,
 }: OrderTrackingPageProps) {
+  const [liveOrder, setLiveOrder] = useState(order);
   const [routeMetrics, setRouteMetrics] = useState<DeliveryRouteMetrics | null>(null);
   const [deliveryAgent, setDeliveryAgent] = useState<DeliveryAgent | null>(null);
   const [deliverySession, setDeliverySession] = useState<DeliverySession | null>(null);
 
-  const currentStepIndex = ORDER_FLOW.indexOf(order.status);
+  useEffect(() => {
+    setLiveOrder(order);
+  }, [order]);
+
+  useEffect(() => {
+    const unsubscribe = onSnapshot(
+      doc(db, 'orders', order.doc_id),
+      snapshot => {
+        if (!snapshot.exists()) {
+          return;
+        }
+
+        const nextOrder = mapOrderRecordToOrder(
+          snapshot.id,
+          snapshot.data() as Record<string, unknown>,
+        );
+        setLiveOrder(previousOrder => ({
+          ...nextOrder,
+          items: nextOrder.items && nextOrder.items.length > 0
+            ? nextOrder.items
+            : previousOrder.items,
+        }));
+      },
+      error => {
+        console.error('Failed to subscribe to live order updates', error);
+      },
+    );
+
+    return () => {
+      unsubscribe();
+    };
+  }, [order.doc_id]);
+
+  const currentStepIndex = ORDER_FLOW.indexOf(liveOrder.status);
   const activeStepIndex = currentStepIndex >= 0 ? currentStepIndex : 0;
-  const agentId = deliverySession?.agent_id || order.delivery_agent_id || '';
-  const agentPhone = deliveryAgent?.phone || order.delivery_agent_phone || '';
-  const agentVehicle = deliveryAgent?.vehicle_type || order.delivery_agent_vehicle || '';
-  const agentName = deliveryAgent?.name || deliverySession?.agent_name || order.delivery_agent_name || 'Delivery Partner';
+  const agentId = deliverySession?.agent_id || liveOrder.delivery_agent_id || '';
+  const agentPhone = deliveryAgent?.phone || liveOrder.delivery_agent_phone || '';
+  const agentVehicle = deliveryAgent?.vehicle_type || liveOrder.delivery_agent_vehicle || '';
+  const agentName = deliveryAgent?.name || deliverySession?.agent_name || liveOrder.delivery_agent_name || 'Delivery Partner';
   const displayAgentPhone = agentPhone || '';
   const phoneHref = displayAgentPhone ? `tel:${normalizePhoneForTel(displayAgentPhone)}` : undefined;
   const stepProgress = ORDER_FLOW.length > 1 ? activeStepIndex / (ORDER_FLOW.length - 1) : 0;
@@ -123,14 +162,14 @@ export default function OrderTrackingPage({
 
   useEffect(() => {
     const unsubscribe = onSnapshot(
-      doc(db, 'delivery_sessions', order.id),
+      doc(db, 'delivery_sessions', liveOrder.id),
       snapshot => {
         if (!snapshot.exists()) {
           setDeliverySession(null);
           return;
         }
 
-        setDeliverySession(mapDeliverySession(order.id, snapshot.data() as Record<string, unknown>));
+        setDeliverySession(mapDeliverySession(liveOrder.id, snapshot.data() as Record<string, unknown>));
       },
       error => {
         console.error('Failed to subscribe to delivery session', error);
@@ -141,7 +180,7 @@ export default function OrderTrackingPage({
     return () => {
       unsubscribe();
     };
-  }, [order.id]);
+  }, [liveOrder.id]);
 
   useEffect(() => {
     if (!agentId) {
@@ -171,22 +210,34 @@ export default function OrderTrackingPage({
   }, [agentId]);
 
   const etaLabel = useMemo(() => {
-    if (order.status === 'Delivered') {
+    if (liveOrder.status_code === 'DELIVERED') {
       return 'Delivered';
+    }
+
+    if (liveOrder.status_code === 'REJECTED') {
+      return 'Order rejected';
     }
 
     if (routeMetrics?.eta_minutes) {
       return `Arriving in ${routeMetrics.eta_minutes} min`;
     }
 
-    if (order.status === 'Out for Delivery') {
+    if (liveOrder.status_code === 'OUT_FOR_DELIVERY') {
       return 'Agent is on the way';
     }
 
-    return order.status === 'Preparing' ? 'Preparing your order' : 'Order received';
-  }, [order.status, routeMetrics?.eta_minutes]);
+    if (liveOrder.status_code === 'PREPARING') {
+      return 'Preparing your order';
+    }
 
-  if (!order.customer_location) {
+    if (liveOrder.status_code === 'ACCEPTED') {
+      return 'Order accepted';
+    }
+
+    return 'Order received';
+  }, [liveOrder.status_code, routeMetrics?.eta_minutes]);
+
+  if (liveOrder.status_code !== 'REJECTED' && !liveOrder.customer_location) {
     return (
       <div className="px-4 pb-20 pt-6 sm:px-6">
         <div className="mx-auto max-w-screen-lg">
@@ -230,14 +281,14 @@ export default function OrderTrackingPage({
                   Order Tracking
                 </p>
                 <h1 className="mt-1 break-words text-[1.6rem] font-semibold text-[#fff8f2] sm:text-[1.9rem]">
-                  Order #{order.id}
+                  Order #{liveOrder.id}
                 </h1>
               </div>
               <div className={joinClassNames(
                 'rounded-full border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.22em]',
-                statusToneClass[order.status],
+                statusToneClass[liveOrder.status],
               )}>
-                {order.status}
+                {liveOrder.status}
               </div>
             </div>
           </div>
@@ -254,14 +305,28 @@ export default function OrderTrackingPage({
                 <p className="text-[11px] font-semibold uppercase tracking-[0.32em] text-[#f1b375]">
                   Order Status
                 </p>
-                <h2 className="mt-1 text-lg font-semibold text-[#fff8f2]">{order.status}</h2>
+                <h2 className="mt-1 text-lg font-semibold text-[#fff8f2]">{liveOrder.status}</h2>
               </div>
               <div className="text-sm font-semibold text-[#d8c7ba]">
                 {etaLabel}
               </div>
             </div>
 
-            <div className="mt-5 rounded-[30px] border border-white/10 bg-white/5 px-4 py-5">
+            <p className="mt-4 text-sm text-[#d8c7ba]">
+              {getOrderStatusCustomerCopy(liveOrder.status_code)}
+            </p>
+
+            {liveOrder.status_code === 'REJECTED' && liveOrder.rejection_reason && (
+              <div className="mt-4 rounded-[24px] border border-rose-300/20 bg-rose-500/10 px-4 py-4 text-sm text-rose-100">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-rose-200">
+                  Rejection reason
+                </p>
+                <p className="mt-2 leading-6">{liveOrder.rejection_reason}</p>
+              </div>
+            )}
+
+            {liveOrder.status_code !== 'REJECTED' && (
+              <div className="mt-5 rounded-[30px] border border-white/10 bg-white/5 px-4 py-5">
               <div className="relative">
                 <div className="absolute left-0 right-0 top-3 h-1.5 rounded-full bg-white/10" />
                 <div
@@ -298,72 +363,77 @@ export default function OrderTrackingPage({
                   })}
                 </div>
               </div>
-            </div>
+              </div>
+            )}
           </div>
         </motion.section>
 
-        <motion.section
-          initial={{ opacity: 0, y: 18 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.35, delay: 0.08, ease: 'easeOut' }}
-        >
-          <div className="rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,#17110d,#0f0a08)] p-5 text-[#fff8f2] shadow-[0_18px_50px_rgba(9,6,5,0.22)]">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.32em] text-[#f1b375]">
-              Delivery Partner
-            </p>
-            <div className="mt-4 space-y-2 text-sm">
-              <p className="text-lg font-semibold text-[#fff8f2]">{agentName}</p>
-              <p className="text-[#d8c7ba]">{agentVehicle || 'Vehicle details will appear here.'}</p>
-              <p className="text-[#d8c7ba]">{displayAgentPhone || 'Phone number will appear here.'}</p>
-            </div>
+        {liveOrder.status_code !== 'REJECTED' && (
+          <>
+            <motion.section
+              initial={{ opacity: 0, y: 18 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.35, delay: 0.08, ease: 'easeOut' }}
+            >
+              <div className="rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,#17110d,#0f0a08)] p-5 text-[#fff8f2] shadow-[0_18px_50px_rgba(9,6,5,0.22)]">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.32em] text-[#f1b375]">
+                  Delivery Partner
+                </p>
+                <div className="mt-4 space-y-2 text-sm">
+                  <p className="text-lg font-semibold text-[#fff8f2]">{agentName}</p>
+                  <p className="text-[#d8c7ba]">{agentVehicle || 'Vehicle details will appear here.'}</p>
+                  <p className="text-[#d8c7ba]">{displayAgentPhone || 'Phone number will appear here.'}</p>
+                </div>
 
-            <div className="mt-5 flex flex-wrap gap-3">
-              <a
-                href={phoneHref}
-                className={`inline-flex items-center justify-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
-                  phoneHref
-                    ? 'bg-orange-500 text-white hover:bg-orange-600'
-                    : 'cursor-not-allowed border border-white/10 bg-white/5 text-[#8b7565]'
-                }`}
-              >
-                <Phone size={15} />
-                Call Partner
-              </a>
-              {onClearTracking && (
-                <button
-                  onClick={onClearTracking}
-                  className="inline-flex items-center justify-center rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-[#f5ede3]"
-                >
-                  Clear Tracking
-                </button>
-              )}
-            </div>
-          </div>
-        </motion.section>
+                <div className="mt-5 flex flex-wrap gap-3">
+                  <a
+                    href={phoneHref}
+                    className={`inline-flex items-center justify-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
+                      phoneHref
+                        ? 'bg-orange-500 text-white hover:bg-orange-600'
+                        : 'cursor-not-allowed border border-white/10 bg-white/5 text-[#8b7565]'
+                    }`}
+                  >
+                    <Phone size={15} />
+                    Call Partner
+                  </a>
+                  {onClearTracking && (
+                    <button
+                      onClick={onClearTracking}
+                      className="inline-flex items-center justify-center rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-[#f5ede3]"
+                    >
+                      Clear Tracking
+                    </button>
+                  )}
+                </div>
+              </div>
+            </motion.section>
 
-        <motion.section
-          initial={{ opacity: 0, y: 18 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.35, delay: 0.1, ease: 'easeOut' }}
-        >
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <div className="rounded-full border border-white/10 bg-black/30 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.22em] text-[#f6c18b]">
-              Live Map
-            </div>
-            <div className="text-xs font-semibold text-[#d8c7ba]">
-              {order.status === 'Out for Delivery' ? 'Agent on the way' : order.status}
-            </div>
-          </div>
-          <DeliveryTrackingMap
-            coffeeShopLocation={coffeeShopLocation}
-            customerLocation={order.customer_location}
-            onRouteMetricsChange={setRouteMetrics}
-            orderId={order.id}
-            agentId={agentId}
-            className="w-full overflow-hidden rounded-[30px] [&_.pointer-events-none.absolute.inset-x-0.top-0.z-20]:hidden [&_.pointer-events-none.absolute.inset-x-0.bottom-0.z-20]:hidden"
-            mapClassName="h-[520px] w-full sm:h-[640px] lg:h-[720px]"
-          />
-        </motion.section>
+            <motion.section
+              initial={{ opacity: 0, y: 18 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.35, delay: 0.1, ease: 'easeOut' }}
+            >
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <div className="rounded-full border border-white/10 bg-black/30 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.22em] text-[#f6c18b]">
+                  Live Map
+                </div>
+                <div className="text-xs font-semibold text-[#d8c7ba]">
+                  {liveOrder.status === 'Out for Delivery' ? 'Agent on the way' : liveOrder.status}
+                </div>
+              </div>
+              <DeliveryTrackingMap
+                coffeeShopLocation={coffeeShopLocation}
+                customerLocation={liveOrder.customer_location}
+                onRouteMetricsChange={setRouteMetrics}
+                orderId={liveOrder.id}
+                agentId={agentId}
+                className="w-full overflow-hidden rounded-[30px] [&_.pointer-events-none.absolute.inset-x-0.top-0.z-20]:hidden [&_.pointer-events-none.absolute.inset-x-0.bottom-0.z-20]:hidden"
+                mapClassName="h-[520px] w-full sm:h-[640px] lg:h-[720px]"
+              />
+            </motion.section>
+          </>
+        )}
       </div>
     </div>
   );

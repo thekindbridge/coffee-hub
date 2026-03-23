@@ -39,9 +39,12 @@ const buildStoredOrderRecord = (
   deliveryFee: pricing.deliveryFee,
   couponCode: pricing.couponCode,
   totalAmount: pricing.finalTotal,
+  finalAmount: pricing.finalTotal,
   paymentMode: 'COD',
   paymentStatus: 'PENDING',
-  orderStatus: 'PLACED',
+  status: 'PENDING',
+  orderStatus: 'PENDING',
+  rejectionReason: '',
 });
 
 const loadExistingOrder = async (db: Firestore, orderId: string) => {

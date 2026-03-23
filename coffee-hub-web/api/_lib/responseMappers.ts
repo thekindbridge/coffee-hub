@@ -1,3 +1,8 @@
+import {
+  getOrderStatusLabel,
+  normalizeOrderStatusCode,
+} from '../../shared/orderStatus.js';
+
 type TimestampLike = {
   toDate?: () => Date;
 };
@@ -22,9 +27,12 @@ export interface StoredOrderRecord {
   deliveryFee?: number;
   couponCode?: string;
   totalAmount?: number;
+  finalAmount?: number;
   paymentMode?: string;
   paymentStatus?: string;
+  status?: string;
   orderStatus?: string;
+  rejectionReason?: string;
   agentId?: string;
   agentName?: string;
   agentPhone?: string;
@@ -41,9 +49,11 @@ export interface StoredOrderRecord {
   delivery_agent_email?: string;
   delivery_agent_vehicle?: string;
   assignedAt?: TimestampLike;
+  acceptedAt?: TimestampLike;
   pickedAt?: TimestampLike;
   outForDeliveryAt?: TimestampLike;
   deliveredAt?: TimestampLike;
+  rejectedAt?: TimestampLike;
   preparingAt?: TimestampLike;
   readyAt?: TimestampLike;
   deliveryAssignedAt?: TimestampLike;
@@ -58,6 +68,7 @@ export interface StoredOrderRecord {
   preparing_at?: TimestampLike;
   ready_for_pickup_at?: TimestampLike;
   createdAt?: TimestampLike;
+  updatedAt?: TimestampLike;
 }
 
 const mapTimestampToIsoString = (value: unknown) => {
@@ -100,39 +111,6 @@ const mapLocationRecord = (value: unknown) => {
   };
 };
 
-const normalizeOrderStatus = (status: unknown) => {
-  if (typeof status === 'string') {
-    const normalized = status.trim().toLowerCase().replace(/_/g, ' ');
-    if (normalized === 'placed' || normalized === 'pending') {
-      return 'Pending';
-    }
-    if (normalized === 'preparing') {
-      return 'Preparing';
-    }
-    if (
-      normalized === 'ready for pickup' ||
-      normalized === 'ready' ||
-      normalized === 'assigned' ||
-      normalized === 'assigned to agent' ||
-      normalized === 'assigned to rider' ||
-      normalized === 'picked up' ||
-      normalized === 'picked'
-    ) {
-      return normalized === 'ready for pickup' || normalized === 'ready'
-        ? 'Preparing'
-        : 'Out for Delivery';
-    }
-    if (normalized === 'out for delivery') {
-      return 'Out for Delivery';
-    }
-    if (normalized === 'delivered') {
-      return 'Delivered';
-    }
-  }
-
-  return 'Pending';
-};
-
 const normalizePaymentMethod = (value: unknown) => {
   if (typeof value !== 'string') {
     return 'COD';
@@ -169,10 +147,11 @@ export const mapOrderRecordToResponse = (
   record: StoredOrderRecord,
 ) => {
   const orderId = ((record.orderId as string) || orderDocId).toUpperCase();
+  const statusCode = normalizeOrderStatusCode(record.status ?? record.orderStatus);
   const subtotal = Number(record.subtotal ?? record.totalAmount ?? 0);
   const discount = Number(record.discount || 0);
   const deliveryFee = Number(record.deliveryFee || 0);
-  const totalAmount = Number(record.totalAmount ?? subtotal - discount + deliveryFee);
+  const totalAmount = Number(record.totalAmount ?? record.finalAmount ?? subtotal - discount + deliveryFee);
   const assignedAt = mapTimestampToIsoString(
     record.assignedAt ?? record.deliveryAssignedAt ?? record.delivery_assigned_at,
   );
@@ -207,10 +186,13 @@ export const mapOrderRecordToResponse = (
     delivery_fee: deliveryFee,
     coupon_code: (record.couponCode || '').toUpperCase(),
     final_total: totalAmount,
-    status: normalizeOrderStatus(record.orderStatus),
+    status: getOrderStatusLabel(statusCode),
+    status_code: statusCode,
+    rejection_reason: (record.rejectionReason || '').trim(),
     payment_method: normalizePaymentMethod(record.paymentMode),
     payment_status: normalizePaymentStatus(record.paymentStatus),
     created_at: mapTimestampToIsoString(record.createdAt) || new Date().toISOString(),
+    updated_at: mapTimestampToIsoString(record.updatedAt),
     user_id: record.userId || '',
     delivery_agent_id: agentId,
     delivery_agent_name: record.agentName || record.deliveryAgentName || record.delivery_agent_name || '',

@@ -6,6 +6,10 @@ import {
 } from 'firebase/firestore';
 import type { QueryDocumentSnapshot, Timestamp } from 'firebase/firestore';
 import { db } from '../../../services/firebase';
+import {
+  getOrderStatusLabel,
+  normalizeOrderStatusCode,
+} from '../../../../shared/orderStatus';
 import type {
   DeliveryAgent,
   DeliveryLocation,
@@ -102,38 +106,8 @@ export const mapDeliverySessionDocToSession = (
   };
 };
 
-export const normalizeOrderStatus = (status: unknown): Order['status'] => {
-  if (typeof status === 'string') {
-    const normalized = status.trim().toLowerCase().replace(/_/g, ' ');
-    if (normalized === 'placed' || normalized === 'pending') {
-      return 'Pending';
-    }
-    if (normalized === 'preparing') {
-      return 'Preparing';
-    }
-    if (
-      normalized === 'ready for pickup' ||
-      normalized === 'ready' ||
-      normalized === 'assigned' ||
-      normalized === 'assigned to agent' ||
-      normalized === 'assigned to rider' ||
-      normalized === 'picked up' ||
-      normalized === 'picked'
-    ) {
-      return normalized === 'ready for pickup' || normalized === 'ready'
-        ? 'Preparing'
-        : 'Out for Delivery';
-    }
-    if (normalized === 'out for delivery') {
-      return 'Out for Delivery';
-    }
-    if (normalized === 'delivered') {
-      return 'Delivered';
-    }
-  }
-
-  return 'Pending';
-};
+export const normalizeOrderStatus = (status: unknown): Order['status'] =>
+  getOrderStatusLabel(normalizeOrderStatusCode(status));
 
 const normalizePaymentMethod = (value: unknown) => {
   if (typeof value !== 'string') {
@@ -297,10 +271,14 @@ export const mapMenuDocToMenuItem = (snapshot: QueryDocumentSnapshot): MenuItem 
   };
 };
 
-export const mapOrderDocToOrder = (snapshot: QueryDocumentSnapshot): Order => {
-  const data = snapshot.data() as Record<string, unknown>;
+export const mapOrderRecordToOrder = (
+  docId: string,
+  data: Record<string, unknown>,
+): Order => {
   const createdAtValue = data.createdAt as Timestamp | undefined;
-  const orderId = ((data.orderId as string) || snapshot.id).toUpperCase();
+  const updatedAtValue = data.updatedAt as Timestamp | undefined;
+  const orderId = ((data.orderId as string) || docId).toUpperCase();
+  const statusCode = normalizeOrderStatusCode(data.status ?? data.orderStatus);
   const subtotal = Number(data.subtotal ?? data.totalAmount ?? data.finalTotal ?? data.total ?? 0);
   const discount = Number(data.discount || 0);
   const deliveryFee = Number(data.deliveryFee || 0);
@@ -324,7 +302,7 @@ export const mapOrderDocToOrder = (snapshot: QueryDocumentSnapshot): Order => {
 
   return {
     id: orderId,
-    doc_id: snapshot.id,
+    doc_id: docId,
     customer_name: (data.name as string) || (data.customerName as string) || '',
     phone: (data.phone as string) || '',
     address: (data.address as string) || '',
@@ -335,10 +313,13 @@ export const mapOrderDocToOrder = (snapshot: QueryDocumentSnapshot): Order => {
     delivery_fee: deliveryFee,
     coupon_code: ((data.couponCode as string) || '').toUpperCase(),
     final_total: finalTotal,
-    status: normalizeOrderStatus(data.orderStatus ?? data.status),
+    status: getOrderStatusLabel(statusCode),
+    status_code: statusCode,
+    rejection_reason: ((data.rejectionReason as string) || '').trim(),
     payment_method: normalizePaymentMethod(data.paymentMode ?? data.paymentMethod),
     payment_status: normalizePaymentStatus(data.paymentStatus),
     created_at: createdAtValue?.toDate()?.toISOString() || new Date().toISOString(),
+    updated_at: updatedAtValue?.toDate()?.toISOString() || '',
     user_id: (data.userId as string) || '',
     delivery_agent_id: agentId,
     delivery_agent_name: agentName,
@@ -354,6 +335,9 @@ export const mapOrderDocToOrder = (snapshot: QueryDocumentSnapshot): Order => {
     items: embeddedItems,
   };
 };
+
+export const mapOrderDocToOrder = (snapshot: QueryDocumentSnapshot): Order =>
+  mapOrderRecordToOrder(snapshot.id, snapshot.data() as Record<string, unknown>);
 
 const chunkValues = <T,>(values: T[], size: number): T[][] => {
   const chunks: T[][] = [];

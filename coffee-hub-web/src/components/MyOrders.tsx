@@ -2,6 +2,11 @@ import { useMemo, useState } from 'react';
 import { ChevronDown, ChevronUp, Clock3, MapPin, PackageSearch } from 'lucide-react';
 
 import type { Order } from '../types';
+import {
+  getOrderStatusCustomerCopy,
+  ORDER_STATUS_DISPLAY,
+  ORDER_STATUS_PROGRESS_FLOW,
+} from '../../shared/orderStatus';
 
 interface MyOrdersProps {
   orders: Order[];
@@ -10,19 +15,18 @@ interface MyOrdersProps {
   onTrackOrder: (order: Order) => void;
 }
 
-const ORDER_FLOW: Order['status'][] = [
-  'Pending',
-  'Preparing',
-  'Out for Delivery',
-  'Delivered',
-];
+const ORDER_FLOW: Order['status'][] = ORDER_STATUS_PROGRESS_FLOW.map(
+  statusCode => ORDER_STATUS_DISPLAY[statusCode],
+);
 const CURRENCY_SYMBOL = '\u20B9';
 
 const STATUS_BADGE_CLASS: Record<Order['status'], string> = {
   Pending: 'border border-white/12 bg-white/6 text-ink-muted',
+  Accepted: 'border border-emerald-400/30 bg-emerald-400/14 text-emerald-300',
   Preparing: 'border border-amber-400/30 bg-amber-400/14 text-amber-300',
   'Out for Delivery': 'border border-sky-400/30 bg-sky-400/14 text-sky-300',
   Delivered: 'border border-emerald-400/30 bg-emerald-400/14 text-emerald-300',
+  Rejected: 'border border-rose-400/30 bg-rose-400/14 text-rose-300',
 };
 
 const formatOrderDate = (value: string) => {
@@ -42,7 +46,7 @@ export default function MyOrders({ orders, isLoading, onBrowseMenu, onTrackOrder
     const past: Order[] = [];
 
     orders.forEach(order => {
-      if (order.status === 'Delivered') {
+      if (order.status_code === 'DELIVERED' || order.status_code === 'REJECTED') {
         past.push(order);
       } else {
         active.push(order);
@@ -118,7 +122,7 @@ export default function MyOrders({ orders, isLoading, onBrowseMenu, onTrackOrder
             >
               {order.status}
             </span>
-            {showTracker && (
+            {showTracker && order.status_code !== 'REJECTED' && (
               <button
                 onClick={() => onTrackOrder(order)}
                 className="inline-flex flex-shrink-0 items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-semibold text-ink-muted transition-colors hover:border-white/20 hover:text-accent"
@@ -129,6 +133,8 @@ export default function MyOrders({ orders, isLoading, onBrowseMenu, onTrackOrder
             )}
           </div>
         </div>
+
+        <p className="mt-4 text-sm text-ink-muted">{getOrderStatusCustomerCopy(order.status_code)}</p>
 
         <div className="mt-4 space-y-1 text-sm text-ink-muted">
           {hasItems ? (
@@ -150,7 +156,14 @@ export default function MyOrders({ orders, isLoading, onBrowseMenu, onTrackOrder
           <p className="text-base font-semibold text-highlight">{CURRENCY_SYMBOL}{order.total_amount}</p>
         </div>
 
-        {showTracker && renderProgressTracker(order.status)}
+        {showTracker && order.status_code !== 'REJECTED' && renderProgressTracker(order.status)}
+
+        {order.status_code === 'REJECTED' && order.rejection_reason && (
+          <div className="mt-4 rounded-[20px] border border-rose-400/20 bg-rose-500/10 px-4 py-4 text-sm text-rose-100">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-rose-200">Rejection reason</p>
+            <p className="mt-2 leading-6">{order.rejection_reason}</p>
+          </div>
+        )}
 
         <button
           onClick={() => toggleOrderDetails(order.doc_id)}
@@ -239,7 +252,7 @@ export default function MyOrders({ orders, isLoading, onBrowseMenu, onTrackOrder
           <div className="mb-4 flex items-center justify-between">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-secondary">Past orders</p>
-              <h2 className="mt-1 text-[1.45rem] font-semibold text-accent">Delivered</h2>
+              <h2 className="mt-1 text-[1.45rem] font-semibold text-accent">Completed</h2>
             </div>
             <span className="coffee-badge">{pastOrders.length}</span>
           </div>
@@ -249,7 +262,7 @@ export default function MyOrders({ orders, isLoading, onBrowseMenu, onTrackOrder
             </div>
           ) : (
             <div className="coffee-surface-soft rounded-[22px] p-4 text-sm text-ink-muted">
-              Delivered orders will appear here.
+              Delivered and rejected orders will appear here.
             </div>
           )}
         </section>

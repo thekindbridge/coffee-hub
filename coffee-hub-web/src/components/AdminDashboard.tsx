@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { LayoutGrid, Package2, ReceiptText, TicketPercent } from 'lucide-react';
 
-import type { DeliveryAgent, Offer, OfferInput, Order } from '../types';
+import type { DeliveryAgent, Offer, OfferInput, Order, OrderStatusCode } from '../types';
 import AdminMenuManager from './AdminMenuManager';
 import AdminOffersManager from './AdminOffersManager';
 import AdminOrders from './AdminOrders';
@@ -14,9 +14,12 @@ interface AdminDashboardProps {
   isOffersLoading: boolean;
   offersError: string;
   newOrderDocIds: string[];
-  orderStatuses: Order['status'][];
   deliveryAgents: DeliveryAgent[];
-  onUpdateStatus: (orderDocId: string, status: Order['status']) => void;
+  onUpdateStatus: (params: {
+    orderId: string;
+    status: OrderStatusCode;
+    rejectionReason?: string;
+  }) => Promise<void>;
   onCreateOffer: (offerInput: OfferInput) => Promise<void>;
   onUpdateOffer: (offerId: string, offerInput: OfferInput) => Promise<void>;
   onDeleteOffer: (offerId: string) => Promise<void>;
@@ -52,7 +55,6 @@ export default function AdminDashboard({
   isOffersLoading,
   offersError,
   newOrderDocIds,
-  orderStatuses,
   deliveryAgents,
   onUpdateStatus,
   onCreateOffer,
@@ -70,8 +72,16 @@ export default function AdminDashboard({
     () => orders.filter(order => order.status === 'Preparing').length,
     [orders],
   );
+  const acceptedCount = useMemo(
+    () => orders.filter(order => order.status === 'Accepted').length,
+    [orders],
+  );
   const outForDeliveryCount = useMemo(
     () => orders.filter(order => order.status === 'Out for Delivery').length,
+    [orders],
+  );
+  const rejectedCount = useMemo(
+    () => orders.filter(order => order.status === 'Rejected').length,
     [orders],
   );
 
@@ -84,10 +94,12 @@ export default function AdminDashboard({
               <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-secondary">Coffee HUB admin</p>
               <h2 className="mt-1 text-[1.55rem] font-semibold text-accent">Operations overview</h2>
             </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {renderCountCard('Pending', pendingCount, ReceiptText)}
+              {renderCountCard('Accepted', acceptedCount, LayoutGrid)}
               {renderCountCard('Preparing', preparingCount, Package2)}
               {renderCountCard('Out for Delivery', outForDeliveryCount, LayoutGrid)}
+              {renderCountCard('Rejected', rejectedCount, ReceiptText)}
             </div>
             <div className="coffee-surface-soft rounded-[24px] p-4 text-sm text-ink-muted">
               <p className="font-semibold text-accent">{newOrderDocIds.length} new order alert{newOrderDocIds.length === 1 ? '' : 's'}</p>
@@ -104,7 +116,6 @@ export default function AdminDashboard({
           <AdminOrders
             orders={orders}
             newOrderDocIds={newOrderDocIds}
-            orderStatuses={orderStatuses}
             deliveryAgents={deliveryAgents}
             onUpdateStatus={onUpdateStatus}
           />

@@ -564,7 +564,7 @@ export const CartDrawer = ({
                   Freshly confirmed
                 </div>
                 <h2 className="mt-5 text-[1.75rem] font-semibold text-accent">Order confirmed</h2>
-                <p className="mt-2 text-sm leading-6 text-ink-muted">Your order #{orderStatus?.id} is being prepared.</p>
+                <p className="mt-2 text-sm leading-6 text-ink-muted">Your order #{orderStatus?.id} is waiting for admin confirmation.</p>
                 <p className="mt-2 text-sm font-semibold text-secondary">Cash on delivery selected.</p>
                 <button onClick={onTrackOrder} className="coffee-btn-primary mt-8 w-full">
                   <Clock size={16} />

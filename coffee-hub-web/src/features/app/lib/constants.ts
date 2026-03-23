@@ -1,11 +1,13 @@
 import type { Order } from '../../../types';
 import type { AgentTrackerStatus } from '../../../agent/agentTracker';
+import {
+  ORDER_STATUS_DISPLAY,
+  ORDER_STATUS_PROGRESS_FLOW,
+} from '../../../../shared/orderStatus';
 
 export const ORDER_STATUSES: Order['status'][] = [
-  'Pending',
-  'Preparing',
-  'Out for Delivery',
-  'Delivered',
+  ...ORDER_STATUS_PROGRESS_FLOW.map(statusCode => ORDER_STATUS_DISPLAY[statusCode]),
+  ORDER_STATUS_DISPLAY.REJECTED,
 ];
 
 export const ADMIN_EMAIL = (import.meta.env.VITE_ADMIN_EMAIL || '').trim().toLowerCase();

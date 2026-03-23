@@ -10,9 +10,11 @@ const CURRENCY_SYMBOL = '\u20B9';
 
 const STATUS_BADGE_CLASS: Record<Order['status'], string> = {
   Pending: 'border border-amber-300/30 bg-amber-400/20 text-amber-300',
+  Accepted: 'border border-emerald-300/30 bg-emerald-400/20 text-emerald-300',
   Preparing: 'border border-sky-300/30 bg-sky-400/20 text-sky-300',
   'Out for Delivery': 'border border-orange-300/30 bg-orange-400/20 text-orange-300',
   Delivered: 'border border-emerald-300/30 bg-emerald-400/20 text-emerald-300',
+  Rejected: 'border border-rose-300/30 bg-rose-400/20 text-rose-300',
 };
 
 const buildMapsSearchUrl = (address: string) => (

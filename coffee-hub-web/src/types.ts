@@ -1,5 +1,7 @@
+import type { OrderStatus, OrderStatusCode } from '../shared/orderStatus';
 import type { ShopTiming } from '../shared/shopTiming';
 
+export type { OrderStatus, OrderStatusCode } from '../shared/orderStatus';
 export type { ShopTiming } from '../shared/shopTiming';
 
 export interface MenuItem {
@@ -84,10 +86,13 @@ export interface Order {
   delivery_fee?: number;
   coupon_code?: string;
   final_total?: number;
-  status: 'Pending' | 'Preparing' | 'Out for Delivery' | 'Delivered';
+  status: OrderStatus;
+  status_code: OrderStatusCode;
+  rejection_reason?: string;
   payment_method: string;
   payment_status?: OrderPaymentStatus;
   created_at: string;
+  updated_at?: string;
   user_id: string;
   customer_location?: DeliveryLocation | null;
   delivery_agent_id?: string;
@@ -156,6 +161,10 @@ export interface CheckoutOrderDraft {
 }
 
 export interface CreateOrderResponse {
+  order: Order;
+}
+
+export interface UpdateOrderStatusResponse {
   order: Order;
 }
 

@@ -2,6 +2,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { doc, runTransaction, serverTimestamp } from 'firebase/firestore';
 
 import { db } from '../services/firebase';
+import {
+  getOrderStatusCustomerCopy,
+  type OrderStatusCode,
+} from '../../shared/orderStatus';
 import type { DeliveryAgent, DeliveryLocation, Order } from '../types';
 import { calculateDistanceMeters } from '../agent/agentTracker';
 
@@ -10,16 +14,21 @@ const CURRENCY_SYMBOL = '\u20B9';
 interface AdminOrdersProps {
   orders: Order[];
   newOrderDocIds: string[];
-  orderStatuses: Order['status'][];
   deliveryAgents: DeliveryAgent[];
-  onUpdateStatus: (orderDocId: string, status: Order['status']) => void;
+  onUpdateStatus: (params: {
+    orderId: string;
+    status: OrderStatusCode;
+    rejectionReason?: string;
+  }) => Promise<void>;
 }
 
 const STATUS_BADGE_CLASS: Record<Order['status'], string> = {
   Pending: 'border border-amber-300/30 bg-amber-400/18 text-amber-300',
+  Accepted: 'border border-emerald-300/30 bg-emerald-400/18 text-emerald-300',
   Preparing: 'border border-sky-300/30 bg-sky-400/18 text-sky-300',
   'Out for Delivery': 'border border-orange-300/30 bg-orange-400/18 text-orange-300',
-  Delivered: 'border border-emerald-300/30 bg-emerald-400/18 text-emerald-300',
+  Delivered: 'border border-emerald-300/30 bg-emerald-500/18 text-emerald-200',
+  Rejected: 'border border-rose-300/30 bg-rose-400/18 text-rose-300',
 };
 
 const getTrackingOrderId = (order: Order, orderData?: Record<string, unknown>) =>
@@ -71,14 +80,18 @@ const formatAgentStatusLabel = (status: DeliveryAgent['status'] | 'available' | 
 export default function AdminOrders({
   orders,
   newOrderDocIds,
-  orderStatuses,
   deliveryAgents,
   onUpdateStatus,
 }: AdminOrdersProps) {
   const [expandedOrderId, setExpandedOrderId] = useState('');
   const [assigningOrderDocId, setAssigningOrderDocId] = useState('');
-  const [optimisticStatuses, setOptimisticStatuses] = useState<Record<string, Order['status']>>({});
+  const [submittingOrderDocId, setSubmittingOrderDocId] = useState('');
+  const [rejectingOrder, setRejectingOrder] = useState<Order | null>(null);
+  const [rejectionReasonDraft, setRejectionReasonDraft] = useState('');
+  const [actionError, setActionError] = useState('');
+  const [rejectError, setRejectError] = useState('');
   const [toastMessage, setToastMessage] = useState('');
+
   const availableAgents = useMemo(
     () => deliveryAgents.filter(agent => getAgentStatus(agent) === 'available'),
     [deliveryAgents],
@@ -103,115 +116,149 @@ export default function AdminOrders({
     };
   }, [toastMessage]);
 
-  useEffect(() => {
-    setOptimisticStatuses(previousStatuses => {
-      const nextStatuses = { ...previousStatuses };
+  const closeRejectModal = () => {
+    setRejectingOrder(null);
+    setRejectionReasonDraft('');
+    setRejectError('');
+  };
 
-      orders.forEach(order => {
-        if (nextStatuses[order.doc_id] && nextStatuses[order.doc_id] === order.status) {
-          delete nextStatuses[order.doc_id];
-        }
+  const runStatusAction = async (
+    order: Order,
+    status: OrderStatusCode,
+    rejectionReason?: string,
+  ) => {
+    setActionError('');
+    setSubmittingOrderDocId(order.doc_id);
+
+    try {
+      await onUpdateStatus({
+        orderId: order.doc_id,
+        status,
+        rejectionReason,
       });
 
-      return nextStatuses;
-    });
-  }, [orders]);
+      if (status === 'REJECTED') {
+        setToastMessage('Order rejected successfully');
+      } else {
+        setToastMessage(`Order moved to ${getOrderStatusCustomerCopy(status)}`);
+      }
+    } catch (error) {
+      const message = error instanceof Error
+        ? error.message
+        : 'Unable to update this order right now.';
+      setActionError(message);
+      throw error;
+    } finally {
+      setSubmittingOrderDocId('');
+    }
+  };
 
-  const assignAgentToOrder = async (orderDocId: string, agentId: string) => {
-    if (!orderDocId) {
-      alert('Order does not exist.');
+  const handleRejectConfirm = async () => {
+    if (!rejectingOrder) {
       return;
     }
 
+    const nextReason = rejectionReasonDraft.trim();
+    if (!nextReason) {
+      setRejectError('Enter a rejection reason before confirming.');
+      return;
+    }
+
+    try {
+      await runStatusAction(rejectingOrder, 'REJECTED', nextReason);
+      closeRejectModal();
+    } catch {
+      // Error already surfaced in the modal / alert area.
+    }
+  };
+
+  const assignAgentToOrder = async (order: Order, agentId: string) => {
     if (!agentId) {
-      alert('Select a delivery agent before dispatching the order.');
+      setActionError('Select a delivery agent before dispatching the order.');
+      return;
+    }
+
+    if (order.status_code !== 'PREPARING') {
+      setActionError('Only preparing orders can be assigned to a delivery agent.');
       return;
     }
 
     const selectedAgent = availableAgents.find(agent => agent.id === agentId);
     if (!selectedAgent) {
-      alert('Selected delivery agent does not exist.');
+      setActionError('Selected delivery agent is not available.');
       return;
     }
 
-    const selectedAgentStatus = getAgentStatus(selectedAgent);
-    if (!selectedAgent.is_active || selectedAgentStatus === 'offline' || selectedAgentStatus === 'busy') {
-      alert('Selected delivery agent is not available.');
+    if (!order.customer_location) {
+      setActionError('Customer location is required before assigning a delivery agent.');
       return;
     }
 
-    const selectedOrder = orders.find(order => order.doc_id === orderDocId);
-    if (!selectedOrder) {
-      alert('Order does not exist.');
-      return;
-    }
-
-    if (!selectedOrder.customer_location) {
-      alert('Customer location is required before dispatching this order.');
-      return;
-    }
-
-    setAssigningOrderDocId(orderDocId);
+    setActionError('');
+    setAssigningOrderDocId(order.doc_id);
 
     try {
       await runTransaction(db, async transaction => {
-        const orderRef = doc(db, 'orders', orderDocId);
+        const orderRef = doc(db, 'orders', order.doc_id);
         const orderSnap = await transaction.get(orderRef);
 
         if (!orderSnap.exists()) {
-          throw new Error('Order does not exist');
+          throw new Error('Order does not exist.');
         }
 
         const orderData = orderSnap.data() as Record<string, unknown>;
-        const trackingOrderId = getTrackingOrderId(selectedOrder, orderData);
-        const agentRef = doc(db, 'delivery_agents', agentId);
+        const trackingOrderId = getTrackingOrderId(order, orderData);
+        const currentStatus = typeof orderData.status === 'string'
+          ? orderData.status
+          : (orderData.orderStatus as string) || '';
+
+        if (currentStatus.trim().toUpperCase() !== 'PREPARING') {
+          throw new Error('Only preparing orders can be assigned to a delivery agent.');
+        }
+
+        const selectedAgentRef = doc(db, 'delivery_agents', selectedAgent.id);
         const sessionRef = doc(db, 'delivery_sessions', trackingOrderId);
         const locationRef = doc(db, 'agent_locations', trackingOrderId);
-        const agentSnap = await transaction.get(agentRef);
+        const selectedAgentSnap = await transaction.get(selectedAgentRef);
 
-        if (!agentSnap.exists()) {
-          throw new Error('Selected delivery agent does not exist');
+        if (!selectedAgentSnap.exists()) {
+          throw new Error('Selected delivery agent does not exist.');
         }
 
-        const agentData = agentSnap.data() as Record<string, unknown>;
-        const agentStatusValue = typeof agentData.status === 'string' ? agentData.status.toLowerCase() : '';
-        const isAgentActive = agentData.isActive === true || (agentStatusValue ? agentStatusValue !== 'offline' : false);
+        const agentData = selectedAgentSnap.data() as Record<string, unknown>;
+        const agentStatusValue = typeof agentData.status === 'string'
+          ? agentData.status.toLowerCase()
+          : '';
+        const isAgentActive =
+          agentData.isActive === true || (agentStatusValue ? agentStatusValue !== 'offline' : false);
 
         if (!isAgentActive || agentStatusValue === 'busy') {
-          throw new Error('Selected delivery agent is not available');
-        }
-
-        if ((orderData.status as string) === 'Delivered') {
-          throw new Error('Delivered orders cannot be reassigned');
+          throw new Error('Selected delivery agent is not available.');
         }
 
         const previousAgentId =
-          ((orderData.deliveryAgentId as string) || selectedOrder.delivery_agent_id || '').trim();
+          ((orderData.deliveryAgentId as string) || order.delivery_agent_id || '').trim();
         const agentName = (agentData.name as string) || selectedAgent.name;
         const agentPhone = (agentData.phone as string) || selectedAgent.phone || '';
         const agentEmail = (agentData.email as string) || selectedAgent.email || '';
         const agentVehicle = (agentData.vehicleType as string) || selectedAgent.vehicle_type || '';
 
         transaction.update(orderRef, {
-          agentId,
+          agentId: selectedAgent.id,
           agentName,
           agentPhone,
           agentEmail,
           agentVehicle,
-          deliveryAgentId: agentId,
+          deliveryAgentId: selectedAgent.id,
           deliveryAgentName: agentName,
           deliveryAgentPhone: agentPhone,
           deliveryAgentEmail: agentEmail,
           deliveryAgentVehicle: agentVehicle,
-          status: 'Out for Delivery',
-          assignedAt: serverTimestamp(),
-          deliveryAssignedAt: serverTimestamp(),
-          outForDeliveryAt: serverTimestamp(),
-          deliveryOutForDeliveryAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
         });
 
         transaction.set(
-          agentRef,
+          selectedAgentRef,
           {
             currentOrderId: trackingOrderId,
             isActive: true,
@@ -225,7 +272,7 @@ export default function AdminOrders({
           { merge: true },
         );
 
-        if (previousAgentId && previousAgentId !== agentId) {
+        if (previousAgentId && previousAgentId !== selectedAgent.id) {
           transaction.set(
             doc(db, 'delivery_agents', previousAgentId),
             {
@@ -240,14 +287,16 @@ export default function AdminOrders({
         transaction.set(
           sessionRef,
           {
-            agentId,
+            agentId: selectedAgent.id,
             agentName,
             agentPhone,
+            agentEmail,
+            agentVehicle,
             completedAt: null,
             customerLocation:
-              orderData.customerLocation ?? toSerializableLocation(selectedOrder.customer_location),
+              orderData.customerLocation ?? toSerializableLocation(order.customer_location),
             lastLocation: null,
-            orderDocId,
+            orderDocId: order.doc_id,
             orderId: trackingOrderId,
             startedAt: null,
             status: 'assigned',
@@ -255,18 +304,17 @@ export default function AdminOrders({
           },
           { merge: true },
         );
+
         transaction.delete(locationRef);
       });
 
-      setOptimisticStatuses(previousStatuses => ({
-        ...previousStatuses,
-        [orderDocId]: 'Out for Delivery',
-      }));
-      setToastMessage('Agent assigned successfully');
+      setToastMessage('Delivery agent assigned');
       setExpandedOrderId('');
     } catch (error) {
-      console.error('Failed to assign delivery agent', error);
-      alert('Unable to assign delivery agent. Please try again.');
+      const message = error instanceof Error
+        ? error.message
+        : 'Unable to assign delivery agent.';
+      setActionError(message);
     } finally {
       setAssigningOrderDocId('');
     }
@@ -281,191 +329,338 @@ export default function AdminOrders({
   }
 
   return (
-    <section className="space-y-4">
-      <div>
-        <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-secondary">Orders queue</p>
-        <h2 className="mt-1 text-[1.45rem] font-semibold text-accent">Manage live orders</h2>
-      </div>
-      {toastMessage && (
-        <div className="rounded-[20px] border border-emerald-300/20 bg-emerald-500/12 px-4 py-3 text-sm font-semibold text-emerald-300">
-          {toastMessage}
+    <>
+      <section className="space-y-4">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-secondary">Orders queue</p>
+          <h2 className="mt-1 text-[1.45rem] font-semibold text-accent">Manage live orders</h2>
         </div>
-      )}
 
-      {sortedOrders.map(order => {
-        const effectiveStatus = optimisticStatuses[order.doc_id] || order.status;
-        const isAssigned = effectiveStatus === 'Out for Delivery' || effectiveStatus === 'Delivered';
-        const isExpanded = expandedOrderId === order.doc_id;
-        const assignedAgentProfile = order.delivery_agent_id
-          ? deliveryAgents.find(agent => agent.id === order.delivery_agent_id) || null
-          : null;
-        const assignedAgentName = assignedAgentProfile?.name || order.delivery_agent_name || 'Agent not assigned';
-        const assignedAgentPhone = assignedAgentProfile?.phone || order.delivery_agent_phone || '--';
-        const assignedAgentVehicle = assignedAgentProfile?.vehicle_type || order.delivery_agent_vehicle || '--';
-        const assignedAgentStatus = assignedAgentProfile
-          ? formatAgentStatusLabel(getAgentStatus(assignedAgentProfile))
-          : effectiveStatus === 'Out for Delivery'
-            ? 'Busy'
-            : '--';
+        {actionError && (
+          <div className="rounded-[20px] border border-rose-300/20 bg-rose-500/12 px-4 py-3 text-sm font-semibold text-rose-300">
+            {actionError}
+          </div>
+        )}
 
-        return (
-          <article
-            key={order.doc_id}
-            className={`coffee-surface-soft rounded-[24px] p-4 ${
-              newOrderDocIds.includes(order.doc_id) ? 'ring-1 ring-secondary/40' : ''
-            }`}
-          >
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-ink-muted">Order ID</p>
-                <p className="mt-1 text-lg font-semibold text-accent">#{order.id}</p>
+        {toastMessage && (
+          <div className="rounded-[20px] border border-emerald-300/20 bg-emerald-500/12 px-4 py-3 text-sm font-semibold text-emerald-300">
+            {toastMessage}
+          </div>
+        )}
+
+        {sortedOrders.map(order => {
+          const canManageAgentAssignment = order.status_code === 'PREPARING';
+          const isExpanded = expandedOrderId === order.doc_id;
+          const hasAssignedAgent = Boolean(
+            order.delivery_agent_id ||
+            order.delivery_agent_name ||
+            order.delivery_agent_phone ||
+            order.delivery_agent_vehicle,
+          );
+          const assignedAgentProfile = order.delivery_agent_id
+            ? deliveryAgents.find(agent => agent.id === order.delivery_agent_id) || null
+            : null;
+          const assignedAgentName = assignedAgentProfile?.name || order.delivery_agent_name || 'Agent not assigned';
+          const assignedAgentPhone = assignedAgentProfile?.phone || order.delivery_agent_phone || '--';
+          const assignedAgentVehicle = assignedAgentProfile?.vehicle_type || order.delivery_agent_vehicle || '--';
+          const assignedAgentStatus = assignedAgentProfile
+            ? formatAgentStatusLabel(getAgentStatus(assignedAgentProfile))
+            : order.status_code === 'OUT_FOR_DELIVERY'
+              ? 'Busy'
+              : '--';
+
+          return (
+            <article
+              key={order.doc_id}
+              className={`coffee-surface-soft rounded-[24px] p-4 ${
+                newOrderDocIds.includes(order.doc_id) ? 'ring-1 ring-secondary/40' : ''
+              }`}
+            >
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-ink-muted">Order ID</p>
+                  <p className="mt-1 text-lg font-semibold text-accent">#{order.id}</p>
+                </div>
+                <span className={`inline-flex rounded-full px-3 py-1 text-[11px] font-semibold ${STATUS_BADGE_CLASS[order.status]}`}>
+                  {order.status}
+                </span>
               </div>
-              <span className={`inline-flex rounded-full px-3 py-1 text-[11px] font-semibold ${STATUS_BADGE_CLASS[effectiveStatus]}`}>
-                {effectiveStatus}
-              </span>
-            </div>
 
-            <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-muted">Customer</p>
-                <p className="mt-1 font-semibold text-accent">{order.customer_name}</p>
-              </div>
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-muted">Total</p>
-                <p className="mt-1 font-semibold text-highlight">{CURRENCY_SYMBOL}{order.total_amount}</p>
-              </div>
-            </div>
+              <p className="mt-3 text-sm text-ink-muted">{getOrderStatusCustomerCopy(order.status_code)}</p>
 
-            <div className="mt-4 text-sm text-ink-muted">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-muted">Items</p>
-              {order.items && order.items.length > 0 ? (
-                <ul className="mt-2 space-y-1">
-                  {order.items.map(item => (
-                    <li key={item.id}>
-                      {item.name} x{item.quantity}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="mt-2 text-xs text-ink-muted">Items loading...</p>
+              <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-muted">Customer</p>
+                  <p className="mt-1 font-semibold text-accent">{order.customer_name}</p>
+                </div>
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-muted">Total</p>
+                  <p className="mt-1 font-semibold text-highlight">{CURRENCY_SYMBOL}{order.total_amount}</p>
+                </div>
+              </div>
+
+              <div className="mt-4 text-sm text-ink-muted">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-muted">Items</p>
+                {order.items && order.items.length > 0 ? (
+                  <ul className="mt-2 space-y-1">
+                    {order.items.map(item => (
+                      <li key={item.id}>
+                        {item.name} x{item.quantity}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mt-2 text-xs text-ink-muted">Items loading...</p>
+                )}
+              </div>
+
+              {order.status_code === 'REJECTED' && order.rejection_reason && (
+                <div className="mt-4 rounded-[18px] border border-rose-300/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-rose-200">Rejection reason</p>
+                  <p className="mt-2 leading-6">{order.rejection_reason}</p>
+                </div>
               )}
-            </div>
 
-            <div className="mt-4 space-y-3">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-muted">
-                  Assign Agent
-                </p>
-                <button
-                  onClick={() => {
-                    if (isAssigned) {
-                      return;
-                    }
-                    setExpandedOrderId(prev => (prev === order.doc_id ? '' : order.doc_id));
-                  }}
-                  disabled={isAssigned}
-                  className="rounded-full bg-primary px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {isAssigned ? 'Assigned' : isExpanded ? 'Hide Agents' : 'Assign Agent'}
-                </button>
-              </div>
-
-              {isExpanded && !isAssigned && (
-                <div className="space-y-2">
-                  {availableAgents.length === 0 ? (
-                    <div className="rounded-[18px] border border-white/8 bg-white/5 px-4 py-3 text-sm text-ink-muted">
-                      No available delivery agents.
+              {hasAssignedAgent && (
+                <div className="mt-4 space-y-3 rounded-[18px] border border-white/8 bg-white/5 px-4 py-3 text-sm text-ink-muted">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-secondary">Assigned Agent</p>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-ink-muted">Name</p>
+                      <p className="mt-1 text-sm font-semibold text-accent">{assignedAgentName}</p>
                     </div>
-                  ) : (
-                    availableAgents.map(agent => {
-                      const statusValue = getAgentStatus(agent);
-                      const statusLabel = formatAgentStatusLabel(statusValue);
-                      const isAgentUnavailable = statusValue === 'offline' || statusValue === 'busy';
-                      return (
-                        <div
-                          key={agent.id}
-                          className="grid gap-3 rounded-[18px] border border-white/8 bg-white/5 p-4 sm:grid-cols-[1.3fr,0.7fr,auto] sm:items-center"
-                        >
-                          <div className="space-y-1">
-                            <p className="text-sm font-semibold text-accent">{agent.name}</p>
-                            <p className="text-sm text-ink-muted">
-                              {agent.vehicle_type || 'Vehicle not added'}
-                            </p>
-                            <p className="text-sm text-ink-muted">
-                              {agent.phone || 'Phone not added'}
-                            </p>
-                            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-secondary">
-                              {statusLabel}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-muted">
-                              Distance
-                            </p>
-                            <p className="mt-1 text-sm font-semibold text-ink">{resolveAgentDistance(agent, order)}</p>
-                          </div>
-                          <button
-                            onClick={() => {
-                              void assignAgentToOrder(order.doc_id, agent.id);
-                            }}
-                            disabled={isAgentUnavailable || assigningOrderDocId === order.doc_id}
-                            className="inline-flex min-h-10 items-center justify-center rounded-full bg-primary px-4 text-xs font-semibold uppercase tracking-[0.18em] text-white disabled:cursor-not-allowed disabled:opacity-60"
-                          >
-                            {assigningOrderDocId === order.doc_id ? 'Assigning...' : 'Assign'}
-                          </button>
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-ink-muted">Phone</p>
+                      <p className="mt-1 text-sm font-semibold text-ink">{assignedAgentPhone}</p>
+                    </div>
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-ink-muted">Vehicle</p>
+                      <p className="mt-1 text-sm font-semibold text-ink">{assignedAgentVehicle}</p>
+                    </div>
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-ink-muted">Status</p>
+                      <p className="mt-1 text-sm font-semibold text-ink">{assignedAgentStatus}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {canManageAgentAssignment && (
+                <div className="mt-4 space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-muted">
+                      Assign Agent
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setExpandedOrderId(prev => (prev === order.doc_id ? '' : order.doc_id))}
+                      className="rounded-full bg-primary px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-white transition hover:opacity-90"
+                    >
+                      {isExpanded ? 'Hide Agents' : hasAssignedAgent ? 'Change Agent' : 'Assign Agent'}
+                    </button>
+                  </div>
+
+                  {!hasAssignedAgent && (
+                    <p className="text-xs text-ink-muted">
+                      Assign a delivery agent before moving this order to dispatch.
+                    </p>
+                  )}
+
+                  {isExpanded && (
+                    <div className="space-y-2">
+                      {availableAgents.length === 0 ? (
+                        <div className="rounded-[18px] border border-white/8 bg-white/5 px-4 py-3 text-sm text-ink-muted">
+                          No available delivery agents.
                         </div>
-                      );
-                    })
+                      ) : (
+                        availableAgents.map(agent => {
+                          const statusValue = getAgentStatus(agent);
+                          const statusLabel = formatAgentStatusLabel(statusValue);
+                          const isAgentUnavailable = statusValue === 'offline' || statusValue === 'busy';
+
+                          return (
+                            <div
+                              key={agent.id}
+                              className="grid gap-3 rounded-[18px] border border-white/8 bg-white/5 p-4 sm:grid-cols-[1.3fr,0.7fr,auto] sm:items-center"
+                            >
+                              <div className="space-y-1">
+                                <p className="text-sm font-semibold text-accent">{agent.name}</p>
+                                <p className="text-sm text-ink-muted">{agent.vehicle_type || 'Vehicle not added'}</p>
+                                <p className="text-sm text-ink-muted">{agent.phone || 'Phone not added'}</p>
+                                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-secondary">
+                                  {statusLabel}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-muted">
+                                  Distance
+                                </p>
+                                <p className="mt-1 text-sm font-semibold text-ink">{resolveAgentDistance(agent, order)}</p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  void assignAgentToOrder(order, agent.id);
+                                }}
+                                disabled={isAgentUnavailable || assigningOrderDocId === order.doc_id}
+                                className="inline-flex min-h-10 items-center justify-center rounded-full bg-primary px-4 text-xs font-semibold uppercase tracking-[0.18em] text-white disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                {assigningOrderDocId === order.doc_id ? 'Assigning...' : 'Assign'}
+                              </button>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
                   )}
                 </div>
               )}
-            </div>
 
-            {(order.delivery_agent_id || order.delivery_agent_name || order.delivery_agent_phone || order.delivery_agent_vehicle) && (
-              <div className="mt-3 space-y-3 rounded-[18px] border border-white/8 bg-white/5 px-4 py-3 text-sm text-ink-muted">
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-secondary">Assigned Agent</p>
-                </div>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-ink-muted">Name</p>
-                    <p className="mt-1 text-sm font-semibold text-accent">{assignedAgentName}</p>
+              <div className="mt-4 rounded-[20px] border border-white/8 bg-white/5 px-4 py-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-muted">Actions</p>
+
+                {order.status_code === 'PENDING' && (
+                  <div className="mt-3 flex flex-wrap gap-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void runStatusAction(order, 'ACCEPTED');
+                      }}
+                      disabled={submittingOrderDocId === order.doc_id}
+                      className="coffee-btn-primary min-h-10 px-4"
+                    >
+                      {submittingOrderDocId === order.doc_id ? 'Updating...' : 'Accept'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActionError('');
+                        setRejectingOrder(order);
+                        setRejectionReasonDraft('');
+                        setRejectError('');
+                      }}
+                      disabled={submittingOrderDocId === order.doc_id}
+                      className="rounded-full border border-rose-300/25 bg-rose-500/10 px-4 py-2 text-sm font-semibold text-rose-200 transition hover:bg-rose-500/16 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Reject
+                    </button>
                   </div>
-                  <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-ink-muted">Phone</p>
-                    <p className="mt-1 text-sm font-semibold text-ink">{assignedAgentPhone}</p>
+                )}
+
+                {order.status_code === 'ACCEPTED' && (
+                  <div className="mt-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void runStatusAction(order, 'PREPARING');
+                      }}
+                      disabled={submittingOrderDocId === order.doc_id}
+                      className="coffee-btn-primary min-h-10 px-4"
+                    >
+                      {submittingOrderDocId === order.doc_id ? 'Updating...' : 'Start Preparing'}
+                    </button>
                   </div>
-                  <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-ink-muted">Vehicle</p>
-                    <p className="mt-1 text-sm font-semibold text-ink">{assignedAgentVehicle}</p>
+                )}
+
+                {order.status_code === 'PREPARING' && (
+                  <div className="mt-3 space-y-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void runStatusAction(order, 'OUT_FOR_DELIVERY');
+                      }}
+                      disabled={!hasAssignedAgent || submittingOrderDocId === order.doc_id || assigningOrderDocId === order.doc_id}
+                      className="coffee-btn-primary min-h-10 px-4 disabled:opacity-60"
+                    >
+                      {submittingOrderDocId === order.doc_id ? 'Updating...' : 'Mark Out for Delivery'}
+                    </button>
+                    {!hasAssignedAgent && (
+                      <p className="text-xs text-ink-muted">
+                        Assign a delivery agent before dispatching this order.
+                      </p>
+                    )}
                   </div>
-                  <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-ink-muted">Status</p>
-                    <p className="mt-1 text-sm font-semibold text-ink">{assignedAgentStatus}</p>
+                )}
+
+                {order.status_code === 'OUT_FOR_DELIVERY' && (
+                  <div className="mt-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void runStatusAction(order, 'DELIVERED');
+                      }}
+                      disabled={submittingOrderDocId === order.doc_id}
+                      className="coffee-btn-primary min-h-10 px-4"
+                    >
+                      {submittingOrderDocId === order.doc_id ? 'Updating...' : 'Mark Delivered'}
+                    </button>
                   </div>
-                </div>
+                )}
+
+                {(order.status_code === 'DELIVERED' || order.status_code === 'REJECTED') && (
+                  <p className="mt-3 text-sm text-ink-muted">
+                    This order is locked because it has reached a final state.
+                  </p>
+                )}
               </div>
+            </article>
+          );
+        })}
+      </section>
+
+      {rejectingOrder && (
+        <div className="fixed inset-0 z-[120] flex items-end justify-center bg-black/60 px-4 py-6 sm:items-center sm:px-6">
+          <div className="w-full max-w-lg rounded-[28px] border border-white/10 bg-[#16100c] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.32)]">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-secondary">Reject Order</p>
+            <h3 className="mt-2 text-[1.35rem] font-semibold text-accent">
+              Reject order #{rejectingOrder.id}
+            </h3>
+            <p className="mt-2 text-sm leading-6 text-ink-muted">
+              Enter a clear reason. The customer will see this comment in their live order updates.
+            </p>
+
+            <label className="mt-5 block text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-muted">
+              Enter rejection reason
+            </label>
+            <textarea
+              value={rejectionReasonDraft}
+              onChange={event => {
+                setRejectionReasonDraft(event.target.value);
+                if (rejectError) {
+                  setRejectError('');
+                }
+              }}
+              rows={4}
+              placeholder="Example: Shop is closed for maintenance."
+              className="coffee-input mt-2 min-h-[120px] resize-none"
+            />
+
+            {rejectError && (
+              <p className="mt-3 text-sm font-semibold text-rose-300">{rejectError}</p>
             )}
 
-            <div className="mt-4">
-              <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-muted">
-                Change Status
-              </label>
-              <select
-                value={effectiveStatus}
-                onChange={event => onUpdateStatus(order.doc_id, event.target.value as Order['status'])}
-                className="coffee-input"
+            <div className="mt-5 flex gap-3">
+              <button
+                type="button"
+                onClick={closeRejectModal}
+                className="coffee-btn-secondary flex-1 justify-center"
               >
-                {orderStatuses.map(status => (
-                  <option key={status} value={status}>
-                    {status}
-                  </option>
-                ))}
-              </select>
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  void handleRejectConfirm();
+                }}
+                disabled={submittingOrderDocId === rejectingOrder.doc_id}
+                className="inline-flex min-h-11 flex-1 items-center justify-center rounded-full bg-rose-500 px-4 text-sm font-semibold text-white transition hover:bg-rose-600 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {submittingOrderDocId === rejectingOrder.doc_id ? 'Rejecting...' : 'Confirm Reject'}
+              </button>
             </div>
-          </article>
-        );
-      })}
-    </section>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

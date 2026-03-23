@@ -15,7 +15,7 @@ import { useOffers } from './hooks/useOffers';
 import AdminDashboard from './components/AdminDashboard';
 import AgentDashboard from './components/AgentDashboard';
 import MyOrders from './components/MyOrders';
-import { CURRENCY_SYMBOL, ORDER_STATUSES } from './features/app/lib/constants';
+import { CURRENCY_SYMBOL } from './features/app/lib/constants';
 import { useRealtimeAppData } from './features/app/hooks/useRealtimeAppData';
 import { useOrderOperations } from './features/app/hooks/useOrderOperations';
 import { useProfileManager } from './features/app/hooks/useProfileManager';
@@ -140,13 +140,23 @@ export default function App() {
       const mergedItems =
         syncedOrder.items && syncedOrder.items.length > 0 ? syncedOrder.items : prev.items;
       const isSameStatus = prev.status === syncedOrder.status;
+      const isSameStatusCode = prev.status_code === syncedOrder.status_code;
       const isSameTotal = prev.total_amount === syncedOrder.total_amount;
       const isSameAddress = prev.address === syncedOrder.address;
+      const isSameRejectionReason = prev.rejection_reason === syncedOrder.rejection_reason;
       const isSameLocation =
         prev.customer_location?.lat === syncedOrder.customer_location?.lat &&
         prev.customer_location?.lng === syncedOrder.customer_location?.lng;
       const isSameItemsRef = prev.items === mergedItems;
-      if (isSameStatus && isSameTotal && isSameAddress && isSameLocation && isSameItemsRef) {
+      if (
+        isSameStatus &&
+        isSameStatusCode &&
+        isSameTotal &&
+        isSameAddress &&
+        isSameRejectionReason &&
+        isSameLocation &&
+        isSameItemsRef
+      ) {
         return prev;
       }
       return { ...syncedOrder, items: mergedItems };
@@ -303,10 +313,9 @@ export default function App() {
             isOffersLoading={isOffersLoading}
             offersError={offersError}
             newOrderDocIds={appData.newOrderDocIds}
-            orderStatuses={ORDER_STATUSES}
             deliveryAgents={appData.deliveryAgents}
-            onUpdateStatus={(orderDocId, status) => {
-              void orderOperations.updateOrderStatus(orderDocId, status);
+            onUpdateStatus={async ({ orderId, status, rejectionReason }) => {
+              await orderOperations.updateOrderStatus({ orderId, status, rejectionReason });
             }}
             onCreateOffer={createOffer}
             onUpdateOffer={updateOffer}
