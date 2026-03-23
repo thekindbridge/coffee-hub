@@ -1,7 +1,8 @@
 {
-  "name": "react-example",
+  "name": "coffee-hub-web",
   "private": true,
   "version": "0.0.0",
+  "description": "Coffee HUB web ordering app and Vercel APIs",
   "type": "module",
   "engines": {
     "node": "20.x"
@@ -11,7 +12,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "clean": "vite build --emptyOutDir",
-    "lint": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "lint": "npm run typecheck",
     "seed-menu": "node --experimental-strip-types src/scripts/seedMenu.ts"
   },
   "dependencies": {

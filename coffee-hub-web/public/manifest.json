@@ -1,20 +1,28 @@
 {
-  "name": "Coffee Hub",
-  "short_name": "Coffee Hub",
+  "id": "/",
+  "name": "Coffee HUB Ordering",
+  "short_name": "Coffee HUB",
+  "description": "Order fresh coffee, snacks, and quick meals from Coffee HUB.",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#000000",
+  "display_override": ["standalone", "minimal-ui", "browser"],
+  "orientation": "portrait-primary",
+  "background_color": "#120d0b",
+  "theme_color": "#120d0b",
+  "categories": ["food", "shopping"],
   "icons": [
     {
       "src": "/icon-192.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     },
     {
-      "src": "https://res.cloudinary.com/ddfhaqeme/image/upload/v1773341446/grok-image-42302cf0-204b-482e-9159-1e3e5307f1f7_hj3irh.png",
+      "src": "/icon-512.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     }
   ]
 }

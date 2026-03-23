@@ -1,73 +1,58 @@
-# COFFE HUB - Firebase Edition
+# Coffee HUB
 
-COFFE HUB is now a frontend-only React + Vite + Tailwind app powered by Firebase.
+Coffee HUB is a React + Vite ordering app backed by Vercel APIs, Firebase Auth, Firestore, and a mobile-friendly PWA shell. The legacy Bubblewrap/TWA Android wrapper has been removed so the codebase can evolve cleanly toward React Native and additional role-based clients.
 
-## Stack
+## Architecture
 
-- React + TypeScript + Vite
-- Tailwind CSS + Motion
-- Firebase Authentication (Phone Number OTP)
-- Cloud Firestore (menu, orders)
+- Web app: React 19 + Vite + TypeScript
+- Backend: Vercel serverless APIs in `api/`
+- Data: Firebase Authentication + Firestore
+- Realtime operations: Firestore subscriptions for menu, orders, delivery state
+- Mobile installability: PWA manifest + service worker + install prompt
+
+## Current checkout mode
+
+The checkout flow in this repository currently creates authenticated cash-on-delivery orders through `/api/orders/create`.
+
+If Razorpay support is required, add dedicated payment order creation and payment verification endpoints before wiring a native client to online payments.
 
 ## Setup
 
-1. Install dependencies:
-   `npm install`
-2. Create `.env.local` and fill Firebase values.
-3. Enable Firebase Authentication with Phone provider.
-4. Create Firestore collections:
-   - `menu_items`
-   - `orders`
-5. Start development server:
-   `npm run dev`
+1. Install dependencies with `npm install`.
+2. Create `.env.local` with Firebase web config values.
+3. Configure Vercel server env vars for Firebase Admin:
+   - `FIREBASE_ADMIN_PROJECT_ID`
+   - `FIREBASE_ADMIN_CLIENT_EMAIL`
+   - `FIREBASE_ADMIN_PRIVATE_KEY`
+4. Start the web app with `npm run dev`.
+5. Run validation with `npm run lint` and `npm run build`.
 
-## Admin Access
+## API surface
 
-Admin dashboard is shown when signed-in user phone number matches:
+- `GET /api/menu`
+  Returns clean menu JSON for web or mobile clients.
+- `GET /api/orders`
+  Returns authenticated order history for the signed-in user.
+- `GET /api/orders?scope=all`
+  Admin-only order listing for future dashboards and staff apps.
+- `POST /api/orders/create`
+  Authenticated order creation with server-side pricing validation.
+- `POST /api/create-order`
+  Backward-compatible alias for the same order creation handler.
+- `POST /api/admin/update-shop-timing`
+  Admin-only shop timing updates.
 
-`+917893504892`
+## Firestore collections
 
-You can override this using `VITE_ADMIN_PHONE`.
+- `menu_items`
+- `orders`
+- `offers`
+- `customer_profiles`
+- `delivery_agents`
+- `delivery_sessions`
+- `admin_access`
+- `delivery_access`
 
-## Firestore Document Shapes
+## Future mobile direction
 
-### menu_items
-
-```json
-{
-  "name": "Chicken Noodles",
-  "category": "Noodles",
-  "price": 180,
-  "spiceLevel": 4,
-  "veg": false,
-  "rating": 4.5,
-  "image": "https://cdn.example.com/chicken-noodles.jpg",
-  "description": "Wok tossed spicy chicken noodles",
-  "isAvailable": true
-}
-```
-
-### orders
-
-```json
-{
-  "orderId": "COF1001",
-  "userId": "firebaseUserId",
-  "name": "Customer Name",
-  "phone": "9876543210",
-  "address": "Inkollu, Andhra Pradesh",
-  "items": [
-    {
-      "itemId": "menu_item_doc_id",
-      "name": "Chicken Noodles",
-      "quantity": 2,
-      "price": 180
-    }
-  ],
-  "paymentMode": "COD",
-  "paymentStatus": "PENDING",
-  "orderStatus": "PLACED",
-  "totalAmount": 420,
-  "createdAt": "serverTimestamp"
-}
-```
+The backend now exposes reusable JSON endpoints for menu and order retrieval, so the next phase can move shared business rules into APIs while React Native and delivery/admin clients consume the same contract.

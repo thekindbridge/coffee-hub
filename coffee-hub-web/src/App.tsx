@@ -34,7 +34,9 @@ import { ContactPage } from './features/customer/pages/ContactPage';
 import { CustomerProfileDrawer } from './features/customer/components/CustomerProfileDrawer';
 import { CartDrawer } from './features/customer/components/CartDrawer';
 import { BrewingOverlay } from './features/customer/components/BrewingOverlay';
+import { InstallAppBanner } from './features/customer/components/InstallAppBanner';
 import { ShopStatusBanner } from './features/customer/components/ShopStatusBanner';
+import { useInstallPrompt } from './features/customer/hooks/useInstallPrompt';
 import { StaffProfileDrawer } from './features/staff/components/StaffProfileDrawer';
 import { buildShopAvailabilityMessage } from '../shared/shopTiming';
 
@@ -46,6 +48,7 @@ export default function App() {
   const [isTrackingOrder, setIsTrackingOrder] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
+  const installPrompt = useInstallPrompt();
 
   const appData = useRealtimeAppData();
 
@@ -186,6 +189,7 @@ export default function App() {
     [appData.shopTiming.openTime],
   );
   const shouldShowShopClosedBanner = !appData.isShopTimingLoading && !checkout.isShopOpen;
+  const isCartFloatingVisible = checkout.cartCount > 0 && activeTab !== 'tracking';
 
   const handleTrackOrderLookup = () => {
     const orderId = trackingOrderId.trim().toUpperCase();
@@ -482,7 +486,14 @@ export default function App() {
         </footer>
       )}
 
-      {checkout.cartCount > 0 && activeTab !== 'tracking' && (
+      <InstallAppBanner
+        isVisible={installPrompt.isInstallPromptAvailable}
+        isCartButtonVisible={isCartFloatingVisible}
+        onDismiss={installPrompt.dismissPrompt}
+        onInstall={() => void installPrompt.promptToInstall()}
+      />
+
+      {isCartFloatingVisible && (
         <button
           onClick={() => checkout.setIsCartOpen(true)}
           className="fixed bottom-24 left-4 right-4 z-40 mx-auto flex max-w-screen-md items-center justify-between rounded-[24px] border border-white/10 bg-[linear-gradient(135deg,rgba(111,78,55,0.96),rgba(62,39,35,0.96))] px-4 py-3 text-white shadow-[0_22px_40px_rgba(40,22,16,0.45)] active:scale-[0.98] sm:left-6 sm:right-6"
