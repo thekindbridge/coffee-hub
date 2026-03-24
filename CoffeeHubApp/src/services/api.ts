@@ -9,10 +9,18 @@ type RequestOptions = {
 export type MenuItem = {
   id: string;
   name: string;
-  description?: string;
-  imageUrl?: string;
-  category?: string;
+  category: string;
   price: number;
+  spice_level: number;
+  is_veg: boolean;
+  rating: number;
+  image_url: string;
+  description: string;
+  is_available: boolean;
+};
+
+type MenuResponse = {
+  menu: MenuItem[];
 };
 
 export type CreateOrderInput = {
@@ -49,8 +57,14 @@ async function request<TResponse>(path: string, options: RequestOptions = {}): P
   return payload as TResponse;
 }
 
-export function getMenu() {
-  return request<MenuItem[]>('/api/menu');
+export async function getMenu() {
+  const payload = await request<MenuResponse | MenuItem[]>('/api/menu');
+
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+
+  return Array.isArray(payload.menu) ? payload.menu : [];
 }
 
 export function createOrder(payload: CreateOrderInput, token?: string) {
