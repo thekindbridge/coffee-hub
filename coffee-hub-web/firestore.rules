@@ -20,16 +20,20 @@ service cloud.firestore {
         exists(/databases/$(database)/documents/agents/$(userEmail()));
     }
 
+    function isAssignedAgentEmail(orderData) {
+      return signedIn() &&
+        (orderData.assignedAgentId == userEmail() ||
+          orderData.assignedAgentEmail == userEmail() ||
+          orderData.agentEmail == userEmail() ||
+          orderData.deliveryAgentEmail == userEmail());
+    }
+
     function isOrderOwner() {
       return signedIn() && resource.data.userId == request.auth.uid;
     }
 
     function isAssignedAgent() {
-      return signedIn() &&
-        (resource.data.assignedAgentId == userEmail() ||
-          resource.data.assignedAgentEmail == userEmail() ||
-          resource.data.agentEmail == userEmail() ||
-          resource.data.deliveryAgentEmail == userEmail());
+      return isAssignedAgentEmail(resource.data);
     }
 
     function isOrderOwnerById(orderId) {
@@ -45,10 +49,64 @@ service cloud.firestore {
           get(/databases/$(database)/documents/orders/$(orderId)).data.deliveryAgentEmail == userEmail());
     }
 
+    function isValidCoordinate(value, minimum, maximum) {
+      return value is number && value >= minimum && value <= maximum;
+    }
+
+    function isValidDeliveryLocation(location) {
+      return location == null || (
+        location is map &&
+        location.keys().hasOnly(['lat', 'lng', 'accuracy', 'updatedAt']) &&
+        isValidCoordinate(location.lat, -90, 90) &&
+        isValidCoordinate(location.lng, -180, 180) &&
+        (location.accuracy == null || location.accuracy is number) &&
+        (location.updatedAt == null || location.updatedAt is timestamp)
+      );
+    }
+
+    function hasOnlyAssignedAgentTrackingChanges() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        'deliveryLocation',
+        'updatedAt',
+        'status',
+        'orderStatus',
+        'deliveredAt',
+        'deliveryDeliveredAt'
+      ]);
+    }
+
+    function isAssignedAgentTrackingOwnOrder() {
+      return isAssignedAgentEmail(resource.data) &&
+        resource.data.status == 'OUT_FOR_DELIVERY' &&
+        request.resource.data.updatedAt is timestamp &&
+        isValidDeliveryLocation(request.resource.data.deliveryLocation) &&
+        hasOnlyAssignedAgentTrackingChanges() &&
+        (
+          (
+            request.resource.data.status == resource.data.status &&
+            request.resource.data.orderStatus == resource.data.orderStatus
+          ) ||
+          (
+            request.resource.data.status == 'DELIVERED' &&
+            request.resource.data.orderStatus == 'DELIVERED' &&
+            request.resource.data.deliveredAt is timestamp &&
+            request.resource.data.deliveryDeliveredAt is timestamp
+          )
+        );
+    }
+
+    function isOwnAgentDocument(agentId) {
+      return signedIn() &&
+        (agentId == userEmail() ||
+          resource.data.email == userEmail() ||
+          request.resource.data.email == userEmail());
+    }
+
     match /orders/{orderId} {
       allow read: if isAdmin() || isOrderOwner() || isAssignedAgent();
       allow create: if signedIn() && request.resource.data.userId == request.auth.uid;
-      allow update, delete: if isAdmin();
+      allow update: if isAdmin() || isAssignedAgentTrackingOwnOrder();
+      allow delete: if isAdmin();
     }
 
     match /order_items/{itemId} {
@@ -63,7 +121,7 @@ service cloud.firestore {
 
     match /agents/{agentId} {
       allow read: if isAdmin() || signedIn();
-      allow create, update: if isAdmin() || (signedIn() && request.resource.data.email == userEmail());
+      allow create, update: if isAdmin() || isOwnAgentDocument(agentId);
       allow delete: if isAdmin();
     }
 

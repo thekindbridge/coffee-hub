@@ -32,6 +32,8 @@ export interface AgentTrackerOptions {
   orderDocId: string;
   minimumUpdateIntervalMs?: number;
   minimumDistanceDeltaMeters?: number;
+  maximumHeartbeatIntervalMs?: number;
+  maximumAcceptedAccuracyMeters?: number;
   restartAfterMs?: number;
   restartDelayMs?: number;
   geolocationOptions?: PositionOptions;
@@ -43,6 +45,8 @@ export interface AgentTrackerOptions {
 
 const DEFAULT_MINIMUM_UPDATE_INTERVAL_MS = 5000;
 const DEFAULT_MINIMUM_DISTANCE_DELTA_METERS = 15;
+const DEFAULT_MAXIMUM_HEARTBEAT_INTERVAL_MS = 30000;
+const DEFAULT_MAXIMUM_ACCEPTED_ACCURACY_METERS = 120;
 const DEFAULT_RESTART_AFTER_MS = 20000;
 const DEFAULT_RESTART_DELAY_MS = 4000;
 
@@ -87,6 +91,8 @@ export class AgentTracker {
       | 'orderDocId'
       | 'minimumUpdateIntervalMs'
       | 'minimumDistanceDeltaMeters'
+      | 'maximumHeartbeatIntervalMs'
+      | 'maximumAcceptedAccuracyMeters'
       | 'restartAfterMs'
       | 'restartDelayMs'
       | 'geolocationOptions'
@@ -114,6 +120,10 @@ export class AgentTracker {
         options.minimumUpdateIntervalMs ?? DEFAULT_MINIMUM_UPDATE_INTERVAL_MS,
       minimumDistanceDeltaMeters:
         options.minimumDistanceDeltaMeters ?? DEFAULT_MINIMUM_DISTANCE_DELTA_METERS,
+      maximumHeartbeatIntervalMs:
+        options.maximumHeartbeatIntervalMs ?? DEFAULT_MAXIMUM_HEARTBEAT_INTERVAL_MS,
+      maximumAcceptedAccuracyMeters:
+        options.maximumAcceptedAccuracyMeters ?? DEFAULT_MAXIMUM_ACCEPTED_ACCURACY_METERS,
       restartAfterMs: options.restartAfterMs ?? DEFAULT_RESTART_AFTER_MS,
       restartDelayMs: options.restartDelayMs ?? DEFAULT_RESTART_DELAY_MS,
       geolocationOptions: options.geolocationOptions ?? {
@@ -220,15 +230,30 @@ export class AgentTracker {
     const nextLocation = toDeliveryLocation(position);
     this.options.onLocation?.(nextLocation);
 
+    if (
+      nextLocation.accuracy &&
+      nextLocation.accuracy > this.options.maximumAcceptedAccuracyMeters &&
+      this.lastPersistedLocation
+    ) {
+      return;
+    }
+
     const now = Date.now();
+    const isFirstPersist = !this.lastPersistedLocation;
     const hasReachedUpdateInterval =
       now - this.lastPersistedAt >= this.options.minimumUpdateIntervalMs;
     const hasMovedEnough =
-      !this.lastPersistedLocation ||
+      isFirstPersist ||
       calculateDistanceMeters(this.lastPersistedLocation, nextLocation) >=
         this.options.minimumDistanceDeltaMeters;
+    const hasHeartbeatExpired =
+      now - this.lastPersistedAt >= this.options.maximumHeartbeatIntervalMs;
 
-    if (!hasReachedUpdateInterval && !hasMovedEnough) {
+    if (!isFirstPersist && !hasReachedUpdateInterval) {
+      return;
+    }
+
+    if (!isFirstPersist && !hasMovedEnough && !hasHeartbeatExpired) {
       return;
     }
 
@@ -248,6 +273,19 @@ export class AgentTracker {
 
   private async persistLocation(location: DeliveryLocation) {
     await Promise.all([
+      setDoc(
+        doc(db, 'orders', this.options.orderDocId),
+        {
+          deliveryLocation: {
+            lat: location.lat,
+            lng: location.lng,
+            accuracy: location.accuracy ?? null,
+            updatedAt: serverTimestamp(),
+          },
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      ),
       setDoc(
         doc(db, 'agent_locations', this.options.orderId),
         {

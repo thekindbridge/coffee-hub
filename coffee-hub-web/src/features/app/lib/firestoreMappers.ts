@@ -362,6 +362,7 @@ export const mapOrderRecordToOrder = (
     phone: (data.phone as string) || '',
     address: (data.address as string) || '',
     customer_location: mapLocationRecord(data.customerLocation),
+    delivery_location: mapLocationRecord(data.deliveryLocation ?? data.delivery_location),
     total_amount: finalTotal,
     subtotal,
     discount,

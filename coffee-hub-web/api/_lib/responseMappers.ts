@@ -21,6 +21,7 @@ export interface StoredOrderRecord {
   phone?: string;
   address?: string;
   customerLocation?: Record<string, unknown> | null;
+  deliveryLocation?: Record<string, unknown> | null;
   items?: StoredOrderItem[];
   subtotal?: number;
   discount?: number;
@@ -186,6 +187,7 @@ export const mapOrderRecordToResponse = (
     phone: record.phone || '',
     address: record.address || '',
     customer_location: mapLocationRecord(record.customerLocation),
+    delivery_location: mapLocationRecord(record.deliveryLocation),
     total_amount: totalAmount,
     subtotal,
     discount,

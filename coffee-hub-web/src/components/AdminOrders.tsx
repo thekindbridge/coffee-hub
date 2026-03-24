@@ -8,6 +8,7 @@ import {
 } from '../../shared/orderStatus';
 import type { DeliveryAgent, DeliveryLocation, Order } from '../types';
 import { calculateDistanceMeters } from '../agent/agentTracker';
+import AdminDeliveryMonitor from './AdminDeliveryMonitor';
 
 const CURRENCY_SYMBOL = '\u20B9';
 
@@ -447,6 +448,25 @@ export default function AdminOrders({
                       <p className="mt-1 text-sm font-semibold text-ink">{assignedAgentStatus}</p>
                     </div>
                   </div>
+                </div>
+              )}
+
+              {order.status_code === 'OUT_FOR_DELIVERY' && (
+                <div className="mt-4 space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-muted">
+                      Live Monitor
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setExpandedOrderId(prev => (prev === order.doc_id ? '' : order.doc_id))}
+                      className="rounded-full bg-primary px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-white transition hover:opacity-90"
+                    >
+                      {isExpanded ? 'Hide Monitor' : 'Open Monitor'}
+                    </button>
+                  </div>
+
+                  {isExpanded && <AdminDeliveryMonitor order={order} />}
                 </div>
               )}
 

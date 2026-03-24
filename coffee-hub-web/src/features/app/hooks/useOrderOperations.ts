@@ -115,6 +115,14 @@ export const useOrderOperations = ({
       orderStatus: 'DELIVERED',
       deliveredAt: serverTimestamp(),
       deliveryDeliveredAt: serverTimestamp(),
+      ...(finalLocation
+        ? {
+            deliveryLocation: {
+              ...toFirestoreLocation(finalLocation),
+              updatedAt: serverTimestamp(),
+            },
+          }
+        : {}),
       updatedAt: serverTimestamp(),
     });
     batch.set(
@@ -174,6 +182,7 @@ export const useOrderOperations = ({
 
     applyOrderLocalUpdate(order.doc_id, currentOrder => ({
       ...currentOrder,
+      delivery_location: finalLocation ?? currentOrder.delivery_location ?? null,
       status: 'Delivered',
       status_code: 'DELIVERED',
       rejection_reason: '',
@@ -186,6 +195,11 @@ export const useOrderOperations = ({
   const handleStartDelivery = async () => {
     if (!currentDeliveryOrder?.customer_location) {
       alert('This order is missing customer coordinates, so live delivery cannot start.');
+      return;
+    }
+
+    if (currentDeliveryOrder.status_code !== 'OUT_FOR_DELIVERY') {
+      alert('Tracking can only start once the order is out for delivery.');
       return;
     }
 
@@ -232,35 +246,6 @@ export const useOrderOperations = ({
 
     trackedOrderIdRef.current = currentDeliveryOrder.id;
 
-    const nowIso = new Date().toISOString();
-    const orderDeliveryUpdate: Record<string, unknown> = {
-      status: 'OUT_FOR_DELIVERY',
-      orderStatus: 'OUT_FOR_DELIVERY',
-      outForDeliveryAt: serverTimestamp(),
-      deliveryOutForDeliveryAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    };
-    if (!currentDeliveryOrder.delivery_assigned_at) {
-      orderDeliveryUpdate.assignedAt = serverTimestamp();
-      orderDeliveryUpdate.deliveryAssignedAt = serverTimestamp();
-    }
-
-    await setDoc(
-      doc(db, 'orders', currentDeliveryOrder.doc_id),
-      orderDeliveryUpdate,
-      { merge: true },
-    );
-
-    applyOrderLocalUpdate(currentDeliveryOrder.doc_id, order => ({
-      ...order,
-      status: 'Out for Delivery',
-      status_code: 'OUT_FOR_DELIVERY',
-      rejection_reason: '',
-      delivery_assigned_at: order.delivery_assigned_at || nowIso,
-      delivery_out_for_delivery_at: order.delivery_out_for_delivery_at || nowIso,
-      updated_at: nowIso,
-    }));
-
     await setDoc(
       doc(db, 'delivery_sessions', currentDeliveryOrder.id),
       {
@@ -274,6 +259,7 @@ export const useOrderOperations = ({
         startedAt: serverTimestamp(),
         status: 'active',
         updatedAt: serverTimestamp(),
+        customerLocation: currentDeliveryOrder.customer_location,
       },
       { merge: true },
     );

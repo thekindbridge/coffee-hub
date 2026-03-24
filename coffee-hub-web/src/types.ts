@@ -95,6 +95,7 @@ export interface Order {
   updated_at?: string;
   user_id: string;
   customer_location?: DeliveryLocation | null;
+  delivery_location?: DeliveryLocation | null;
   delivery_agent_id?: string;
   delivery_agent_name?: string;
   delivery_agent_phone?: string;

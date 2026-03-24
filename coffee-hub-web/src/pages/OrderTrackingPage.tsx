@@ -429,8 +429,10 @@ export default function OrderTrackingPage({
               <DeliveryTrackingMap
                 coffeeShopLocation={coffeeShopLocation}
                 customerLocation={liveOrder.customer_location}
+                liveAgentLocation={liveOrder.delivery_location}
                 onRouteMetricsChange={setRouteMetrics}
                 orderId={liveOrder.id}
+                orderDocId={liveOrder.doc_id}
                 agentId={agentId}
                 className="w-full overflow-hidden rounded-[30px] [&_.pointer-events-none.absolute.inset-x-0.top-0.z-20]:hidden [&_.pointer-events-none.absolute.inset-x-0.bottom-0.z-20]:hidden"
                 mapClassName="h-[520px] w-full sm:h-[640px] lg:h-[720px]"
