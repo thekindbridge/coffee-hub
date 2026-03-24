@@ -14,6 +14,7 @@ import {
 import { postApi } from '../../../utils/apiClient';
 import {
   getOrderStatusLabel,
+  isCustomerCancellableOrderStatus,
   normalizeOrderStatusCode,
 } from '../../../../shared/orderStatus';
 import type {
@@ -273,6 +274,43 @@ export const useOrderOperations = ({
     return response.order;
   };
 
+  const cancelOrder = async (orderId: string, cancellationReason: string) => {
+    const existingOrder =
+      userOrders.find(order => order.doc_id === orderId) ||
+      (orderStatus?.doc_id === orderId ? orderStatus : null);
+
+    if (!existingOrder) {
+      throw new Error('Unable to find the order to cancel.');
+    }
+
+    if (!isCustomerCancellableOrderStatus(existingOrder.status_code)) {
+      throw new Error('Order cannot be cancelled at this stage.');
+    }
+
+    const nextReason = cancellationReason.trim();
+    if (!nextReason) {
+      throw new Error('Select a cancellation reason before confirming.');
+    }
+
+    const idToken = await auth.currentUser?.getIdToken(true);
+    if (!idToken) {
+      throw new Error('Please sign in again before cancelling the order.');
+    }
+
+    const response = await postApi<UpdateOrderStatusResponse>(
+      '/api/orders/cancel',
+      {
+        cancellationReason: nextReason,
+        orderId,
+      },
+      idToken,
+    );
+
+    replaceOrderLocalState(response.order);
+    setNewOrderDocIds(prev => prev.filter(id => id !== response.order.doc_id));
+    return response.order;
+  };
+
   const handleLogout = async () => {
     try {
       agentTrackerRef.current?.stop();
@@ -291,6 +329,7 @@ export const useOrderOperations = ({
 
   return {
     assignAgentToOrder,
+    cancelOrder,
     handleStartDelivery,
     handleEndDelivery,
     updateOrderStatus,

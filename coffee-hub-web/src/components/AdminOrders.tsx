@@ -28,6 +28,7 @@ const STATUS_BADGE_CLASS: Record<Order['status'], string> = {
   'Out for Delivery': 'border border-orange-300/30 bg-orange-400/18 text-orange-300',
   Delivered: 'border border-emerald-300/30 bg-emerald-500/18 text-emerald-200',
   Rejected: 'border border-rose-300/30 bg-rose-400/18 text-rose-300',
+  Cancelled: 'border border-rose-300/30 bg-rose-500/18 text-rose-200',
 };
 
 const formatDistance = (meters: number | null) => {
@@ -293,6 +294,13 @@ export default function AdminOrders({
                 </div>
               )}
 
+              {order.status_code === 'CANCELLED' && order.cancellation_reason && (
+                <div className="mt-4 rounded-[18px] border border-rose-300/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-rose-200">Cancellation reason</p>
+                  <p className="mt-2 leading-6">{order.cancellation_reason}</p>
+                </div>
+              )}
+
               {hasAssignedAgent && (
                 <div className="mt-4 space-y-3 rounded-[18px] border border-white/8 bg-white/5 px-4 py-3 text-sm text-ink-muted">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-secondary">Assigned Agent</p>
@@ -476,7 +484,11 @@ export default function AdminOrders({
                   </div>
                 )}
 
-                {(order.status_code === 'DELIVERED' || order.status_code === 'REJECTED') && (
+                {(
+                  order.status_code === 'DELIVERED' ||
+                  order.status_code === 'REJECTED' ||
+                  order.status_code === 'CANCELLED'
+                ) && (
                   <p className="mt-3 text-sm text-ink-muted">
                     This order is locked because it has reached a final state.
                   </p>

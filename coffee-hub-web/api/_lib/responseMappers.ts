@@ -34,6 +34,7 @@ export interface StoredOrderRecord {
   status?: string;
   orderStatus?: string;
   rejectionReason?: string;
+  cancellationReason?: string;
   agentId?: string;
   agentName?: string;
   agentPhone?: string;
@@ -60,6 +61,7 @@ export interface StoredOrderRecord {
   outForDeliveryAt?: TimestampLike;
   deliveredAt?: TimestampLike;
   rejectedAt?: TimestampLike;
+  cancelledAt?: TimestampLike;
   preparingAt?: TimestampLike;
   readyAt?: TimestampLike;
   deliveryAssignedAt?: TimestampLike;
@@ -170,6 +172,7 @@ export const mapOrderRecordToResponse = (
   const deliveredAt = mapTimestampToIsoString(
     record.deliveredAt ?? record.deliveryDeliveredAt ?? record.delivery_delivered_at,
   );
+  const cancelledAt = mapTimestampToIsoString(record.cancelledAt);
   const preparingAt = mapTimestampToIsoString(record.preparingAt ?? record.preparing_at);
   const readyAt = mapTimestampToIsoString(record.readyAt ?? record.readyForPickupAt ?? record.ready_for_pickup_at);
   const agentId = (
@@ -197,10 +200,12 @@ export const mapOrderRecordToResponse = (
     status: getOrderStatusLabel(statusCode),
     status_code: statusCode,
     rejection_reason: (record.rejectionReason || '').trim(),
+    cancellation_reason: (record.cancellationReason || '').trim(),
     payment_method: normalizePaymentMethod(record.paymentMode),
     payment_status: normalizePaymentStatus(record.paymentStatus),
     created_at: mapTimestampToIsoString(record.createdAt) || new Date().toISOString(),
     updated_at: mapTimestampToIsoString(record.updatedAt),
+    cancelled_at: cancelledAt,
     user_id: record.userId || '',
     delivery_agent_id: agentId,
     delivery_agent_name:

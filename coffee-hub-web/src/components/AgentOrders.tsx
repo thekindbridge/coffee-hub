@@ -15,6 +15,7 @@ const STATUS_BADGE_CLASS: Record<Order['status'], string> = {
   'Out for Delivery': 'border border-orange-300/30 bg-orange-400/20 text-orange-300',
   Delivered: 'border border-emerald-300/30 bg-emerald-400/20 text-emerald-300',
   Rejected: 'border border-rose-300/30 bg-rose-400/20 text-rose-300',
+  Cancelled: 'border border-rose-300/30 bg-rose-400/20 text-rose-300',
 };
 
 const buildMapsSearchUrl = (address: string) => (

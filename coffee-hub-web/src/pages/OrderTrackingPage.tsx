@@ -92,6 +92,7 @@ const statusToneClass: Record<Order['status'], string> = {
   'Out for Delivery': 'border-orange-300/25 bg-orange-300/10 text-orange-100',
   Delivered: 'border-emerald-300/25 bg-emerald-300/10 text-emerald-100',
   Rejected: 'border-rose-300/25 bg-rose-300/10 text-rose-100',
+  Cancelled: 'border-rose-300/25 bg-rose-300/10 text-rose-100',
 };
 
 export default function OrderTrackingPage({
@@ -222,6 +223,10 @@ export default function OrderTrackingPage({
       return 'Order rejected';
     }
 
+    if (liveOrder.status_code === 'CANCELLED') {
+      return 'Order cancelled';
+    }
+
     if (routeMetrics?.eta_minutes) {
       return `Arriving in ${routeMetrics.eta_minutes} min`;
     }
@@ -241,7 +246,11 @@ export default function OrderTrackingPage({
     return 'Order received';
   }, [liveOrder.status_code, routeMetrics?.eta_minutes]);
 
-  if (liveOrder.status_code !== 'REJECTED' && !liveOrder.customer_location) {
+  if (
+    liveOrder.status_code !== 'REJECTED' &&
+    liveOrder.status_code !== 'CANCELLED' &&
+    !liveOrder.customer_location
+  ) {
     return (
       <div className="px-4 pb-20 pt-6 sm:px-6">
         <div className="mx-auto max-w-screen-lg">
@@ -329,7 +338,16 @@ export default function OrderTrackingPage({
               </div>
             )}
 
-            {liveOrder.status_code !== 'REJECTED' && (
+            {liveOrder.status_code === 'CANCELLED' && liveOrder.cancellation_reason && (
+              <div className="mt-4 rounded-[24px] border border-rose-300/20 bg-rose-500/10 px-4 py-4 text-sm text-rose-100">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-rose-200">
+                  Cancellation reason
+                </p>
+                <p className="mt-2 leading-6">{liveOrder.cancellation_reason}</p>
+              </div>
+            )}
+
+            {liveOrder.status_code !== 'REJECTED' && liveOrder.status_code !== 'CANCELLED' && (
               <div className="mt-5 rounded-[30px] border border-white/10 bg-white/5 px-4 py-5">
               <div className="relative">
                 <div className="absolute left-0 right-0 top-3 h-1.5 rounded-full bg-white/10" />
@@ -372,7 +390,7 @@ export default function OrderTrackingPage({
           </div>
         </motion.section>
 
-        {liveOrder.status_code !== 'REJECTED' && (
+        {liveOrder.status_code !== 'REJECTED' && liveOrder.status_code !== 'CANCELLED' && (
           <>
             <motion.section
               initial={{ opacity: 0, y: 18 }}

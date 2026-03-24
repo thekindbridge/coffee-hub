@@ -2,8 +2,10 @@ import { useMemo, useState } from 'react';
 import { ChevronDown, ChevronUp, Clock3, MapPin, PackageSearch } from 'lucide-react';
 
 import type { Order } from '../types';
+import { CancelOrderModal } from './CancelOrderModal';
 import {
   getOrderStatusCustomerCopy,
+  isCustomerCancellableOrderStatus,
   ORDER_STATUS_DISPLAY,
   ORDER_STATUS_PROGRESS_FLOW,
 } from '../../shared/orderStatus';
@@ -12,6 +14,7 @@ interface MyOrdersProps {
   orders: Order[];
   isLoading: boolean;
   onBrowseMenu: () => void;
+  onCancelOrder: (order: Order, cancellationReason: string) => Promise<void>;
   onTrackOrder: (order: Order) => void;
 }
 
@@ -27,6 +30,7 @@ const STATUS_BADGE_CLASS: Record<Order['status'], string> = {
   'Out for Delivery': 'border border-sky-400/30 bg-sky-400/14 text-sky-300',
   Delivered: 'border border-emerald-400/30 bg-emerald-400/14 text-emerald-300',
   Rejected: 'border border-rose-400/30 bg-rose-400/14 text-rose-300',
+  Cancelled: 'border border-rose-400/30 bg-rose-500/14 text-rose-200',
 };
 
 const formatOrderDate = (value: string) => {
@@ -38,15 +42,28 @@ const formatOrderDate = (value: string) => {
   return parsedDate.toLocaleString();
 };
 
-export default function MyOrders({ orders, isLoading, onBrowseMenu, onTrackOrder }: MyOrdersProps) {
+export default function MyOrders({
+  orders,
+  isLoading,
+  onBrowseMenu,
+  onCancelOrder,
+  onTrackOrder,
+}: MyOrdersProps) {
   const [expandedOrderDocId, setExpandedOrderDocId] = useState('');
+  const [cancelTargetOrder, setCancelTargetOrder] = useState<Order | null>(null);
+  const [cancellingOrderDocId, setCancellingOrderDocId] = useState('');
+  const [cancelError, setCancelError] = useState('');
 
   const { activeOrders, pastOrders } = useMemo(() => {
     const active: Order[] = [];
     const past: Order[] = [];
 
     orders.forEach(order => {
-      if (order.status_code === 'DELIVERED' || order.status_code === 'REJECTED') {
+      if (
+        order.status_code === 'DELIVERED' ||
+        order.status_code === 'REJECTED' ||
+        order.status_code === 'CANCELLED'
+      ) {
         past.push(order);
       } else {
         active.push(order);
@@ -58,6 +75,35 @@ export default function MyOrders({ orders, isLoading, onBrowseMenu, onTrackOrder
 
   const toggleOrderDetails = (orderDocId: string) => {
     setExpandedOrderDocId(prev => (prev === orderDocId ? '' : orderDocId));
+  };
+
+  const closeCancelModal = () => {
+    if (cancellingOrderDocId) {
+      return;
+    }
+
+    setCancelTargetOrder(null);
+    setCancelError('');
+  };
+
+  const handleCancelConfirm = async (reason: string) => {
+    if (!cancelTargetOrder) {
+      return;
+    }
+
+    setCancelError('');
+    setCancellingOrderDocId(cancelTargetOrder.doc_id);
+
+    try {
+      await onCancelOrder(cancelTargetOrder, reason);
+      setCancelTargetOrder(null);
+    } catch (error) {
+      setCancelError(
+        error instanceof Error ? error.message : 'Unable to cancel this order right now.',
+      );
+    } finally {
+      setCancellingOrderDocId('');
+    }
   };
 
   const renderProgressTracker = (status: Order['status']) => {
@@ -107,6 +153,11 @@ export default function MyOrders({ orders, isLoading, onBrowseMenu, onTrackOrder
   const renderOrderCard = (order: Order, showTracker: boolean) => {
     const isExpanded = expandedOrderDocId === order.doc_id;
     const hasItems = Boolean(order.items && order.items.length > 0);
+    const canTrackOrder =
+      showTracker &&
+      order.status_code !== 'REJECTED' &&
+      order.status_code !== 'CANCELLED';
+    const canCancelOrder = isCustomerCancellableOrderStatus(order.status_code);
 
     return (
       <article key={order.doc_id} className="coffee-surface-soft rounded-[24px] p-4">
@@ -122,7 +173,7 @@ export default function MyOrders({ orders, isLoading, onBrowseMenu, onTrackOrder
             >
               {order.status}
             </span>
-            {showTracker && order.status_code !== 'REJECTED' && (
+            {canTrackOrder && (
               <button
                 onClick={() => onTrackOrder(order)}
                 className="inline-flex flex-shrink-0 items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-semibold text-ink-muted transition-colors hover:border-white/20 hover:text-accent"
@@ -156,12 +207,33 @@ export default function MyOrders({ orders, isLoading, onBrowseMenu, onTrackOrder
           <p className="text-base font-semibold text-highlight">{CURRENCY_SYMBOL}{order.total_amount}</p>
         </div>
 
-        {showTracker && order.status_code !== 'REJECTED' && renderProgressTracker(order.status)}
+        {canCancelOrder && (
+          <button
+            type="button"
+            onClick={() => {
+              setCancelError('');
+              setCancelTargetOrder(order);
+            }}
+            disabled={cancellingOrderDocId === order.doc_id}
+            className="mt-4 inline-flex min-h-11 w-full items-center justify-center rounded-full border border-rose-300/25 bg-rose-500/10 px-4 text-sm font-semibold text-rose-200 transition hover:bg-rose-500/16 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {cancellingOrderDocId === order.doc_id ? 'Cancelling...' : 'Cancel Order'}
+          </button>
+        )}
+
+        {canTrackOrder && renderProgressTracker(order.status)}
 
         {order.status_code === 'REJECTED' && order.rejection_reason && (
           <div className="mt-4 rounded-[20px] border border-rose-400/20 bg-rose-500/10 px-4 py-4 text-sm text-rose-100">
             <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-rose-200">Rejection reason</p>
             <p className="mt-2 leading-6">{order.rejection_reason}</p>
+          </div>
+        )}
+
+        {order.status_code === 'CANCELLED' && order.cancellation_reason && (
+          <div className="mt-4 rounded-[20px] border border-rose-400/20 bg-rose-500/10 px-4 py-4 text-sm text-rose-100">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-rose-200">Cancellation reason</p>
+            <p className="mt-2 leading-6">{order.cancellation_reason}</p>
           </div>
         )}
 
@@ -252,7 +324,7 @@ export default function MyOrders({ orders, isLoading, onBrowseMenu, onTrackOrder
           <div className="mb-4 flex items-center justify-between">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-secondary">Past orders</p>
-              <h2 className="mt-1 text-[1.45rem] font-semibold text-accent">Completed</h2>
+              <h2 className="mt-1 text-[1.45rem] font-semibold text-accent">History</h2>
             </div>
             <span className="coffee-badge">{pastOrders.length}</span>
           </div>
@@ -262,11 +334,20 @@ export default function MyOrders({ orders, isLoading, onBrowseMenu, onTrackOrder
             </div>
           ) : (
             <div className="coffee-surface-soft rounded-[22px] p-4 text-sm text-ink-muted">
-              Delivered and rejected orders will appear here.
+              Delivered, rejected, and cancelled orders will appear here.
             </div>
           )}
         </section>
       </div>
+
+      <CancelOrderModal
+        isOpen={Boolean(cancelTargetOrder)}
+        orderId={cancelTargetOrder?.id || ''}
+        isSubmitting={Boolean(cancellingOrderDocId)}
+        submitError={cancelError}
+        onClose={closeCancelModal}
+        onConfirm={handleCancelConfirm}
+      />
     </div>
   );
 }

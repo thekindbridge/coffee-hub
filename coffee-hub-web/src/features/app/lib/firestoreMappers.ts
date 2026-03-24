@@ -341,6 +341,7 @@ export const mapOrderRecordToOrder = (
     data.outForDeliveryAt ?? data.deliveryOutForDeliveryAt ?? data.delivery_out_for_delivery_at,
   );
   const deliveredAt = mapTimestampToIsoString(data.deliveredAt ?? data.deliveryDeliveredAt ?? data.delivery_delivered_at);
+  const cancelledAt = mapTimestampToIsoString(data.cancelledAt ?? data.cancelled_at);
   const preparingAt = mapTimestampToIsoString(data.preparingAt ?? data.preparing_at);
   const readyAt = mapTimestampToIsoString(data.readyAt ?? data.readyForPickupAt ?? data.ready_for_pickup_at);
   const agentId = (
@@ -397,10 +398,12 @@ export const mapOrderRecordToOrder = (
     status: getOrderStatusLabel(statusCode),
     status_code: statusCode,
     rejection_reason: ((data.rejectionReason as string) || '').trim(),
+    cancellation_reason: ((data.cancellationReason as string) || '').trim(),
     payment_method: normalizePaymentMethod(data.paymentMode ?? data.paymentMethod),
     payment_status: normalizePaymentStatus(data.paymentStatus),
     created_at: createdAtValue?.toDate()?.toISOString() || new Date().toISOString(),
     updated_at: updatedAtValue?.toDate()?.toISOString() || '',
+    cancelled_at: cancelledAt,
     user_id: (data.userId as string) || '',
     delivery_agent_id: agentId,
     delivery_agent_name: agentName,

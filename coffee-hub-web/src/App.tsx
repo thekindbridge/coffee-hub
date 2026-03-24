@@ -152,6 +152,7 @@ export default function App() {
       const isSameTotal = prev.total_amount === syncedOrder.total_amount;
       const isSameAddress = prev.address === syncedOrder.address;
       const isSameRejectionReason = prev.rejection_reason === syncedOrder.rejection_reason;
+      const isSameCancellationReason = prev.cancellation_reason === syncedOrder.cancellation_reason;
       const isSameLocation =
         prev.customer_location?.lat === syncedOrder.customer_location?.lat &&
         prev.customer_location?.lng === syncedOrder.customer_location?.lng;
@@ -162,6 +163,7 @@ export default function App() {
         isSameTotal &&
         isSameAddress &&
         isSameRejectionReason &&
+        isSameCancellationReason &&
         isSameLocation &&
         isSameItemsRef
       ) {
@@ -537,6 +539,9 @@ export default function App() {
             orders={appData.userOrders}
             isLoading={appData.isUserOrdersLoading}
             onBrowseMenu={() => setActiveTab('menu')}
+            onCancelOrder={async (order, cancellationReason) => {
+              await orderOperations.cancelOrder(order.doc_id, cancellationReason);
+            }}
             onTrackOrder={handleTrackFromOrder}
           />
         )}

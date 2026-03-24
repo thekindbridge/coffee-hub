@@ -380,6 +380,14 @@ export const buildCustomerOrderNotification = ({
         tag: `order-${orderId}`,
         url: buildOrderTrackingUrl(orderId),
       };
+    case 'CANCELLED':
+      return {
+        title: 'Order Cancelled',
+        body: 'Your order has been cancelled.',
+        preferenceKey: 'orderUpdates',
+        tag: `order-${orderId}`,
+        url: buildOrderTrackingUrl(orderId),
+      };
     default:
       return {
         title: 'Order Update',
@@ -407,11 +415,27 @@ export const buildAdminPaymentNotification = (orderId: string): PushMessageConte
   url: '/?scope=admin',
 });
 
+export const buildAdminOrderCancelledNotification = (orderId: string): PushMessageContent => ({
+  title: 'Order Cancelled',
+  body: `Order #${orderId} was cancelled by the customer.`,
+  preferenceKey: 'orderUpdates',
+  tag: `admin-order-cancelled-${orderId}`,
+  url: '/?scope=admin',
+});
+
 export const buildAgentAssignmentNotification = (orderId: string): PushMessageContent => ({
   title: 'New Delivery Assigned',
   body: `You have a new order to deliver. Order #${orderId}`,
   preferenceKey: 'orderUpdates',
   tag: `agent-order-${orderId}`,
+  url: '/?scope=agent',
+});
+
+export const buildAgentOrderCancelledNotification = (orderId: string): PushMessageContent => ({
+  title: 'Delivery Cancelled',
+  body: `Assigned order #${orderId} has been cancelled.`,
+  preferenceKey: 'orderUpdates',
+  tag: `agent-order-cancelled-${orderId}`,
   url: '/?scope=agent',
 });
 

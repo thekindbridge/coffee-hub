@@ -89,10 +89,12 @@ export interface Order {
   status: OrderStatus;
   status_code: OrderStatusCode;
   rejection_reason?: string;
+  cancellation_reason?: string;
   payment_method: string;
   payment_status?: OrderPaymentStatus;
   created_at: string;
   updated_at?: string;
+  cancelled_at?: string;
   user_id: string;
   customer_location?: DeliveryLocation | null;
   delivery_location?: DeliveryLocation | null;

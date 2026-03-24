@@ -5,6 +5,7 @@ export const ORDER_STATUS_DISPLAY = {
   OUT_FOR_DELIVERY: 'Out for Delivery',
   DELIVERED: 'Delivered',
   REJECTED: 'Rejected',
+  CANCELLED: 'Cancelled',
 } as const;
 
 export type OrderStatusCode = keyof typeof ORDER_STATUS_DISPLAY;
@@ -19,21 +20,23 @@ export const ORDER_STATUS_PROGRESS_FLOW: readonly OrderStatusCode[] = [
 ];
 
 export const ORDER_STATUS_TRANSITIONS: Record<OrderStatusCode, readonly OrderStatusCode[]> = {
-  PENDING: ['ACCEPTED', 'REJECTED'],
-  ACCEPTED: ['PREPARING'],
+  PENDING: ['ACCEPTED', 'REJECTED', 'CANCELLED'],
+  ACCEPTED: ['PREPARING', 'CANCELLED'],
   PREPARING: ['OUT_FOR_DELIVERY'],
   OUT_FOR_DELIVERY: ['DELIVERED'],
   DELIVERED: [],
   REJECTED: [],
+  CANCELLED: [],
 };
 
 export const ORDER_STATUS_CUSTOMER_COPY: Record<OrderStatusCode, string> = {
-  PENDING: 'Waiting for confirmation ⏳',
-  ACCEPTED: 'Order accepted ✅',
-  PREPARING: 'Preparing your order ☕',
-  OUT_FOR_DELIVERY: 'On the way 🚚',
-  DELIVERED: 'Delivered 🎉',
-  REJECTED: 'Order rejected ❌',
+  PENDING: 'Waiting for confirmation.',
+  ACCEPTED: 'Order accepted.',
+  PREPARING: 'Preparing your order.',
+  OUT_FOR_DELIVERY: 'On the way.',
+  DELIVERED: 'Delivered.',
+  REJECTED: 'Order rejected.',
+  CANCELLED: 'Order cancelled.',
 };
 
 const LEGACY_STATUS_MAP: Record<string, OrderStatusCode> = {
@@ -53,6 +56,8 @@ const LEGACY_STATUS_MAP: Record<string, OrderStatusCode> = {
   PICKED_UP: 'OUT_FOR_DELIVERY',
   DELIVERED: 'DELIVERED',
   REJECTED: 'REJECTED',
+  CANCELLED: 'CANCELLED',
+  CANCELED: 'CANCELLED',
 };
 
 const normalizeStatusKey = (value: string) =>
@@ -87,8 +92,17 @@ export const isValidOrderStatusTransition = (
 
 export const isTerminalOrderStatus = (value: OrderStatusCode | string) => {
   const normalizedStatus = normalizeOrderStatusCode(value);
-  return normalizedStatus === 'DELIVERED' || normalizedStatus === 'REJECTED';
+  return (
+    normalizedStatus === 'DELIVERED' ||
+    normalizedStatus === 'REJECTED' ||
+    normalizedStatus === 'CANCELLED'
+  );
 };
 
 export const requiresRejectionReason = (value: OrderStatusCode | string) =>
   normalizeOrderStatusCode(value) === 'REJECTED';
+
+export const isCustomerCancellableOrderStatus = (value: OrderStatusCode | string) => {
+  const normalizedStatus = normalizeOrderStatusCode(value);
+  return normalizedStatus === 'PENDING' || normalizedStatus === 'ACCEPTED';
+};

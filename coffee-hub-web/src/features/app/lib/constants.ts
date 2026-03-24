@@ -8,6 +8,7 @@ import {
 export const ORDER_STATUSES: Order['status'][] = [
   ...ORDER_STATUS_PROGRESS_FLOW.map(statusCode => ORDER_STATUS_DISPLAY[statusCode]),
   ORDER_STATUS_DISPLAY.REJECTED,
+  ORDER_STATUS_DISPLAY.CANCELLED,
 ];
 
 export const ADMIN_EMAIL = (import.meta.env.VITE_ADMIN_EMAIL || '').trim().toLowerCase();
