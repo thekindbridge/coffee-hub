@@ -1,21 +1,78 @@
-import { useEffect, useState } from 'react';
-import { FlatList, StyleSheet, Text, View } from 'react-native';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
+import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
+import { useEffect, useRef, useState } from 'react';
+import {
+  FlatList,
+  Linking,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppButton } from '../components/AppButton';
-import { AppCard } from '../components/AppCard';
+import { Banner } from '../components/Banner';
 import { Loader } from '../components/Loader';
 import { MenuItemCard } from '../components/MenuItemCard';
+import { ROUTES } from '../constants/routes';
 import { palette, radius, spacing } from '../constants/theme';
-import { useAuth, useCart } from '../hooks';
+import { useCart } from '../hooks';
+import type { MainTabParamList } from '../navigation/types';
 import { getMenu, type MenuItem } from '../services/api';
 
+const HERO_IMAGE =
+  'https://res.cloudinary.com/ddfhaqeme/image/upload/v1772699634/e0818545-8027-4b28-8a1f-d521f79fdb6a_plei96.jpg';
+const MAPS_URL = 'https://maps.app.goo.gl/8B32K8X6Vdhg6VUE6';
+
+const infoTiles = [
+  {
+    body: 'Compact checkout built for quick repeat orders on mobile.',
+    icon: <Feather color={palette.secondary} name="clock" size={20} />,
+    title: 'Fast lanes',
+    tone: palette.primarySoft,
+  },
+  {
+    body: 'Quick COD checkout, clean prep, and order tracking from one drawer.',
+    icon: <Feather color={palette.highlight} name="shield" size={20} />,
+    title: 'Fresh & safe',
+    tone: 'rgba(255, 179, 71, 0.12)',
+  },
+] as const;
+
+const reasonsToLove = [
+  {
+    icon: <Feather color={palette.highlight} name="star" size={16} />,
+    label: '4.5+ Local Rating',
+    tone: '#2B1A0F',
+  },
+  {
+    icon: <MaterialCommunityIcons color="#F6C18B" name="chef-hat" size={16} />,
+    label: 'Freshly Prepared Food',
+    tone: '#241510',
+  },
+  {
+    icon: <Feather color="#7DD3FC" name="truck" size={16} />,
+    label: 'Fast Delivery in Inkollu',
+    tone: '#14202A',
+  },
+  {
+    icon: <Feather color="#C4B5FD" name="gift" size={16} />,
+    label: 'Daily Offers & Rewards',
+    tone: '#1F1A2F',
+  },
+] as const;
+
 export function HomeScreen() {
-  const { user } = useAuth();
-  const { addItem, itemCount } = useCart();
+  const navigation = useNavigation<BottomTabNavigationProp<MainTabParamList>>();
+  const scrollViewRef = useRef<ScrollView>(null);
+  const { addItem, cartQuantityById, itemCount } = useCart();
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
+  const [quickPicksY, setQuickPicksY] = useState(0);
 
   const loadMenu = async () => {
     setIsLoading(true);
@@ -37,80 +94,208 @@ export function HomeScreen() {
     void loadMenu();
   }, []);
 
-  const handleAddToCart = (item: MenuItem) => {
-    addItem({
-      id: item.id,
-      name: item.name,
-      price: item.price,
+  const quickPicks = menuItems.slice(0, 6);
+
+  const heroMetrics = [
+    { label: 'Delivery', value: '20-30m' },
+    { label: 'Fresh picks', value: `${menuItems.length}+` },
+    { label: 'In cart', value: `${itemCount}` },
+  ];
+
+  const handleAddToCart = (item: MenuItem, delta: number) => {
+    addItem(
+      {
+        id: item.id,
+        name: item.name,
+        price: item.price,
+        description: item.description,
+        image_url: item.image_url,
+        is_veg: item.is_veg,
+        rating: item.rating,
+        spice_level: item.spice_level,
+      },
+      delta,
+    );
+  };
+
+  const handleScrollToQuickPicks = () => {
+    scrollViewRef.current?.scrollTo({
+      animated: true,
+      y: Math.max(quickPicksY - spacing.lg, 0),
     });
   };
 
-  const header = (
-    <View style={styles.header}>
-      <AppCard>
-        <Text style={styles.heading}>Welcome back</Text>
-        <Text style={styles.body}>{user?.email ?? 'guest@coffeehub.app'}</Text>
-      </AppCard>
+  const renderQuickPicks = () => {
+    if (isLoading) {
+      return (
+        <View style={styles.loadingShell}>
+          <Loader />
+        </View>
+      );
+    }
 
-      {errorMessage && menuItems.length > 0 ? (
-        <AppCard style={styles.errorCard}>
-          <Text style={styles.errorTitle}>Could not refresh the menu.</Text>
-          <Text style={styles.errorBody}>{errorMessage}</Text>
+    if (errorMessage && quickPicks.length === 0) {
+      return (
+        <View style={styles.stateCard}>
+          <Text style={styles.stateTitle}>Unable to load the menu</Text>
+          <Text style={styles.stateBody}>{errorMessage}</Text>
           <AppButton label="Try Again" onPress={() => void loadMenu()} variant="secondary" />
-        </AppCard>
-      ) : null}
+        </View>
+      );
+    }
 
-      <View style={styles.sectionHeader}>
-        <View style={styles.sectionCopy}>
-          <Text style={styles.sectionTitle}>Menu</Text>
-          <Text style={styles.sectionBody}>
-            Browse live items from the backend and add them to the shared cart.
+    if (quickPicks.length === 0) {
+      return (
+        <View style={styles.stateCard}>
+          <Text style={styles.stateTitle}>No menu items available</Text>
+          <Text style={styles.stateBody}>
+            The backend responded successfully, but there are no quick picks to show right now.
           </Text>
         </View>
-        <View style={styles.cartPill}>
-          <Text style={styles.cartLabel}>{itemCount} in cart</Text>
-        </View>
-      </View>
-    </View>
-  );
+      );
+    }
 
-  const emptyState = isLoading ? (
-    <Loader />
-  ) : errorMessage ? (
-    <View style={styles.stateWrapper}>
-      <AppCard style={styles.errorCard}>
-        <Text style={styles.errorTitle}>Unable to load menu</Text>
-        <Text style={styles.errorBody}>{errorMessage}</Text>
-        <AppButton label="Try Again" onPress={() => void loadMenu()} variant="secondary" />
-      </AppCard>
-    </View>
-  ) : (
-    <View style={styles.stateWrapper}>
-      <AppCard>
-        <Text style={styles.stateTitle}>No menu items available</Text>
-        <Text style={styles.stateBody}>
-          The backend responded successfully, but the menu is empty right now.
-        </Text>
-      </AppCard>
-    </View>
-  );
+    return (
+      <FlatList
+        contentContainerStyle={styles.quickPicksContent}
+        data={quickPicks}
+        horizontal
+        ItemSeparatorComponent={() => <View style={styles.quickPicksSeparator} />}
+        keyExtractor={item => item.id}
+        nestedScrollEnabled
+        renderItem={({ item }) => (
+          <View style={styles.menuCardSlot}>
+            <MenuItemCard
+              cartQuantity={cartQuantityById.get(item.id) ?? 0}
+              item={item}
+              onAddToCart={handleAddToCart}
+            />
+          </View>
+        )}
+        showsHorizontalScrollIndicator={false}
+      />
+    );
+  };
 
   return (
     <SafeAreaView edges={['bottom']} style={styles.safeArea}>
-      <FlatList
-        contentContainerStyle={styles.listContent}
-        data={menuItems}
-        ItemSeparatorComponent={() => <View style={styles.separator} />}
-        keyExtractor={item => item.id}
-        ListEmptyComponent={emptyState}
-        ListHeaderComponent={header}
-        onRefresh={() => void loadMenu()}
-        refreshing={isLoading && menuItems.length > 0}
-        renderItem={({ item }) => (
-          <MenuItemCard item={item} onAddToCart={handleAddToCart} />
-        )}
+      <ScrollView
+        contentContainerStyle={styles.content}
+        ref={scrollViewRef}
         showsVerticalScrollIndicator={false}
-      />
+      >
+        <View style={styles.heroSection}>
+          <Banner
+            backgroundImageUri={HERO_IMAGE}
+            badges={[
+              {
+                icon: <Feather color={palette.secondary} name="coffee" size={12} />,
+                label: 'Inkollu coffee kitchen',
+              },
+              {
+                icon: <Feather color={palette.textSecondary} name="map-pin" size={12} />,
+                label: 'Fast local delivery',
+              },
+            ]}
+            description="Compact ordering for hungry evenings, quick reorders, and warm coffee-house vibes."
+            eyebrow="Brewed for mobile ordering"
+            metrics={heroMetrics}
+            primaryAction={{
+              icon: <Feather color={palette.textPrimary} name="shopping-bag" size={16} />,
+              label: 'Order now',
+              onPress: handleScrollToQuickPicks,
+            }}
+            secondaryAction={{
+              icon: <Feather color={palette.textSecondary} name="shopping-cart" size={16} />,
+              label: 'View cart',
+              onPress: () => navigation.navigate(ROUTES.Cart),
+              variant: 'secondary',
+            }}
+            title="Hot bowls, rich bites, fast pours."
+          />
+        </View>
+
+        {errorMessage && quickPicks.length > 0 ? (
+          <View style={styles.inlineErrorCard}>
+            <Text style={styles.inlineErrorTitle}>Could not refresh quick picks.</Text>
+            <Text style={styles.inlineErrorBody}>{errorMessage}</Text>
+          </View>
+        ) : null}
+
+        <View onLayout={event => setQuickPicksY(event.nativeEvent.layout.y)} style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionHeaderCopy}>
+              <Text style={styles.sectionEyebrow}>Popular right now</Text>
+              <Text style={styles.sectionTitle}>Quick picks</Text>
+            </View>
+
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => navigation.navigate(ROUTES.Cart)}
+              style={({ pressed }) => [styles.inlineAction, pressed && styles.pressed]}
+            >
+              <Text style={styles.inlineActionText}>Cart</Text>
+              <Feather color={palette.textSecondary} name="chevron-right" size={16} />
+            </Pressable>
+          </View>
+
+          {renderQuickPicks()}
+        </View>
+
+        <View style={styles.infoGrid}>
+          {infoTiles.map(tile => (
+            <View key={tile.title} style={styles.infoTile}>
+              <View style={[styles.infoIconShell, { backgroundColor: tile.tone }]}>{tile.icon}</View>
+              <Text style={styles.infoTitle}>{tile.title}</Text>
+              <Text style={styles.infoBody}>{tile.body}</Text>
+            </View>
+          ))}
+        </View>
+
+        <View style={styles.reasonsCard}>
+          <View style={styles.reasonsHeader}>
+            <Feather color={palette.secondary} name="zap" size={14} />
+            <Text style={styles.reasonsEyebrow}>Why customers love Coffee Hub</Text>
+          </View>
+
+          <View style={styles.reasonsGrid}>
+            {reasonsToLove.map(reason => (
+              <View key={reason.label} style={styles.reasonPill}>
+                <View style={[styles.reasonIconShell, { backgroundColor: reason.tone }]}>{reason.icon}</View>
+                <Text style={styles.reasonLabel}>{reason.label}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+
+        <View style={styles.locationCard}>
+          <Text style={styles.locationEyebrow}>Serving Inkollu & Nearby Areas</Text>
+
+          <View style={styles.locationList}>
+            <View style={styles.locationRow}>
+              <View style={styles.locationIconShell}>
+                <Feather color={palette.secondary} name="truck" size={16} />
+              </View>
+              <Text style={styles.locationText}>Average delivery time: 20-30 minutes</Text>
+            </View>
+
+            <View style={styles.locationRow}>
+              <View style={styles.locationIconShell}>
+                <Feather color={palette.secondary} name="map-pin" size={16} />
+              </View>
+              <Text style={styles.locationText}>Inkollu Coffee Kitchen</Text>
+            </View>
+          </View>
+
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => void Linking.openURL(MAPS_URL)}
+            style={({ pressed }) => [styles.locationButton, pressed && styles.pressed]}
+          >
+            <Text style={styles.locationButtonText}>Open in Google Maps</Text>
+          </Pressable>
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -120,90 +305,260 @@ const styles = StyleSheet.create({
     backgroundColor: palette.background,
     flex: 1,
   },
-  listContent: {
-    flexGrow: 1,
+  content: {
     paddingBottom: spacing.xl,
-    padding: spacing.lg,
-    paddingTop: spacing.md,
   },
-  header: {
-    marginBottom: spacing.lg,
-    rowGap: spacing.md,
+  heroSection: {
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
   },
-  heading: {
-    color: palette.textPrimary,
-    fontSize: 18,
+  inlineErrorCard: {
+    backgroundColor: palette.warningSoft,
+    borderColor: 'rgba(244, 193, 110, 0.24)',
+    borderRadius: 22,
+    borderWidth: 1,
+    marginHorizontal: spacing.md,
+    marginTop: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  inlineErrorTitle: {
+    color: palette.accent,
+    fontSize: 14,
     fontWeight: '700',
-    marginBottom: spacing.xs,
+    marginBottom: 4,
   },
-  body: {
-    color: palette.textSecondary,
-    fontSize: 15,
-    lineHeight: 22,
+  inlineErrorBody: {
+    color: '#F5DDBB',
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  section: {
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.xl,
   },
   sectionHeader: {
-    alignItems: 'flex-start',
+    alignItems: 'flex-end',
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: spacing.xs,
+    marginBottom: spacing.md,
   },
-  sectionCopy: {
-    flex: 1,
-    paddingRight: spacing.md,
-    rowGap: spacing.xs,
+  sectionHeaderCopy: {
+    gap: 4,
+  },
+  sectionEyebrow: {
+    color: palette.secondary,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 2.8,
+    textTransform: 'uppercase',
   },
   sectionTitle: {
-    color: palette.textPrimary,
-    fontSize: 22,
+    color: palette.accent,
+    fontSize: 24,
     fontWeight: '700',
   },
-  sectionBody: {
-    color: palette.textSecondary,
-    fontSize: 15,
-    lineHeight: 22,
-  },
-  cartPill: {
+  inlineAction: {
     alignItems: 'center',
-    alignSelf: 'flex-start',
     backgroundColor: palette.primarySoft,
-    borderRadius: radius.pill,
-    justifyContent: 'center',
-    minHeight: 36,
+    borderColor: palette.border,
+    borderRadius: 18,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 6,
+    minHeight: 40,
     paddingHorizontal: spacing.md,
   },
-  cartLabel: {
-    color: palette.textPrimary,
+  inlineActionText: {
+    color: palette.textSecondary,
     fontSize: 13,
     fontWeight: '700',
   },
-  separator: {
-    height: spacing.md,
+  loadingShell: {
+    alignItems: 'center',
+    backgroundColor: palette.surfaceStrong,
+    borderColor: palette.border,
+    borderRadius: 26,
+    borderWidth: 1,
+    justifyContent: 'center',
+    minHeight: 240,
   },
-  stateWrapper: {
-    paddingTop: spacing.md,
+  quickPicksContent: {
+    paddingRight: spacing.md,
+  },
+  quickPicksSeparator: {
+    width: spacing.sm,
+  },
+  menuCardSlot: {
+    width: 248,
+  },
+  stateCard: {
+    backgroundColor: palette.surfaceStrong,
+    borderColor: palette.border,
+    borderRadius: 26,
+    borderWidth: 1,
+    gap: spacing.md,
+    padding: spacing.lg,
   },
   stateTitle: {
-    color: palette.textPrimary,
+    color: palette.accent,
     fontSize: 18,
     fontWeight: '700',
-    marginBottom: spacing.xs,
   },
   stateBody: {
     color: palette.textSecondary,
-    fontSize: 15,
+    fontSize: 14,
     lineHeight: 22,
   },
-  errorCard: {
-    rowGap: spacing.md,
+  infoGrid: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.lg,
   },
-  errorTitle: {
+  infoTile: {
+    backgroundColor: palette.surfaceStrong,
+    borderColor: palette.border,
+    borderRadius: 24,
+    borderWidth: 1,
+    flex: 1,
+    padding: spacing.md,
+  },
+  infoIconShell: {
+    alignItems: 'center',
+    borderRadius: 16,
+    height: 44,
+    justifyContent: 'center',
+    width: 44,
+  },
+  infoTitle: {
+    color: palette.accent,
+    fontSize: 14,
+    fontWeight: '700',
+    marginTop: spacing.md,
+  },
+  infoBody: {
+    color: palette.textSecondary,
+    fontSize: 12,
+    lineHeight: 20,
+    marginTop: spacing.xs,
+  },
+  reasonsCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderColor: palette.border,
+    borderRadius: 26,
+    borderWidth: 1,
+    marginHorizontal: spacing.md,
+    marginTop: spacing.lg,
+    padding: spacing.md,
+  },
+  reasonsHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 8,
+  },
+  reasonsEyebrow: {
+    color: palette.secondary,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 2.4,
+    textTransform: 'uppercase',
+  },
+  reasonsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginTop: spacing.md,
+  },
+  reasonPill: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(18, 13, 11, 0.8)',
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 20,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: spacing.sm,
+    minWidth: '47%',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+  },
+  reasonIconShell: {
+    alignItems: 'center',
+    borderRadius: 16,
+    height: 36,
+    justifyContent: 'center',
+    width: 36,
+  },
+  reasonLabel: {
+    color: palette.accent,
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '700',
+    lineHeight: 18,
+  },
+  locationCard: {
+    backgroundColor: 'rgba(18, 12, 9, 0.94)',
+    borderColor: palette.border,
+    borderRadius: 26,
+    borderWidth: 1,
+    marginHorizontal: spacing.md,
+    marginTop: spacing.lg,
+    padding: spacing.lg,
+  },
+  locationEyebrow: {
+    color: palette.secondary,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 2.4,
+    textTransform: 'uppercase',
+  },
+  locationList: {
+    gap: spacing.sm,
+    marginTop: spacing.md,
+  },
+  locationRow: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderColor: palette.border,
+    borderRadius: 18,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+  },
+  locationIconShell: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(26, 20, 17, 1)',
+    borderRadius: 16,
+    height: 36,
+    justifyContent: 'center',
+    width: 36,
+  },
+  locationText: {
+    color: palette.accent,
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '700',
+    lineHeight: 20,
+  },
+  locationButton: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderColor: palette.border,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    justifyContent: 'center',
+    marginTop: spacing.md,
+    minHeight: 48,
+    paddingHorizontal: spacing.md,
+  },
+  locationButtonText: {
     color: palette.textPrimary,
-    fontSize: 18,
+    fontSize: 14,
     fontWeight: '700',
   },
-  errorBody: {
-    color: palette.textSecondary,
-    fontSize: 15,
-    lineHeight: 22,
+  pressed: {
+    opacity: 0.9,
   },
 });

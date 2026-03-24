@@ -1,34 +1,126 @@
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { palette, radius, spacing } from '../constants/theme';
 import type { MenuItem } from '../services/api';
-import { AppButton } from './AppButton';
 
 type MenuItemCardProps = {
   item: MenuItem;
-  onAddToCart: (item: MenuItem) => void;
+  cartQuantity: number;
+  onAddToCart: (item: MenuItem, delta: number) => void;
 };
 
-export function MenuItemCard({ item, onAddToCart }: MenuItemCardProps) {
+const SpiceMeter = ({ level }: { level: number }) => (
+  <View style={styles.spiceMeter}>
+    {Array.from({ length: 5 }).map((_, index) => (
+      <MaterialCommunityIcons
+        color={index < level ? palette.primary : 'rgba(255, 255, 255, 0.2)'}
+        key={`${level}-${index}`}
+        name="fire"
+        size={14}
+      />
+    ))}
+  </View>
+);
+
+export function MenuItemCard({ item, cartQuantity, onAddToCart }: MenuItemCardProps) {
+  const isVeg = item.is_veg;
+  const spiceLevel = Math.max(0, Math.min(5, item.spice_level));
+  const formattedPrice = Number.isInteger(item.price) ? item.price.toString() : item.price.toFixed(2);
   const hasImage = item.image_url.trim().length > 0;
 
   return (
     <View style={styles.card}>
-      {hasImage ? (
-        <Image source={{ uri: item.image_url }} style={styles.image} />
-      ) : (
-        <View style={[styles.image, styles.imagePlaceholder]}>
-          <Text style={styles.placeholderText}>No image available</Text>
+      <View style={styles.imageWrapper}>
+        {hasImage ? (
+          <Image source={{ uri: item.image_url }} style={styles.image} />
+        ) : (
+          <View style={[styles.image, styles.imageFallback]}>
+            <Feather color={palette.secondary} name="coffee" size={30} />
+          </View>
+        )}
+
+        <View pointerEvents="none" style={styles.imageOverlay} />
+
+        <View style={styles.badgeRow}>
+          <View style={styles.metaBadge}>
+            <MaterialCommunityIcons
+              color={isVeg ? '#34D399' : '#F87171'}
+              name={isVeg ? 'leaf' : 'fire'}
+              size={12}
+            />
+            <Text style={styles.metaBadgeText}>{isVeg ? 'Veg' : 'Non-veg'}</Text>
+          </View>
+
+          <View style={styles.metaBadge}>
+            <Feather color={palette.highlight} name="star" size={12} />
+            <Text style={styles.metaBadgeText}>{item.rating.toFixed(1)}</Text>
+          </View>
         </View>
-      )}
+      </View>
 
       <View style={styles.content}>
         <View style={styles.copy}>
-          <Text style={styles.name}>{item.name}</Text>
-          <Text style={styles.price}>Rs. {item.price.toFixed(2)}</Text>
+          <View style={styles.titleRow}>
+            <Text numberOfLines={2} style={styles.title}>
+              {item.name}
+            </Text>
+
+            <View style={styles.spiceBadge}>
+              <MaterialCommunityIcons color={palette.highlight} name="fire" size={12} />
+              <Text style={styles.spiceBadgeText}>{spiceLevel}/5</Text>
+            </View>
+          </View>
+
+          <Text numberOfLines={2} style={styles.description}>
+            {item.description}
+          </Text>
         </View>
 
-        <AppButton label="Add to Cart" onPress={() => onAddToCart(item)} />
+        <View style={styles.footer}>
+          <View style={styles.priceSection}>
+            <View style={styles.priceRow}>
+              <Feather color={palette.secondary} name="coffee" size={14} />
+              <Text style={styles.price}>Rs {formattedPrice}</Text>
+            </View>
+            <SpiceMeter level={spiceLevel} />
+          </View>
+
+          {cartQuantity > 0 ? (
+            <View style={styles.quantityBlock}>
+              <View style={styles.quantityControls}>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => onAddToCart(item, -1)}
+                  style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}
+                >
+                  <Feather color={palette.textSecondary} name="minus" size={16} />
+                </Pressable>
+
+                <Text style={styles.quantityText}>{cartQuantity}</Text>
+
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => onAddToCart(item, 1)}
+                  style={({ pressed }) => [styles.primaryIconButton, pressed && styles.pressed]}
+                >
+                  <Feather color={palette.textPrimary} name="plus" size={16} />
+                </Pressable>
+              </View>
+            </View>
+          ) : (
+            <View style={styles.addBlock}>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => onAddToCart(item, 1)}
+                style={({ pressed }) => [styles.addButton, pressed && styles.pressed]}
+              >
+                <Feather color={palette.textPrimary} name="plus" size={16} />
+                <Text style={styles.addButtonText}>Add</Text>
+              </Pressable>
+            </View>
+          )}
+        </View>
       </View>
     </View>
   );
@@ -38,39 +130,177 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: palette.surface,
     borderColor: palette.border,
-    borderRadius: radius.lg,
+    borderRadius: 26,
     borderWidth: 1,
     overflow: 'hidden',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 18 },
+    shadowOpacity: 0.28,
+    shadowRadius: 24,
+  },
+  imageWrapper: {
+    aspectRatio: 1.06,
+    overflow: 'hidden',
+    position: 'relative',
   },
   image: {
-    backgroundColor: palette.muted,
-    height: 180,
+    height: '100%',
     width: '100%',
   },
-  imagePlaceholder: {
+  imageFallback: {
     alignItems: 'center',
+    backgroundColor: palette.surfaceStrong,
     justifyContent: 'center',
-    padding: spacing.lg,
   },
-  placeholderText: {
-    color: palette.textSecondary,
-    fontSize: 14,
+  imageOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(13, 9, 7, 0.32)',
+  },
+  badgeRow: {
+    left: spacing.md,
+    position: 'absolute',
+    right: spacing.md,
+    top: spacing.md,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  metaBadge: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(18, 13, 11, 0.82)',
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  metaBadgeText: {
+    color: palette.accent,
+    fontSize: 11,
+    fontWeight: '600',
   },
   content: {
-    padding: spacing.md,
-    rowGap: spacing.md,
+    gap: spacing.md,
+    padding: 14,
   },
   copy: {
-    rowGap: spacing.xs,
+    gap: spacing.xs,
   },
-  name: {
-    color: palette.textPrimary,
-    fontSize: 18,
+  titleRow: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: spacing.sm,
+    justifyContent: 'space-between',
+  },
+  title: {
+    color: palette.accent,
+    flex: 1,
+    fontSize: 15,
     fontWeight: '700',
+    lineHeight: 21,
+  },
+  spiceBadge: {
+    alignItems: 'center',
+    backgroundColor: palette.primarySoft,
+    borderColor: palette.border,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  spiceBadgeText: {
+    color: palette.accent,
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  description: {
+    color: palette.textSecondary,
+    fontSize: 12,
+    lineHeight: 20,
+  },
+  footer: {
+    alignItems: 'flex-end',
+    flexDirection: 'row',
+    gap: spacing.sm,
+    justifyContent: 'space-between',
+  },
+  priceSection: {
+    flex: 1,
+    gap: 6,
+  },
+  priceRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 8,
   },
   price: {
-    color: palette.primary,
-    fontSize: 16,
-    fontWeight: '600',
+    color: palette.textPrimary,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  spiceMeter: {
+    flexDirection: 'row',
+    gap: 2,
+  },
+  quantityBlock: {
+    minWidth: 124,
+  },
+  quantityControls: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(18, 13, 11, 0.92)',
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: spacing.xs,
+    justifyContent: 'flex-end',
+    padding: 6,
+  },
+  iconButton: {
+    alignItems: 'center',
+    backgroundColor: palette.primarySoft,
+    borderRadius: radius.pill,
+    height: 36,
+    justifyContent: 'center',
+    width: 36,
+  },
+  primaryIconButton: {
+    alignItems: 'center',
+    backgroundColor: palette.primary,
+    borderRadius: radius.pill,
+    height: 36,
+    justifyContent: 'center',
+    width: 36,
+  },
+  quantityText: {
+    color: palette.accent,
+    fontSize: 14,
+    fontWeight: '700',
+    minWidth: 20,
+    textAlign: 'center',
+  },
+  addBlock: {
+    minWidth: 108,
+  },
+  addButton: {
+    alignItems: 'center',
+    backgroundColor: palette.primary,
+    borderRadius: 18,
+    flexDirection: 'row',
+    gap: 6,
+    justifyContent: 'center',
+    minHeight: 44,
+    paddingHorizontal: spacing.md,
+  },
+  addButtonText: {
+    color: palette.textPrimary,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  pressed: {
+    opacity: 0.9,
   },
 });

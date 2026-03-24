@@ -39,6 +39,8 @@ export function AppButton({
 const styles = StyleSheet.create({
   button: {
     alignItems: 'center',
+    borderColor: palette.border,
+    borderWidth: 1,
     borderRadius: radius.pill,
     minHeight: 52,
     justifyContent: 'center',
@@ -47,15 +49,16 @@ const styles = StyleSheet.create({
   },
   primaryButton: {
     backgroundColor: palette.primary,
+    borderWidth: 0,
   },
   secondaryButton: {
     backgroundColor: palette.primarySoft,
   },
   primaryLabel: {
-    color: palette.surface,
+    color: palette.textPrimary,
   },
   secondaryLabel: {
-    color: palette.textPrimary,
+    color: palette.textSecondary,
   },
   label: {
     fontSize: 16,
