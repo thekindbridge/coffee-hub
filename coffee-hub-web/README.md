@@ -48,7 +48,7 @@ If Razorpay support is required, add dedicated payment order creation and paymen
 - `orders`
 - `offers`
 - `customer_profiles`
-- `delivery_agents`
+- `agents`
 - `delivery_sessions`
 - `admin_access`
 - `delivery_access`

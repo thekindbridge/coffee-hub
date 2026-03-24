@@ -261,7 +261,7 @@ export class AgentTracker {
         { merge: true },
       ),
       setDoc(
-        doc(db, 'delivery_agents', this.options.agentId),
+        doc(db, 'agents', this.options.agentId),
         {
           isActive: true,
           currentOrderId: this.options.orderId,

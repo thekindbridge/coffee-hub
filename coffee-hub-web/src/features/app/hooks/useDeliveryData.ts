@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
-import { collection, onSnapshot } from 'firebase/firestore';
+import { collection, doc, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '../../../services/firebase';
 import {
   createAgentTracker,
@@ -10,13 +10,16 @@ import {
 import type { DeliveryAgent, DeliveryLocation, DeliverySession, Order } from '../../../types';
 import { DEFAULT_TRACKER_STATUS } from '../lib/constants';
 import {
+  fetchOrderItemsMap,
   mapDeliveryAgentDocToAgent,
-  mapDeliverySessionDocToSession,
+  mapDeliverySessionRecordToSession,
+  mapOrderDocToOrder,
 } from '../lib/firestoreMappers';
 
 export type DeliveryData = {
   deliveryAgents: DeliveryAgent[];
   deliverySessions: DeliverySession[];
+  agentOrders: Order[];
   agentTrackerRef: React.MutableRefObject<ReturnType<typeof createAgentTracker> | null>;
   trackedOrderIdRef: React.MutableRefObject<string>;
   isAgentTracking: boolean;
@@ -43,10 +46,11 @@ export const useDeliveryData = (
   isAdmin: boolean,
   isDeliveryAgent: boolean,
   normalizedCurrentEmail: string,
-  adminOrders: Order[],
 ): DeliveryData => {
   const [deliveryAgents, setDeliveryAgents] = useState<DeliveryAgent[]>([]);
   const [deliverySessions, setDeliverySessions] = useState<DeliverySession[]>([]);
+  const [activeAgentOrders, setActiveAgentOrders] = useState<Order[]>([]);
+  const [deliveredAgentOrders, setDeliveredAgentOrders] = useState<Order[]>([]);
   const [isAgentTracking, setIsAgentTracking] = useState(false);
   const [agentPermissionState, setAgentPermissionState] =
     useState<AgentTrackerPermissionState>('unavailable');
@@ -57,6 +61,8 @@ export const useDeliveryData = (
 
   const agentTrackerRef = useRef<ReturnType<typeof createAgentTracker> | null>(null);
   const trackedOrderIdRef = useRef('');
+  const activeOrdersSnapshotVersionRef = useRef(0);
+  const deliveredOrdersSnapshotVersionRef = useRef(0);
 
   // Delivery agents subscription
   useEffect(() => {
@@ -66,7 +72,7 @@ export const useDeliveryData = (
     }
 
     const unsubscribe = onSnapshot(
-      collection(db, 'delivery_agents'),
+      collection(db, 'agents'),
       snapshot => {
         const agents = snapshot.docs
           .filter(d => (d.data() as Record<string, unknown>).accessOnly !== true)
@@ -84,37 +90,6 @@ export const useDeliveryData = (
     };
   }, [isAdmin, isDeliveryAgent]);
 
-  // Delivery sessions subscription
-  useEffect(() => {
-    if (!isAdmin && !isDeliveryAgent) {
-      setDeliverySessions([]);
-      return;
-    }
-
-    const unsubscribe = onSnapshot(
-      collection(db, 'delivery_sessions'),
-      snapshot => {
-        setDeliverySessions(snapshot.docs.map(mapDeliverySessionDocToSession));
-      },
-      error => {
-        console.error('Failed to subscribe to delivery sessions', error);
-        setDeliverySessions([]);
-      },
-    );
-
-    return () => {
-      unsubscribe();
-    };
-  }, [isAdmin, isDeliveryAgent]);
-
-  // Stop tracker on unmount
-  useEffect(() => {
-    return () => {
-      agentTrackerRef.current?.stop();
-    };
-  }, []);
-
-  // Derived values
   const currentDeliveryAgent = useMemo(() => {
     if (!normalizedCurrentEmail) return null;
     return deliveryAgents.find(agent => {
@@ -123,62 +98,133 @@ export const useDeliveryData = (
     }) || null;
   }, [deliveryAgents, normalizedCurrentEmail]);
 
-  const currentDeliverySession = useMemo(() => {
-    const activeSessions = deliverySessions.filter(session => {
-      const sessionOrder = adminOrders.find(o => o.id === session.order_id);
-      return Boolean(
-        sessionOrder &&
-          sessionOrder.status === 'Out for Delivery' &&
-          session.status !== 'completed',
-      );
-    });
+  const currentAgentId = isDeliveryAgent
+    ? (currentDeliveryAgent?.id || normalizedCurrentEmail)
+    : '';
 
-    const matchingByOrder = activeSessions.find(
-      s => s.order_id === currentDeliveryAgent?.current_order_id,
-    );
-    if (matchingByOrder) return matchingByOrder;
+  const subscribeToAgentOrders = (
+    status: 'OUT_FOR_DELIVERY' | 'DELIVERED',
+    agentId: string,
+    setOrders: Dispatch<SetStateAction<Order[]>>,
+    snapshotVersionRef: React.MutableRefObject<number>,
+  ) => onSnapshot(
+    query(
+      collection(db, 'orders'),
+      where('assignedAgentId', '==', agentId),
+      where('status', '==', status),
+    ),
+    snapshot => {
+      const mappedOrders = snapshot.docs
+        .map(mapOrderDocToOrder)
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
-    const matchingByAgent = activeSessions.find(
-      s => s.agent_id === currentDeliveryAgent?.id && s.status !== 'completed',
-    );
-    if (matchingByAgent) return matchingByAgent;
+      setOrders(mappedOrders);
 
-    return activeSessions.find(session => {
-      const sessionOrder = adminOrders.find(o => o.id === session.order_id);
-      return sessionOrder?.delivery_agent_email?.trim().toLowerCase() === normalizedCurrentEmail;
-    }) || null;
-  }, [
-    adminOrders,
-    currentDeliveryAgent?.current_order_id,
-    currentDeliveryAgent?.id,
-    deliverySessions,
-    normalizedCurrentEmail,
-  ]);
+      const snapshotVersion = snapshotVersionRef.current + 1;
+      snapshotVersionRef.current = snapshotVersion;
 
-  const currentDeliveryOrder = useMemo(() => {
-    const targetOrderId =
-      currentDeliverySession?.order_id || currentDeliveryAgent?.current_order_id;
-    if (targetOrderId) {
-      return adminOrders.find(
-        o => o.id === targetOrderId && o.status === 'Out for Delivery',
-      ) || null;
+      void (async () => {
+        try {
+          const orderItemsMap = await fetchOrderItemsMap(mappedOrders.map(order => order.id));
+          if (snapshotVersionRef.current !== snapshotVersion) {
+            return;
+          }
+
+          setOrders(mappedOrders.map(order => ({
+            ...order,
+            items: orderItemsMap.get(order.id) || order.items || [],
+          })));
+        } catch (error) {
+          console.error(`Failed to hydrate ${status} agent orders`, error);
+        }
+      })();
+    },
+    error => {
+      console.error(`Failed to subscribe to ${status} agent orders`, error);
+      setOrders([]);
+    },
+  );
+
+  // Agent orders subscriptions
+  useEffect(() => {
+    if (!isDeliveryAgent || !currentAgentId) {
+      setActiveAgentOrders([]);
+      setDeliveredAgentOrders([]);
+      setDeliverySessions([]);
+      return;
     }
 
-    return adminOrders.find(
-      o =>
-        o.status === 'Out for Delivery' &&
-        (
-          o.delivery_agent_id === currentDeliveryAgent?.id ||
-          o.delivery_agent_email?.trim().toLowerCase() === normalizedCurrentEmail
-        ),
-    ) || null;
-  }, [
-    adminOrders,
-    currentDeliveryAgent?.id,
-    currentDeliveryAgent?.current_order_id,
-    currentDeliverySession?.order_id,
-    normalizedCurrentEmail,
-  ]);
+    const unsubscribeActive = subscribeToAgentOrders(
+      'OUT_FOR_DELIVERY',
+      currentAgentId,
+      setActiveAgentOrders,
+      activeOrdersSnapshotVersionRef,
+    );
+    const unsubscribeDelivered = subscribeToAgentOrders(
+      'DELIVERED',
+      currentAgentId,
+      setDeliveredAgentOrders,
+      deliveredOrdersSnapshotVersionRef,
+    );
+
+    return () => {
+      unsubscribeActive();
+      unsubscribeDelivered();
+    };
+  }, [currentAgentId, isDeliveryAgent]);
+
+  const agentOrders = useMemo(
+    () => [...activeAgentOrders, ...deliveredAgentOrders]
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()),
+    [activeAgentOrders, deliveredAgentOrders],
+  );
+
+  const currentDeliveryOrder = useMemo(
+    () => activeAgentOrders[0] || null,
+    [activeAgentOrders],
+  );
+
+  // Current delivery session subscription
+  useEffect(() => {
+    if (!currentDeliveryOrder?.id) {
+      setDeliverySessions([]);
+      return;
+    }
+
+    const unsubscribe = onSnapshot(
+      doc(db, 'delivery_sessions', currentDeliveryOrder.id),
+      snapshot => {
+        if (!snapshot.exists()) {
+          setDeliverySessions([]);
+          return;
+        }
+
+        setDeliverySessions([
+          mapDeliverySessionRecordToSession(
+            snapshot.id,
+            snapshot.data() as Record<string, unknown>,
+          ),
+        ]);
+      },
+      error => {
+        console.error('Failed to subscribe to current delivery session', error);
+        setDeliverySessions([]);
+      },
+    );
+
+    return () => {
+      unsubscribe();
+    };
+  }, [currentDeliveryOrder?.id]);
+
+  // Stop tracker on unmount
+  useEffect(() => {
+    return () => {
+      agentTrackerRef.current?.stop();
+    };
+  }, []);
+
+  const currentDeliverySession = deliverySessions[0] || null;
 
   // Stop tracker when delivery order changes or completes
   useEffect(() => {
@@ -222,6 +268,7 @@ export const useDeliveryData = (
   return {
     deliveryAgents,
     deliverySessions,
+    agentOrders,
     agentTrackerRef,
     trackedOrderIdRef,
     isAgentTracking,

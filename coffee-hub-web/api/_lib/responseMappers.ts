@@ -38,6 +38,11 @@ export interface StoredOrderRecord {
   agentPhone?: string;
   agentEmail?: string;
   agentVehicle?: string;
+  assignedAgentId?: string;
+  assignedAgentName?: string;
+  assignedAgentPhone?: string;
+  assignedAgentEmail?: string;
+  assignedAgentVehicle?: string;
   deliveryAgentId?: string;
   deliveryAgentName?: string;
   deliveryAgentPhone?: string;
@@ -167,6 +172,7 @@ export const mapOrderRecordToResponse = (
   const preparingAt = mapTimestampToIsoString(record.preparingAt ?? record.preparing_at);
   const readyAt = mapTimestampToIsoString(record.readyAt ?? record.readyForPickupAt ?? record.ready_for_pickup_at);
   const agentId = (
+    record.assignedAgentId ||
     record.agentId ||
     record.deliveryAgentId ||
     record.delivery_agent_id ||
@@ -195,10 +201,30 @@ export const mapOrderRecordToResponse = (
     updated_at: mapTimestampToIsoString(record.updatedAt),
     user_id: record.userId || '',
     delivery_agent_id: agentId,
-    delivery_agent_name: record.agentName || record.deliveryAgentName || record.delivery_agent_name || '',
-    delivery_agent_phone: record.agentPhone || record.deliveryAgentPhone || record.delivery_agent_phone || '',
-    delivery_agent_email: record.agentEmail || record.deliveryAgentEmail || record.delivery_agent_email || '',
-    delivery_agent_vehicle: record.agentVehicle || record.deliveryAgentVehicle || record.delivery_agent_vehicle || '',
+    delivery_agent_name:
+      record.assignedAgentName ||
+      record.agentName ||
+      record.deliveryAgentName ||
+      record.delivery_agent_name ||
+      '',
+    delivery_agent_phone:
+      record.assignedAgentPhone ||
+      record.agentPhone ||
+      record.deliveryAgentPhone ||
+      record.delivery_agent_phone ||
+      '',
+    delivery_agent_email:
+      record.assignedAgentEmail ||
+      record.agentEmail ||
+      record.deliveryAgentEmail ||
+      record.delivery_agent_email ||
+      '',
+    delivery_agent_vehicle:
+      record.assignedAgentVehicle ||
+      record.agentVehicle ||
+      record.deliveryAgentVehicle ||
+      record.delivery_agent_vehicle ||
+      '',
     delivery_assigned_at: assignedAt,
     delivery_picked_at: pickedAt,
     delivery_out_for_delivery_at: outForDeliveryAt,

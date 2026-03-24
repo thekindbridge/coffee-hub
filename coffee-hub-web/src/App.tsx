@@ -357,7 +357,7 @@ export default function App() {
             isAuthorized={appData.isDeliveryAgent}
             isTracking={appData.isAgentTracking}
             lastTrackedLocation={appData.agentLastTrackedLocation}
-            orders={appData.adminOrders}
+            orders={appData.agentOrders}
             onEndDelivery={orderDocId => { void orderOperations.handleEndDelivery(orderDocId); }}
             onStartDelivery={() => { void orderOperations.handleStartDelivery(); }}
             permissionState={appData.agentPermissionState}

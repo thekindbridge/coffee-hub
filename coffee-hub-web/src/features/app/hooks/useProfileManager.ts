@@ -190,21 +190,28 @@ export const useProfileManager = ({
         const existingAgent = deliveryAgents.find(
           agent => agent.id === normalizedEmail || agent.email?.toLowerCase() === normalizedEmail,
         );
-        const agentStatus = staffProfileDraft.status === 'Offline' ? 'offline' : 'available';
+        const shouldMarkOffline = staffProfileDraft.status === 'Offline';
+        const shouldPreserveBusyAssignment =
+          existingAgent?.status === 'busy' && Boolean(existingAgent.current_order_id);
+        const agentStatus = shouldMarkOffline
+          ? 'BUSY'
+          : shouldPreserveBusyAssignment
+            ? 'BUSY'
+            : 'AVAILABLE';
         const agentPayload: Record<string, unknown> = {
           name: staffProfileDraft.name.trim(),
           phone: formatPhoneWithPrefix(staffProfileDraft.phone),
           email: normalizedEmail,
-          vehicleType: staffProfileDraft.vehicleType,
+          vehicle: staffProfileDraft.vehicleType,
           status: agentStatus,
-          isActive: agentStatus !== 'offline',
+          isActive: !shouldMarkOffline,
           role: 'delivery',
           accessOnly: false,
           updatedAt: serverTimestamp(),
         };
         if (!existingAgent) agentPayload.createdAt = serverTimestamp();
 
-        await setDoc(doc(db, 'delivery_agents', normalizedEmail), agentPayload, { merge: true });
+        await setDoc(doc(db, 'agents', normalizedEmail), agentPayload, { merge: true });
       }
 
       setIsStaffProfileSavedToastVisible(true);

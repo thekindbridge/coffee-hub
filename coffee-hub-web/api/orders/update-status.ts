@@ -143,30 +143,35 @@ export default async function handler(request: VercelRequest, response: VercelRe
       }
 
       const assignedAgentId = (
+        currentOrder.assignedAgentId ||
         currentOrder.deliveryAgentId ||
         currentOrder.agentId ||
         currentOrder.delivery_agent_id ||
         ''
       ).trim();
       const assignedAgentName = (
+        currentOrder.assignedAgentName ||
         currentOrder.deliveryAgentName ||
         currentOrder.agentName ||
         currentOrder.delivery_agent_name ||
         ''
       ).trim();
       const assignedAgentPhone = (
+        currentOrder.assignedAgentPhone ||
         currentOrder.deliveryAgentPhone ||
         currentOrder.agentPhone ||
         currentOrder.delivery_agent_phone ||
         ''
       ).trim();
       const assignedAgentEmail = (
+        currentOrder.assignedAgentEmail ||
         currentOrder.deliveryAgentEmail ||
         currentOrder.agentEmail ||
         currentOrder.delivery_agent_email ||
         ''
       ).trim();
       const assignedAgentVehicle = (
+        currentOrder.assignedAgentVehicle ||
         currentOrder.deliveryAgentVehicle ||
         currentOrder.agentVehicle ||
         currentOrder.delivery_agent_vehicle ||
@@ -181,10 +186,10 @@ export default async function handler(request: VercelRequest, response: VercelRe
 
       if (status === 'OUT_FOR_DELIVERY' && assignedAgentId) {
         transaction.set(
-          adminDb.collection('delivery_agents').doc(assignedAgentId),
+          adminDb.collection('agents').doc(assignedAgentId),
           {
             currentOrderId: orderId,
-            status: 'busy',
+            status: 'BUSY',
             updatedAt: FieldValue.serverTimestamp(),
           },
           { merge: true },
@@ -209,10 +214,10 @@ export default async function handler(request: VercelRequest, response: VercelRe
 
       if (status === 'DELIVERED' && assignedAgentId) {
         transaction.set(
-          adminDb.collection('delivery_agents').doc(assignedAgentId),
+          adminDb.collection('agents').doc(assignedAgentId),
           {
             currentOrderId: '',
-            status: 'available',
+            status: 'AVAILABLE',
             updatedAt: FieldValue.serverTimestamp(),
           },
           { merge: true },

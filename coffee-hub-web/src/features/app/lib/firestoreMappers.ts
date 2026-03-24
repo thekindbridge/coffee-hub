@@ -60,29 +60,47 @@ export const mapLocationRecord = (value: unknown): DeliveryLocation | null => {
   };
 };
 
-export const mapDeliveryAgentDocToAgent = (
-  snapshot: QueryDocumentSnapshot,
+const normalizeStoredAgentStatus = (
+  status: unknown,
+  isActive: boolean,
+): DeliveryAgent['status'] => {
+  if (!isActive) {
+    return 'offline';
+  }
+
+  if (typeof status === 'string') {
+    const normalized = status.trim().toLowerCase();
+    if (normalized === 'busy') {
+      return 'busy';
+    }
+    if (normalized === 'offline') {
+      return 'offline';
+    }
+    if (normalized === 'available') {
+      return 'available';
+    }
+  }
+
+  return 'available';
+};
+
+export const mapAgentRecordToAgent = (
+  agentId: string,
+  data: Record<string, unknown>,
 ): DeliveryAgent => {
-  const data = snapshot.data() as Record<string, unknown>;
-  const statusValue = typeof data.status === 'string' ? data.status.toLowerCase() : '';
-  const isActive = Boolean(
-    data.isActive ?? (statusValue ? statusValue !== 'offline' : false),
-  );
+  const explicitIsActive = data.isActive;
+  const isActive = typeof explicitIsActive === 'boolean'
+    ? explicitIsActive
+    : true;
   const currentLocation = mapLocationRecord(data.currentLocation);
 
   return {
-    id: snapshot.id,
-    name: (data.name as string) || 'Delivery Partner',
+    id: agentId,
+    name: (data.name as string) || '',
     phone: (data.phone as string) || '',
     email: (data.email as string) || '',
-    vehicle_type: (data.vehicleType as string) || '',
-    status: statusValue === 'offline'
-      ? 'offline'
-      : statusValue === 'busy'
-        ? 'busy'
-        : statusValue
-          ? 'available'
-          : undefined,
+    vehicle_type: (data.vehicle as string) || (data.vehicleType as string) || '',
+    status: normalizeStoredAgentStatus(data.status, isActive),
     is_active: isActive,
     current_order_id: (data.currentOrderId as string) || '',
     current_location: currentLocation,
@@ -90,21 +108,28 @@ export const mapDeliveryAgentDocToAgent = (
   };
 };
 
+export const mapDeliveryAgentDocToAgent = (
+  snapshot: QueryDocumentSnapshot,
+): DeliveryAgent =>
+  mapAgentRecordToAgent(snapshot.id, snapshot.data() as Record<string, unknown>);
+
+export const mapDeliverySessionRecordToSession = (
+  orderId: string,
+  data: Record<string, unknown>,
+): DeliverySession => ({
+  order_id: orderId,
+  order_doc_id: (data.orderDocId as string) || '',
+  agent_id: (data.agentId as string) || '',
+  agent_name: (data.agentName as string) || '',
+  status: ((data.status as DeliverySession['status']) || 'assigned'),
+  started_at: mapTimestampToIsoString(data.startedAt),
+  completed_at: mapTimestampToIsoString(data.completedAt),
+});
+
 export const mapDeliverySessionDocToSession = (
   snapshot: QueryDocumentSnapshot,
-): DeliverySession => {
-  const data = snapshot.data() as Record<string, unknown>;
-
-  return {
-    order_id: snapshot.id,
-    order_doc_id: (data.orderDocId as string) || '',
-    agent_id: (data.agentId as string) || '',
-    agent_name: (data.agentName as string) || '',
-    status: ((data.status as DeliverySession['status']) || 'assigned'),
-    started_at: mapTimestampToIsoString(data.startedAt),
-    completed_at: mapTimestampToIsoString(data.completedAt),
-  };
-};
+): DeliverySession =>
+  mapDeliverySessionRecordToSession(snapshot.id, snapshot.data() as Record<string, unknown>);
 
 export const normalizeOrderStatus = (status: unknown): Order['status'] =>
   getOrderStatusLabel(normalizeOrderStatusCode(status));
@@ -293,11 +318,41 @@ export const mapOrderRecordToOrder = (
   const deliveredAt = mapTimestampToIsoString(data.deliveredAt ?? data.deliveryDeliveredAt ?? data.delivery_delivered_at);
   const preparingAt = mapTimestampToIsoString(data.preparingAt ?? data.preparing_at);
   const readyAt = mapTimestampToIsoString(data.readyAt ?? data.readyForPickupAt ?? data.ready_for_pickup_at);
-  const agentId = ((data.agentId as string) || (data.deliveryAgentId as string) || (data.delivery_agent_id as string) || '').trim();
-  const agentName = (data.agentName as string) || (data.deliveryAgentName as string) || (data.delivery_agent_name as string) || '';
-  const agentPhone = (data.agentPhone as string) || (data.deliveryAgentPhone as string) || (data.delivery_agent_phone as string) || '';
-  const agentVehicle = (data.agentVehicle as string) || (data.deliveryAgentVehicle as string) || (data.delivery_agent_vehicle as string) || '';
-  const agentEmail = (data.agentEmail as string) || (data.deliveryAgentEmail as string) || (data.delivery_agent_email as string) || '';
+  const agentId = (
+    (data.assignedAgentId as string) ||
+    (data.agentId as string) ||
+    (data.deliveryAgentId as string) ||
+    (data.delivery_agent_id as string) ||
+    ''
+  ).trim();
+  const agentName = (
+    (data.assignedAgentName as string) ||
+    (data.agentName as string) ||
+    (data.deliveryAgentName as string) ||
+    (data.delivery_agent_name as string) ||
+    ''
+  ).trim();
+  const agentPhone = (
+    (data.assignedAgentPhone as string) ||
+    (data.agentPhone as string) ||
+    (data.deliveryAgentPhone as string) ||
+    (data.delivery_agent_phone as string) ||
+    ''
+  ).trim();
+  const agentVehicle = (
+    (data.assignedAgentVehicle as string) ||
+    (data.agentVehicle as string) ||
+    (data.deliveryAgentVehicle as string) ||
+    (data.delivery_agent_vehicle as string) ||
+    ''
+  ).trim();
+  const agentEmail = (
+    (data.assignedAgentEmail as string) ||
+    (data.agentEmail as string) ||
+    (data.deliveryAgentEmail as string) ||
+    (data.delivery_agent_email as string) ||
+    ''
+  ).trim();
   const embeddedItems = mapEmbeddedOrderItems(orderId, data.items);
 
   return {

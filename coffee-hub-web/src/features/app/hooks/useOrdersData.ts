@@ -32,7 +32,6 @@ export type OrdersData = {
  */
 export const useOrdersData = (
   isAdmin: boolean,
-  isDeliveryAgent: boolean,
   currentUserId: string,
 ): OrdersData => {
   const [adminOrders, setAdminOrders] = useState<Order[]>([]);
@@ -48,8 +47,7 @@ export const useOrdersData = (
 
   // --- Admin orders subscription ---
   useEffect(() => {
-    const canAccessStaffOrders = isAdmin || isDeliveryAgent;
-    if (!canAccessStaffOrders) {
+    if (!isAdmin) {
       setAdminOrders([]);
       setNewOrderDocIds([]);
       previousAdminOrderCountRef.current = 0;
@@ -151,7 +149,7 @@ export const useOrdersData = (
       unsubscribe();
       highlightTimeoutIds.forEach(id => window.clearTimeout(id));
     };
-  }, [isAdmin, isDeliveryAgent]);
+  }, [isAdmin]);
 
   // --- User orders subscription ---
   useEffect(() => {

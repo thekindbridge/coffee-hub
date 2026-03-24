@@ -347,7 +347,7 @@ export default function DeliveryTrackingMap({
     }
 
     const targetDoc = normalizedAgentId
-      ? doc(db, 'delivery_agents', normalizedAgentId)
+      ? doc(db, 'agents', normalizedAgentId)
       : doc(db, 'agent_locations', normalizedOrderId);
 
     const unsubscribe = onSnapshot(

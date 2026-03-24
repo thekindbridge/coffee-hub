@@ -236,10 +236,10 @@ export default function AgentDeliveryPage({
               Assigned partner
             </p>
             <p className="mt-2 text-sm font-semibold text-[#fff8f2]">
-              {deliveryAgent?.name || order.delivery_agent_name || 'Coffee Hub Rider'}
+              {deliveryAgent?.name || order.delivery_agent_name || 'Agent details pending'}
             </p>
             <p className="mt-1 text-sm text-[#cdbbaa]">
-              {deliveryAgent?.phone || order.delivery_agent_phone || 'Add phone number in delivery_agents for direct calls.'}
+              {deliveryAgent?.phone || order.delivery_agent_phone || 'Add the agent phone number in Firestore for direct calls.'}
             </p>
           </div>
         </div>

@@ -138,8 +138,16 @@ export const useAccessManager = ({
     setDeliveryAccessSuccess('');
     try {
       await setDoc(
-        doc(db, 'delivery_agents', normalizedEmail),
-        { email: normalizedEmail, role: 'delivery', accessOnly: true, createdAt: serverTimestamp(), updatedAt: serverTimestamp() },
+        doc(db, 'agents', normalizedEmail),
+        {
+          email: normalizedEmail,
+          role: 'delivery',
+          accessOnly: true,
+          isActive: false,
+          status: 'BUSY',
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        },
         { merge: true },
       );
       setDeliveryAccessInput('');
@@ -160,7 +168,7 @@ export const useAccessManager = ({
     setDeliveryAccessError('');
     setDeliveryAccessSuccess('');
     try {
-      await deleteDoc(doc(db, 'delivery_agents', entry.id));
+      await deleteDoc(doc(db, 'agents', entry.id));
       setDeliveryAccessSuccess('Delivery agent access removed.');
     } catch (err) {
       console.error('Failed to remove delivery agent access', err);

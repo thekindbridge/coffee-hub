@@ -189,11 +189,6 @@ export default function AdminOrders({
       return;
     }
 
-    if (!order.customer_location) {
-      setActionError('Customer location is required before assigning a delivery agent.');
-      return;
-    }
-
     setActionError('');
     setAssigningOrderDocId(order.doc_id);
 
@@ -216,7 +211,7 @@ export default function AdminOrders({
           throw new Error('Only preparing orders can be assigned to a delivery agent.');
         }
 
-        const selectedAgentRef = doc(db, 'delivery_agents', selectedAgent.id);
+        const selectedAgentRef = doc(db, 'agents', selectedAgent.id);
         const sessionRef = doc(db, 'delivery_sessions', trackingOrderId);
         const locationRef = doc(db, 'agent_locations', trackingOrderId);
         const selectedAgentSnap = await transaction.get(selectedAgentRef);
@@ -229,33 +224,43 @@ export default function AdminOrders({
         const agentStatusValue = typeof agentData.status === 'string'
           ? agentData.status.toLowerCase()
           : '';
-        const isAgentActive =
-          agentData.isActive === true || (agentStatusValue ? agentStatusValue !== 'offline' : false);
+        const isAgentActive = agentData.isActive !== false;
 
         if (!isAgentActive || agentStatusValue === 'busy') {
           throw new Error('Selected delivery agent is not available.');
         }
 
         const previousAgentId =
-          ((orderData.deliveryAgentId as string) || order.delivery_agent_id || '').trim();
+          (
+            (orderData.assignedAgentId as string) ||
+            (orderData.deliveryAgentId as string) ||
+            order.delivery_agent_id ||
+            ''
+          ).trim();
         const agentName = (agentData.name as string) || selectedAgent.name;
         const agentPhone = (agentData.phone as string) || selectedAgent.phone || '';
         const agentEmail = (agentData.email as string) || selectedAgent.email || '';
-        const agentVehicle = (agentData.vehicleType as string) || selectedAgent.vehicle_type || '';
-
-        transaction.update(orderRef, {
-          agentId: selectedAgent.id,
-          agentName,
-          agentPhone,
-          agentEmail,
-          agentVehicle,
-          deliveryAgentId: selectedAgent.id,
-          deliveryAgentName: agentName,
-          deliveryAgentPhone: agentPhone,
-          deliveryAgentEmail: agentEmail,
-          deliveryAgentVehicle: agentVehicle,
+        const agentVehicle = (agentData.vehicle as string) || selectedAgent.vehicle_type || '';
+        const orderUpdate: Record<string, unknown> = {
+          assignedAgentId: selectedAgent.id,
+          assignedAgentName: agentName,
+          orderStatus: 'OUT_FOR_DELIVERY',
+          rejectionReason: '',
+          status: 'OUT_FOR_DELIVERY',
           updatedAt: serverTimestamp(),
-        });
+        };
+
+        if (!orderData.assignedAt && !orderData.deliveryAssignedAt) {
+          orderUpdate.assignedAt = serverTimestamp();
+          orderUpdate.deliveryAssignedAt = serverTimestamp();
+        }
+
+        if (!orderData.outForDeliveryAt && !orderData.deliveryOutForDeliveryAt) {
+          orderUpdate.outForDeliveryAt = serverTimestamp();
+          orderUpdate.deliveryOutForDeliveryAt = serverTimestamp();
+        }
+
+        transaction.update(orderRef, orderUpdate);
 
         transaction.set(
           selectedAgentRef,
@@ -265,8 +270,8 @@ export default function AdminOrders({
             name: agentName,
             phone: agentPhone,
             email: agentEmail,
-            status: 'busy',
-            vehicleType: agentVehicle,
+            status: 'BUSY',
+            vehicle: agentVehicle,
             updatedAt: serverTimestamp(),
           },
           { merge: true },
@@ -274,10 +279,10 @@ export default function AdminOrders({
 
         if (previousAgentId && previousAgentId !== selectedAgent.id) {
           transaction.set(
-            doc(db, 'delivery_agents', previousAgentId),
+            doc(db, 'agents', previousAgentId),
             {
               currentOrderId: '',
-              status: 'available',
+              status: 'AVAILABLE',
               updatedAt: serverTimestamp(),
             },
             { merge: true },
@@ -462,7 +467,7 @@ export default function AdminOrders({
 
                   {!hasAssignedAgent && (
                     <p className="text-xs text-ink-muted">
-                      Assign a delivery agent before moving this order to dispatch.
+                      Choosing an available agent dispatches this order immediately.
                     </p>
                   )}
 
@@ -563,22 +568,10 @@ export default function AdminOrders({
                 )}
 
                 {order.status_code === 'PREPARING' && (
-                  <div className="mt-3 space-y-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        void runStatusAction(order, 'OUT_FOR_DELIVERY');
-                      }}
-                      disabled={!hasAssignedAgent || submittingOrderDocId === order.doc_id || assigningOrderDocId === order.doc_id}
-                      className="coffee-btn-primary min-h-10 px-4 disabled:opacity-60"
-                    >
-                      {submittingOrderDocId === order.doc_id ? 'Updating...' : 'Mark Out for Delivery'}
-                    </button>
-                    {!hasAssignedAgent && (
-                      <p className="text-xs text-ink-muted">
-                        Assign a delivery agent before dispatching this order.
-                      </p>
-                    )}
+                  <div className="mt-3">
+                    <p className="text-sm text-ink-muted">
+                      Assign an available delivery agent to move this order to out-for-delivery.
+                    </p>
                   </div>
                 )}
 

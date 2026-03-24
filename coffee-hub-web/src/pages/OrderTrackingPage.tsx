@@ -40,10 +40,10 @@ const joinClassNames = (...classNames: Array<string | undefined>) =>
 
 const mapDeliveryAgent = (agentId: string, value: Record<string, unknown>): DeliveryAgent => ({
   id: agentId,
-  name: (value.name as string) || 'Delivery Partner',
+  name: (value.name as string) || '',
   phone: (value.phone as string) || '',
   email: (value.email as string) || '',
-  vehicle_type: (value.vehicleType as string) || '',
+  vehicle_type: (value.vehicle as string) || (value.vehicleType as string) || '',
   status: typeof value.status === 'string'
     ? (value.status as string).toLowerCase() === 'offline'
       ? 'offline'
@@ -143,7 +143,11 @@ export default function OrderTrackingPage({
   const agentId = deliverySession?.agent_id || liveOrder.delivery_agent_id || '';
   const agentPhone = deliveryAgent?.phone || liveOrder.delivery_agent_phone || '';
   const agentVehicle = deliveryAgent?.vehicle_type || liveOrder.delivery_agent_vehicle || '';
-  const agentName = deliveryAgent?.name || deliverySession?.agent_name || liveOrder.delivery_agent_name || 'Delivery Partner';
+  const agentName =
+    deliveryAgent?.name ||
+    deliverySession?.agent_name ||
+    liveOrder.delivery_agent_name ||
+    'Agent details pending';
   const displayAgentPhone = agentPhone || '';
   const phoneHref = displayAgentPhone ? `tel:${normalizePhoneForTel(displayAgentPhone)}` : undefined;
   const stepProgress = ORDER_FLOW.length > 1 ? activeStepIndex / (ORDER_FLOW.length - 1) : 0;
@@ -189,7 +193,7 @@ export default function OrderTrackingPage({
     }
 
     const unsubscribe = onSnapshot(
-      doc(db, 'delivery_agents', agentId),
+      doc(db, 'agents', agentId),
       snapshot => {
         if (!snapshot.exists()) {
           setDeliveryAgent(null);

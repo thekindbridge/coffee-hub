@@ -152,10 +152,10 @@ export const useOrderOperations = ({
 
     if (order.delivery_agent_id) {
       batch.set(
-        doc(db, 'delivery_agents', order.delivery_agent_id),
+        doc(db, 'agents', order.delivery_agent_id),
         {
           currentOrderId: '',
-          status: 'available',
+          status: 'AVAILABLE',
           ...(finalLocation
             ? {
                 lastLocation: {
@@ -268,7 +268,7 @@ export const useOrderOperations = ({
         agentName:
           currentDeliveryAgent?.name ||
           currentDeliveryOrder.delivery_agent_name ||
-          'Delivery Partner',
+          'Assigned agent',
         orderDocId: currentDeliveryOrder.doc_id,
         orderId: currentDeliveryOrder.id,
         startedAt: serverTimestamp(),
@@ -281,6 +281,7 @@ export const useOrderOperations = ({
 
   const handleEndDelivery = async (orderDocId: string) => {
     const orderToComplete =
+      (currentDeliveryOrder?.doc_id === orderDocId ? currentDeliveryOrder : null) ||
       adminOrders.find(order => order.doc_id === orderDocId) ||
       userOrders.find(order => order.doc_id === orderDocId) ||
       (orderStatus?.doc_id === orderDocId ? orderStatus : null);

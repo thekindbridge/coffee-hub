@@ -28,7 +28,7 @@ export const useRealtimeAppData = () => {
 
   const menu = useMenuData(auth.isLoggedIn);
 
-  const orders = useOrdersData(roles.isAdmin, roles.isDeliveryAgent, auth.currentUserId);
+  const orders = useOrdersData(roles.isAdmin, auth.currentUserId);
 
   const shopTiming = useShopTiming(auth.isLoggedIn);
 
@@ -44,7 +44,6 @@ export const useRealtimeAppData = () => {
     roles.isAdmin,
     roles.isDeliveryAgent,
     auth.normalizedCurrentEmail,
-    orders.adminOrders,
   );
 
   return {
@@ -86,6 +85,7 @@ export const useRealtimeAppData = () => {
     // Delivery
     deliveryAgents: delivery.deliveryAgents,
     deliverySessions: delivery.deliverySessions,
+    agentOrders: delivery.agentOrders,
     agentTrackerRef: delivery.agentTrackerRef,
     trackedOrderIdRef: delivery.trackedOrderIdRef,
     isAgentTracking: delivery.isAgentTracking,

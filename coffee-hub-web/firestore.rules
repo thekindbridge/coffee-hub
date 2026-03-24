@@ -17,7 +17,7 @@ service cloud.firestore {
 
     function isDeliveryAgent() {
       return signedIn() &&
-        exists(/databases/$(database)/documents/delivery_agents/$(userEmail()));
+        exists(/databases/$(database)/documents/agents/$(userEmail()));
     }
 
     function isOrderOwner() {
@@ -26,7 +26,9 @@ service cloud.firestore {
 
     function isAssignedAgent() {
       return signedIn() &&
-        (resource.data.agentEmail == userEmail() ||
+        (resource.data.assignedAgentId == userEmail() ||
+          resource.data.assignedAgentEmail == userEmail() ||
+          resource.data.agentEmail == userEmail() ||
           resource.data.deliveryAgentEmail == userEmail());
     }
 
@@ -37,7 +39,9 @@ service cloud.firestore {
 
     function isAssignedAgentByOrder(orderId) {
       return signedIn() &&
-        (get(/databases/$(database)/documents/orders/$(orderId)).data.agentEmail == userEmail() ||
+        (get(/databases/$(database)/documents/orders/$(orderId)).data.assignedAgentId == userEmail() ||
+          get(/databases/$(database)/documents/orders/$(orderId)).data.assignedAgentEmail == userEmail() ||
+          get(/databases/$(database)/documents/orders/$(orderId)).data.agentEmail == userEmail() ||
           get(/databases/$(database)/documents/orders/$(orderId)).data.deliveryAgentEmail == userEmail());
     }
 
@@ -57,7 +61,7 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
-    match /delivery_agents/{agentId} {
+    match /agents/{agentId} {
       allow read: if isAdmin() || signedIn();
       allow create, update: if isAdmin() || (signedIn() && request.resource.data.email == userEmail());
       allow delete: if isAdmin();
@@ -91,7 +95,7 @@ service cloud.firestore {
     }
 
     match /admin_access/{email} {
-      allow read: if isAdmin();
+      allow read: if isAdmin() || (signedIn() && request.auth.token.email == email);
       allow create, update: if signedIn() && request.auth.token.email == email;
       allow delete: if isAdmin();
     }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { collection, onSnapshot, query, where } from 'firebase/firestore';
+import { collection, doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../../services/firebase';
 import { ADMIN_EMAIL } from '../lib/constants';
 import type { AccessEntry } from '../types';
@@ -37,19 +37,10 @@ export const useAccessRoles = (
 
     const normalizedEmail = currentUserEmail.trim().toLowerCase();
 
-    const adminQuery = query(
-      collection(db, 'admin_access'),
-      where('email', '==', normalizedEmail),
-    );
-    const deliveryQuery = query(
-      collection(db, 'delivery_agents'),
-      where('email', '==', normalizedEmail),
-    );
-
     const unsubscribeAdmin = onSnapshot(
-      adminQuery,
+      doc(db, 'admin_access', normalizedEmail),
       snapshot => {
-        setIsAdmin(!snapshot.empty || normalizedEmail === ADMIN_EMAIL);
+        setIsAdmin(snapshot.exists() || normalizedEmail === ADMIN_EMAIL);
       },
       error => {
         console.error('Failed to verify admin access', error);
@@ -58,9 +49,9 @@ export const useAccessRoles = (
     );
 
     const unsubscribeDelivery = onSnapshot(
-      deliveryQuery,
+      doc(db, 'agents', normalizedEmail),
       snapshot => {
-        setIsDeliveryAgent(!snapshot.empty);
+        setIsDeliveryAgent(snapshot.exists());
       },
       error => {
         console.error('Failed to verify delivery agent access', error);
@@ -104,7 +95,7 @@ export const useAccessRoles = (
     );
 
     const unsubscribeAgents = onSnapshot(
-      collection(db, 'delivery_agents'),
+      collection(db, 'agents'),
       snapshot => {
         const entries = snapshot.docs
           .flatMap(docSnapshot => {
