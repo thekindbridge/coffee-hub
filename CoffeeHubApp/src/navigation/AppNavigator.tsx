@@ -5,6 +5,7 @@ import { ROUTES } from '../constants/routes';
 import { palette } from '../constants/theme';
 import { useAuth } from '../hooks';
 import { LoginScreen } from '../screens/LoginScreen';
+import { MenuScreen } from '../screens/MenuScreen';
 import { MainTabNavigator } from './MainTabNavigator';
 import type { RootStackParamList } from './types';
 
@@ -43,11 +44,18 @@ export function AppNavigator() {
         }}
       >
         {isAuthenticated ? (
-          <Stack.Screen
-            component={MainTabNavigator}
-            name={ROUTES.MainTabs}
-            options={{ headerShown: false }}
-          />
+          <>
+            <Stack.Screen
+              component={MainTabNavigator}
+              name={ROUTES.MainTabs}
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
+              component={MenuScreen}
+              name={ROUTES.Menu}
+              options={{ title: 'Menu' }}
+            />
+          </>
         ) : (
           <Stack.Screen
             component={LoginScreen}

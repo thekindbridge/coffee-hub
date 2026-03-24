@@ -28,6 +28,7 @@ export function MenuItemCard({ item, cartQuantity, onAddToCart }: MenuItemCardPr
   const spiceLevel = Math.max(0, Math.min(5, item.spice_level));
   const formattedPrice = Number.isInteger(item.price) ? item.price.toString() : item.price.toFixed(2);
   const hasImage = item.image_url.trim().length > 0;
+  const showRecommended = item.rating >= 4.5;
 
   return (
     <View style={styles.card}>
@@ -57,10 +58,23 @@ export function MenuItemCard({ item, cartQuantity, onAddToCart }: MenuItemCardPr
             <Text style={styles.metaBadgeText}>{item.rating.toFixed(1)}</Text>
           </View>
         </View>
+
+        {showRecommended ? (
+          <View style={styles.recommendedBadge}>
+            <Feather color={palette.highlight} name="award" size={12} />
+            <Text style={styles.recommendedBadgeText}>Popular</Text>
+          </View>
+        ) : null}
       </View>
 
       <View style={styles.content}>
         <View style={styles.copy}>
+          <View style={styles.categoryBadge}>
+            <Text numberOfLines={1} style={styles.categoryBadgeText}>
+              {item.category}
+            </Text>
+          </View>
+
           <View style={styles.titleRow}>
             <Text numberOfLines={2} style={styles.title}>
               {item.name}
@@ -129,17 +143,17 @@ export function MenuItemCard({ item, cartQuantity, onAddToCart }: MenuItemCardPr
 const styles = StyleSheet.create({
   card: {
     backgroundColor: palette.surface,
-    borderColor: palette.border,
-    borderRadius: 26,
+    borderColor: palette.borderStrong,
+    borderRadius: radius.xl,
     borderWidth: 1,
     overflow: 'hidden',
-    shadowColor: '#000000',
+    shadowColor: palette.shadow,
     shadowOffset: { width: 0, height: 18 },
-    shadowOpacity: 0.28,
-    shadowRadius: 24,
+    shadowOpacity: 0.22,
+    shadowRadius: 22,
   },
   imageWrapper: {
-    aspectRatio: 1.06,
+    aspectRatio: 1.08,
     overflow: 'hidden',
     position: 'relative',
   },
@@ -154,7 +168,7 @@ const styles = StyleSheet.create({
   },
   imageOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(13, 9, 7, 0.32)',
+    backgroundColor: 'rgba(13, 9, 7, 0.26)',
   },
   badgeRow: {
     left: spacing.md,
@@ -167,7 +181,7 @@ const styles = StyleSheet.create({
   metaBadge: {
     alignItems: 'center',
     backgroundColor: 'rgba(18, 13, 11, 0.82)',
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: 'rgba(255, 255, 255, 0.12)',
     borderRadius: radius.pill,
     borderWidth: 1,
     flexDirection: 'row',
@@ -180,12 +194,45 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
   },
+  recommendedBadge: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(18, 13, 11, 0.86)',
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    bottom: spacing.md,
+    flexDirection: 'row',
+    gap: 6,
+    left: spacing.md,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    position: 'absolute',
+  },
+  recommendedBadgeText: {
+    color: palette.accent,
+    fontSize: 11,
+    fontWeight: '700',
+  },
   content: {
     gap: spacing.md,
-    padding: 14,
+    padding: spacing.md,
   },
   copy: {
     gap: spacing.xs,
+  },
+  categoryBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: palette.primarySoft,
+    borderRadius: radius.pill,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  categoryBadgeText: {
+    color: palette.secondary,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
   },
   titleRow: {
     alignItems: 'flex-start',
@@ -196,13 +243,13 @@ const styles = StyleSheet.create({
   title: {
     color: palette.accent,
     flex: 1,
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '700',
     lineHeight: 21,
   },
   spiceBadge: {
     alignItems: 'center',
-    backgroundColor: palette.primarySoft,
+    backgroundColor: palette.surfaceSoft,
     borderColor: palette.border,
     borderRadius: radius.pill,
     borderWidth: 1,
@@ -219,7 +266,7 @@ const styles = StyleSheet.create({
   description: {
     color: palette.textSecondary,
     fontSize: 12,
-    lineHeight: 20,
+    lineHeight: 19,
   },
   footer: {
     alignItems: 'flex-end',
@@ -229,16 +276,21 @@ const styles = StyleSheet.create({
   },
   priceSection: {
     flex: 1,
-    gap: 6,
+    gap: spacing.xs,
   },
   priceRow: {
     alignItems: 'center',
+    alignSelf: 'flex-start',
+    backgroundColor: palette.surfaceSoft,
+    borderRadius: radius.pill,
     flexDirection: 'row',
     gap: 8,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
   },
   price: {
     color: palette.textPrimary,
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '700',
   },
   spiceMeter: {
@@ -251,7 +303,7 @@ const styles = StyleSheet.create({
   quantityControls: {
     alignItems: 'center',
     backgroundColor: 'rgba(18, 13, 11, 0.92)',
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: 'rgba(255, 255, 255, 0.12)',
     borderRadius: radius.pill,
     borderWidth: 1,
     flexDirection: 'row',
@@ -261,7 +313,7 @@ const styles = StyleSheet.create({
   },
   iconButton: {
     alignItems: 'center',
-    backgroundColor: palette.primarySoft,
+    backgroundColor: palette.surfaceRaised,
     borderRadius: radius.pill,
     height: 36,
     justifyContent: 'center',
@@ -269,7 +321,7 @@ const styles = StyleSheet.create({
   },
   primaryIconButton: {
     alignItems: 'center',
-    backgroundColor: palette.primary,
+    backgroundColor: palette.primaryDeep,
     borderRadius: radius.pill,
     height: 36,
     justifyContent: 'center',
@@ -287,13 +339,17 @@ const styles = StyleSheet.create({
   },
   addButton: {
     alignItems: 'center',
-    backgroundColor: palette.primary,
-    borderRadius: 18,
+    backgroundColor: palette.primaryDeep,
+    borderRadius: radius.pill,
     flexDirection: 'row',
     gap: 6,
     justifyContent: 'center',
-    minHeight: 44,
+    minHeight: 46,
     paddingHorizontal: spacing.md,
+    shadowColor: palette.shadow,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.14,
+    shadowRadius: 16,
   },
   addButtonText: {
     color: palette.textPrimary,
@@ -301,6 +357,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   pressed: {
-    opacity: 0.9,
+    opacity: 0.95,
+    transform: [{ scale: 0.985 }],
   },
 });

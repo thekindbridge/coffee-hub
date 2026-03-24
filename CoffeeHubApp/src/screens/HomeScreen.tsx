@@ -1,7 +1,11 @@
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import {
+  CompositeNavigationProp,
+  useNavigation,
+} from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
-import { useEffect, useRef, useState } from 'react';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useState } from 'react';
 import {
   FlatList,
   Linking,
@@ -13,15 +17,16 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { AppCard } from '../components/AppCard';
 import { AppButton } from '../components/AppButton';
 import { Banner } from '../components/Banner';
 import { Loader } from '../components/Loader';
 import { MenuItemCard } from '../components/MenuItemCard';
 import { ROUTES } from '../constants/routes';
 import { palette, radius, spacing } from '../constants/theme';
-import { useCart } from '../hooks';
-import type { MainTabParamList } from '../navigation/types';
-import { getMenu, type MenuItem } from '../services/api';
+import { useCart, useMenuCatalog } from '../hooks';
+import type { MainTabParamList, RootStackParamList } from '../navigation/types';
+import type { MenuItem } from '../services/api';
 
 const HERO_IMAGE =
   'https://res.cloudinary.com/ddfhaqeme/image/upload/v1772699634/e0818545-8027-4b28-8a1f-d521f79fdb6a_plei96.jpg';
@@ -65,36 +70,24 @@ const reasonsToLove = [
   },
 ] as const;
 
+type HomeScreenNavigationProp = CompositeNavigationProp<
+  BottomTabNavigationProp<MainTabParamList>,
+  NativeStackNavigationProp<RootStackParamList>
+>;
+
 export function HomeScreen() {
-  const navigation = useNavigation<BottomTabNavigationProp<MainTabParamList>>();
-  const scrollViewRef = useRef<ScrollView>(null);
+  const navigation = useNavigation<HomeScreenNavigationProp>();
   const { addItem, cartQuantityById, itemCount } = useCart();
-  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [errorMessage, setErrorMessage] = useState('');
-  const [quickPicksY, setQuickPicksY] = useState(0);
-
-  const loadMenu = async () => {
-    setIsLoading(true);
-
-    try {
-      const nextMenu = await getMenu();
-      setMenuItems(nextMenu);
-      setErrorMessage('');
-    } catch (error) {
-      const nextError =
-        error instanceof Error ? error.message : 'Unable to load the menu right now.';
-      setErrorMessage(nextError);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    void loadMenu();
-  }, []);
+  const { errorMessage, isLoading, menuItems, reloadMenu } = useMenuCatalog();
 
   const quickPicks = menuItems.slice(0, 6);
+  const featuredCategories = Array.from(
+    new Set(
+      menuItems
+        .map(item => item.category.trim())
+        .filter(category => category.length > 0),
+    ),
+  ).slice(0, 6);
 
   const heroMetrics = [
     { label: 'Delivery', value: '20-30m' },
@@ -118,13 +111,6 @@ export function HomeScreen() {
     );
   };
 
-  const handleScrollToQuickPicks = () => {
-    scrollViewRef.current?.scrollTo({
-      animated: true,
-      y: Math.max(quickPicksY - spacing.lg, 0),
-    });
-  };
-
   const renderQuickPicks = () => {
     if (isLoading) {
       return (
@@ -139,7 +125,7 @@ export function HomeScreen() {
         <View style={styles.stateCard}>
           <Text style={styles.stateTitle}>Unable to load the menu</Text>
           <Text style={styles.stateBody}>{errorMessage}</Text>
-          <AppButton label="Try Again" onPress={() => void loadMenu()} variant="secondary" />
+          <AppButton label="Try Again" onPress={() => void reloadMenu()} variant="secondary" />
         </View>
       );
     }
@@ -181,7 +167,6 @@ export function HomeScreen() {
     <SafeAreaView edges={['bottom']} style={styles.safeArea}>
       <ScrollView
         contentContainerStyle={styles.content}
-        ref={scrollViewRef}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.heroSection}>
@@ -202,8 +187,8 @@ export function HomeScreen() {
             metrics={heroMetrics}
             primaryAction={{
               icon: <Feather color={palette.textPrimary} name="shopping-bag" size={16} />,
-              label: 'Order now',
-              onPress: handleScrollToQuickPicks,
+              label: 'View menu',
+              onPress: () => navigation.navigate(ROUTES.Menu),
             }}
             secondaryAction={{
               icon: <Feather color={palette.textSecondary} name="shopping-cart" size={16} />,
@@ -215,6 +200,59 @@ export function HomeScreen() {
           />
         </View>
 
+        {featuredCategories.length > 0 ? (
+          <View style={styles.discoverySection}>
+            <View style={styles.discoveryHeader}>
+              <View>
+                <Text style={styles.discoveryEyebrow}>Browse by craving</Text>
+                <Text style={styles.discoveryTitle}>Fresh categories for today</Text>
+              </View>
+              <AppButton
+                fullWidth={false}
+                icon={<Feather color={palette.secondary} name="arrow-right" size={16} />}
+                label="Menu"
+                onPress={() => navigation.navigate(ROUTES.Menu)}
+                style={styles.discoveryButton}
+                variant="ghost"
+              />
+            </View>
+
+            <ScrollView
+              contentContainerStyle={styles.discoveryRail}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+            >
+              {featuredCategories.map((category, index) => (
+                <Pressable
+                  accessibilityRole="button"
+                  key={category}
+                  onPress={() => navigation.navigate(ROUTES.Menu)}
+                  style={({ pressed }) => [
+                    styles.discoveryCard,
+                    pressed && styles.pressed,
+                    index === 0 ? styles.discoveryCardFeatured : undefined,
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.discoveryIconShell,
+                      index === 0 ? styles.discoveryIconShellFeatured : undefined,
+                    ]}
+                  >
+                    <Feather
+                      color={index === 0 ? palette.textPrimary : palette.secondary}
+                      name="coffee"
+                      size={16}
+                    />
+                  </View>
+                  <Text style={styles.discoveryCardTitle}>{category}</Text>
+                  <Text style={styles.discoveryCardBody}>Fresh brews and fast bites</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+        ) : null}
+
         {errorMessage && quickPicks.length > 0 ? (
           <View style={styles.inlineErrorCard}>
             <Text style={styles.inlineErrorTitle}>Could not refresh quick picks.</Text>
@@ -222,19 +260,20 @@ export function HomeScreen() {
           </View>
         ) : null}
 
-        <View onLayout={event => setQuickPicksY(event.nativeEvent.layout.y)} style={styles.section}>
+        <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <View style={styles.sectionHeaderCopy}>
               <Text style={styles.sectionEyebrow}>Popular right now</Text>
               <Text style={styles.sectionTitle}>Quick picks</Text>
+              <Text style={styles.sectionBody}>Customer favorites that are easy to reorder.</Text>
             </View>
 
             <Pressable
               accessibilityRole="button"
-              onPress={() => navigation.navigate(ROUTES.Cart)}
+              onPress={() => navigation.navigate(ROUTES.Menu)}
               style={({ pressed }) => [styles.inlineAction, pressed && styles.pressed]}
             >
-              <Text style={styles.inlineActionText}>Cart</Text>
+              <Text style={styles.inlineActionText}>Menu</Text>
               <Feather color={palette.textSecondary} name="chevron-right" size={16} />
             </Pressable>
           </View>
@@ -244,11 +283,11 @@ export function HomeScreen() {
 
         <View style={styles.infoGrid}>
           {infoTiles.map(tile => (
-            <View key={tile.title} style={styles.infoTile}>
+            <AppCard key={tile.title} style={styles.infoTile} variant="soft">
               <View style={[styles.infoIconShell, { backgroundColor: tile.tone }]}>{tile.icon}</View>
               <Text style={styles.infoTitle}>{tile.title}</Text>
               <Text style={styles.infoBody}>{tile.body}</Text>
-            </View>
+            </AppCard>
           ))}
         </View>
 
@@ -312,6 +351,72 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
   },
+  discoverySection: {
+    paddingTop: spacing.lg,
+  },
+  discoveryHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.md,
+  },
+  discoveryEyebrow: {
+    color: palette.secondary,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 2.2,
+    textTransform: 'uppercase',
+  },
+  discoveryTitle: {
+    color: palette.accent,
+    fontSize: 22,
+    fontWeight: '700',
+    marginTop: 6,
+  },
+  discoveryButton: {
+    minHeight: 40,
+    paddingHorizontal: 0,
+  },
+  discoveryRail: {
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
+  },
+  discoveryCard: {
+    backgroundColor: palette.surface,
+    borderColor: palette.border,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    minWidth: 156,
+    padding: spacing.md,
+  },
+  discoveryCardFeatured: {
+    backgroundColor: palette.surfaceRaised,
+    borderColor: palette.borderStrong,
+  },
+  discoveryIconShell: {
+    alignItems: 'center',
+    backgroundColor: palette.primarySoft,
+    borderRadius: radius.pill,
+    height: 40,
+    justifyContent: 'center',
+    width: 40,
+  },
+  discoveryIconShellFeatured: {
+    backgroundColor: palette.primary,
+  },
+  discoveryCardTitle: {
+    color: palette.accent,
+    fontSize: 15,
+    fontWeight: '700',
+    marginTop: spacing.md,
+  },
+  discoveryCardBody: {
+    color: palette.textSecondary,
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: spacing.xs,
+  },
   inlineErrorCard: {
     backgroundColor: palette.warningSoft,
     borderColor: 'rgba(244, 193, 110, 0.24)',
@@ -345,6 +450,7 @@ const styles = StyleSheet.create({
   },
   sectionHeaderCopy: {
     gap: 4,
+    maxWidth: '70%',
   },
   sectionEyebrow: {
     color: palette.secondary,
@@ -358,9 +464,14 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '700',
   },
+  sectionBody: {
+    color: palette.textSecondary,
+    fontSize: 13,
+    lineHeight: 20,
+  },
   inlineAction: {
     alignItems: 'center',
-    backgroundColor: palette.primarySoft,
+    backgroundColor: palette.surfaceSoft,
     borderColor: palette.border,
     borderRadius: 18,
     borderWidth: 1,
@@ -417,12 +528,7 @@ const styles = StyleSheet.create({
     paddingTop: spacing.lg,
   },
   infoTile: {
-    backgroundColor: palette.surfaceStrong,
-    borderColor: palette.border,
-    borderRadius: 24,
-    borderWidth: 1,
     flex: 1,
-    padding: spacing.md,
   },
   infoIconShell: {
     alignItems: 'center',

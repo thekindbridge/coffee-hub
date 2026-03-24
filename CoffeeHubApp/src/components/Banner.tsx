@@ -69,6 +69,7 @@ export function Banner({
       style={styles.card}
     >
       <View style={styles.overlay} />
+      <View pointerEvents="none" style={styles.glow} />
 
       <View style={styles.content}>
         <View style={styles.badgeRow}>
@@ -106,69 +107,85 @@ export function Banner({
 
 const styles = StyleSheet.create({
   card: {
-    borderColor: palette.border,
+    borderColor: palette.borderStrong,
     borderRadius: 30,
     borderWidth: 1,
     overflow: 'hidden',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.xl,
+    shadowColor: palette.shadow,
+    shadowOffset: { width: 0, height: 18 },
+    shadowOpacity: 0.22,
+    shadowRadius: 24,
   },
   image: {
     borderRadius: 30,
-    opacity: 0.3,
+    opacity: 0.34,
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(12, 9, 8, 0.56)',
+    backgroundColor: 'rgba(12, 9, 8, 0.62)',
+  },
+  glow: {
+    backgroundColor: 'rgba(244, 178, 102, 0.12)',
+    borderRadius: 180,
+    height: 180,
+    position: 'absolute',
+    right: -40,
+    top: -20,
+    width: 180,
   },
   content: {
     gap: spacing.lg,
   },
   badgeRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
     justifyContent: 'space-between',
   },
   badge: {
+    flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    backgroundColor: 'rgba(18, 13, 11, 0.74)',
     borderColor: 'rgba(255, 255, 255, 0.1)',
     borderRadius: radius.pill,
     borderWidth: 1,
-    flexDirection: 'row',
     gap: 6,
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
   badgeLabel: {
-    color: palette.textSecondary,
+    color: palette.accent,
     fontSize: 11,
     fontWeight: '600',
   },
   copy: {
     gap: spacing.sm,
-    maxWidth: 280,
+    maxWidth: 300,
   },
   eyebrow: {
     color: palette.secondary,
     fontSize: 11,
     fontWeight: '700',
-    letterSpacing: 3.4,
+    letterSpacing: 3,
     textTransform: 'uppercase',
   },
   title: {
     color: palette.accent,
-    fontSize: 36,
+    fontSize: 34,
     fontWeight: '700',
-    letterSpacing: -1.1,
+    letterSpacing: -0.9,
     lineHeight: 38,
   },
   description: {
     color: palette.textSecondary,
     fontSize: 14,
-    lineHeight: 24,
+    lineHeight: 22,
   },
   actions: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: spacing.sm,
   },
   actionButton: {
@@ -177,14 +194,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     justifyContent: 'center',
-    minHeight: 44,
+    minHeight: 46,
     paddingHorizontal: spacing.md,
   },
   primaryActionButton: {
-    backgroundColor: palette.primary,
+    backgroundColor: palette.primaryDeep,
+    shadowColor: palette.shadow,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.16,
+    shadowRadius: 16,
   },
   secondaryActionButton: {
-    backgroundColor: palette.primarySoft,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
     borderColor: palette.border,
     borderWidth: 1,
   },
@@ -200,19 +221,21 @@ const styles = StyleSheet.create({
   },
   metricRow: {
     flexDirection: 'row',
-    gap: spacing.xs,
+    gap: spacing.sm,
   },
   metricCard: {
     alignItems: 'center',
-    backgroundColor: 'rgba(34, 24, 20, 0.92)',
-    borderRadius: 20,
+    backgroundColor: 'rgba(27, 19, 16, 0.9)',
+    borderColor: palette.borderStrong,
+    borderRadius: radius.lg,
+    borderWidth: 1,
     flex: 1,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.md,
   },
   metricValue: {
     color: palette.accent,
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '700',
   },
   metricLabel: {
@@ -224,6 +247,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   pressed: {
-    opacity: 0.9,
+    opacity: 0.95,
+    transform: [{ scale: 0.985 }],
   },
 });
