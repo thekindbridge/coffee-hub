@@ -3,7 +3,6 @@ import {
   doc,
   serverTimestamp,
   setDoc,
-  writeBatch,
 } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import { auth, db } from '../../../services/firebase';
@@ -84,113 +83,11 @@ export const useOrderOperations = ({
     setOrderStatus(prev => (prev && prev.doc_id === nextOrder.doc_id ? mergeOrder(prev) : prev));
   };
 
-  const applyOrderLocalUpdate = (
-    orderDocId: string,
-    updater: (order: Order) => Order,
-  ) => {
-    setAdminOrders(prev => prev.map(order => (
-      order.doc_id === orderDocId ? updater(order) : order
-    )));
-    setUserOrders(prev => prev.map(order => (
-      order.doc_id === orderDocId ? updater(order) : order
-    )));
-    setOrderStatus(prev => (
-      prev && prev.doc_id === orderDocId ? updater(prev) : prev
-    ));
-  };
-
   const toFirestoreLocation = (location: DeliveryLocation) => ({
     lat: location.lat,
     lng: location.lng,
     accuracy: location.accuracy ?? null,
   });
-
-  const markOrderDelivered = async (
-    order: Order,
-    finalLocation?: DeliveryLocation | null,
-  ) => {
-    const batch = writeBatch(db);
-    batch.update(doc(db, 'orders', order.doc_id), {
-      status: 'DELIVERED',
-      orderStatus: 'DELIVERED',
-      deliveredAt: serverTimestamp(),
-      deliveryDeliveredAt: serverTimestamp(),
-      ...(finalLocation
-        ? {
-            deliveryLocation: {
-              ...toFirestoreLocation(finalLocation),
-              updatedAt: serverTimestamp(),
-            },
-          }
-        : {}),
-      updatedAt: serverTimestamp(),
-    });
-    batch.set(
-      doc(db, 'delivery_sessions', order.id),
-      {
-        agentId: order.delivery_agent_id || '',
-        agentName: order.delivery_agent_name || '',
-        completedAt: serverTimestamp(),
-        lastLocation: finalLocation
-          ? {
-              ...toFirestoreLocation(finalLocation),
-              updatedAt: serverTimestamp(),
-            }
-          : null,
-        orderDocId: order.doc_id,
-        orderId: order.id,
-        status: 'completed',
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true },
-    );
-
-    if (finalLocation) {
-      batch.set(
-        doc(db, 'agent_locations', order.id),
-        {
-          agentId: order.delivery_agent_id || '',
-          orderDocId: order.doc_id,
-          ...toFirestoreLocation(finalLocation),
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true },
-      );
-    }
-
-    if (order.delivery_agent_id) {
-      batch.set(
-        doc(db, 'agents', order.delivery_agent_id),
-        {
-          currentOrderId: '',
-          status: 'AVAILABLE',
-          ...(finalLocation
-            ? {
-                lastLocation: {
-                  ...toFirestoreLocation(finalLocation),
-                  updatedAt: serverTimestamp(),
-                },
-              }
-            : {}),
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true },
-      );
-    }
-
-    await batch.commit();
-
-    applyOrderLocalUpdate(order.doc_id, currentOrder => ({
-      ...currentOrder,
-      delivery_location: finalLocation ?? currentOrder.delivery_location ?? null,
-      status: 'Delivered',
-      status_code: 'DELIVERED',
-      rejection_reason: '',
-      delivery_delivered_at:
-        currentOrder.delivery_delivered_at || new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    }));
-  };
 
   const handleStartDelivery = async () => {
     if (!currentDeliveryOrder?.customer_location) {
@@ -278,11 +175,27 @@ export const useOrderOperations = ({
     }
 
     try {
+      const idToken = await auth.currentUser?.getIdToken(true);
+      if (!idToken) {
+        throw new Error('Please sign in again before ending the delivery.');
+      }
+
       agentTrackerRef.current?.stop();
       agentTrackerRef.current = null;
       trackedOrderIdRef.current = '';
       setIsAgentTracking(false);
-      await markOrderDelivered(orderToComplete, agentLastTrackedLocation);
+      const response = await postApi<UpdateOrderStatusResponse>(
+        '/api/orders/complete-delivery',
+        {
+          orderId: orderToComplete.doc_id,
+          finalLocation: agentLastTrackedLocation
+            ? toFirestoreLocation(agentLastTrackedLocation)
+            : null,
+        },
+        idToken,
+      );
+
+      replaceOrderLocalState(response.order);
       setAgentTrackerStatus({
         lifecycle: 'completed',
         message: 'Delivery ended and the order is marked as delivered.',
@@ -340,6 +253,26 @@ export const useOrderOperations = ({
     return response.order;
   };
 
+  const assignAgentToOrder = async (orderDocId: string, agentId: string) => {
+    const idToken = await auth.currentUser?.getIdToken(true);
+    if (!idToken) {
+      throw new Error('Please sign in again before assigning a delivery agent.');
+    }
+
+    const response = await postApi<UpdateOrderStatusResponse>(
+      '/api/orders/assign-agent',
+      {
+        orderId: orderDocId,
+        agentId,
+      },
+      idToken,
+    );
+
+    replaceOrderLocalState(response.order);
+    setNewOrderDocIds(prev => prev.filter(id => id !== response.order.doc_id));
+    return response.order;
+  };
+
   const handleLogout = async () => {
     try {
       agentTrackerRef.current?.stop();
@@ -357,6 +290,7 @@ export const useOrderOperations = ({
   };
 
   return {
+    assignAgentToOrder,
     handleStartDelivery,
     handleEndDelivery,
     updateOrderStatus,

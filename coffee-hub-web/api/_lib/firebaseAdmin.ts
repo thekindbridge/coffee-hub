@@ -4,6 +4,8 @@ import type { Auth, DecodedIdToken } from 'firebase-admin/auth';
 import { getAuth } from 'firebase-admin/auth';
 import type { Firestore } from 'firebase-admin/firestore';
 import { getFirestore } from 'firebase-admin/firestore';
+import type { Messaging } from 'firebase-admin/messaging';
+import { getMessaging } from 'firebase-admin/messaging';
 import type { VercelRequest } from '@vercel/node';
 
 import { ApiError } from './errors.js';
@@ -11,6 +13,7 @@ import { ApiError } from './errors.js';
 let cachedAdminApp: App | null = null;
 let cachedAdminAuth: Auth | null = null;
 let cachedAdminDb: Firestore | null = null;
+let cachedAdminMessaging: Messaging | null = null;
 
 const normalizeEmail = (value: string) => value.trim().toLowerCase();
 
@@ -80,6 +83,14 @@ export const getAdminDb = () => {
   }
 
   return cachedAdminDb;
+};
+
+export const getAdminMessaging = () => {
+  if (!cachedAdminMessaging) {
+    cachedAdminMessaging = getMessaging(getAdminApp());
+  }
+
+  return cachedAdminMessaging;
 };
 
 const getBearerToken = (request: VercelRequest) => {
@@ -158,6 +169,20 @@ const toAuthApiError = (error: unknown) => {
 const getConfiguredAdminEmail = () =>
   normalizeEmail(process.env.ADMIN_EMAIL || process.env.VITE_ADMIN_EMAIL || '');
 
+export const hasAdminAccess = async (email: string) => {
+  const normalizedEmail = normalizeEmail(email);
+  if (!normalizedEmail) {
+    return false;
+  }
+
+  if (normalizedEmail === getConfiguredAdminEmail()) {
+    return true;
+  }
+
+  const adminAccessDoc = await getAdminDb().collection('admin_access').doc(normalizedEmail).get();
+  return adminAccessDoc.exists;
+};
+
 export const verifyRequestUser = async (
   request: VercelRequest,
   expectedUserId?: string,
@@ -192,12 +217,7 @@ export const verifyAdminRequest = async (request: VercelRequest) => {
     throw new ApiError(403, 'Admin access requires an email-backed account.');
   }
 
-  if (normalizedEmail === getConfiguredAdminEmail()) {
-    return decodedToken;
-  }
-
-  const adminAccessDoc = await getAdminDb().collection('admin_access').doc(normalizedEmail).get();
-  if (!adminAccessDoc.exists) {
+  if (!(await hasAdminAccess(normalizedEmail))) {
     throw new ApiError(403, 'Admin access required.');
   }
 

@@ -1,4 +1,6 @@
 const STATIC_CACHE = 'coffee-hub-static-v1';
+const NOTIFICATION_ICON = '/icon-192.png';
+const NOTIFICATION_BADGE = '/icon-192.png';
 const APP_SHELL = [
   '/',
   '/manifest.json',
@@ -71,6 +73,73 @@ self.addEventListener('fetch', event => {
         .catch(() => cachedResponse || Response.error());
 
       return cachedResponse || networkResponse;
+    }),
+  );
+});
+
+const parsePushPayload = event => {
+  if (!event.data) {
+    return null;
+  }
+
+  try {
+    const rawPayload = event.data.json();
+    const data = rawPayload?.data && typeof rawPayload.data === 'object'
+      ? rawPayload.data
+      : rawPayload;
+
+    const title = `${data?.title || rawPayload?.notification?.title || 'Coffee HUB'}`.trim();
+    const body = `${data?.body || rawPayload?.notification?.body || ''}`.trim();
+    const url = `${data?.url || rawPayload?.fcmOptions?.link || '/'}`.trim() || '/';
+    const tag = `${data?.tag || data?.collapseKey || 'coffee-hub-notification'}`.trim();
+
+    return {
+      title,
+      options: {
+        body,
+        badge: NOTIFICATION_BADGE,
+        data: {
+          url,
+        },
+        icon: NOTIFICATION_ICON,
+        renotify: false,
+        requireInteraction: false,
+        tag,
+      },
+    };
+  } catch (error) {
+    console.error('Failed to parse push payload', error);
+    return null;
+  }
+};
+
+self.addEventListener('push', event => {
+  const payload = parsePushPayload(event);
+  if (!payload) {
+    return;
+  }
+
+  event.waitUntil(self.registration.showNotification(payload.title, payload.options));
+});
+
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+
+  const targetUrl = event.notification?.data?.url || '/';
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clientList => {
+      for (const client of clientList) {
+        if ('focus' in client) {
+          client.navigate(targetUrl);
+          return client.focus();
+        }
+      }
+
+      if (self.clients.openWindow) {
+        return self.clients.openWindow(targetUrl);
+      }
+
+      return undefined;
     }),
   );
 });

@@ -1,12 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
-import { doc, runTransaction, serverTimestamp } from 'firebase/firestore';
-
-import { db } from '../services/firebase';
 import {
   getOrderStatusCustomerCopy,
   type OrderStatusCode,
 } from '../../shared/orderStatus';
-import type { DeliveryAgent, DeliveryLocation, Order } from '../types';
+import type { DeliveryAgent, Order } from '../types';
 import { calculateDistanceMeters } from '../agent/agentTracker';
 import AdminDeliveryMonitor from './AdminDeliveryMonitor';
 
@@ -21,6 +18,7 @@ interface AdminOrdersProps {
     status: OrderStatusCode;
     rejectionReason?: string;
   }) => Promise<void>;
+  onAssignAgent: (orderDocId: string, agentId: string) => Promise<void>;
 }
 
 const STATUS_BADGE_CLASS: Record<Order['status'], string> = {
@@ -30,21 +28,6 @@ const STATUS_BADGE_CLASS: Record<Order['status'], string> = {
   'Out for Delivery': 'border border-orange-300/30 bg-orange-400/18 text-orange-300',
   Delivered: 'border border-emerald-300/30 bg-emerald-500/18 text-emerald-200',
   Rejected: 'border border-rose-300/30 bg-rose-400/18 text-rose-300',
-};
-
-const getTrackingOrderId = (order: Order, orderData?: Record<string, unknown>) =>
-  (((orderData?.orderId as string) || order.id || order.doc_id).trim().toUpperCase());
-
-const toSerializableLocation = (location: DeliveryLocation | null | undefined) => {
-  if (!location) {
-    return null;
-  }
-
-  return {
-    lat: location.lat,
-    lng: location.lng,
-    accuracy: location.accuracy ?? null,
-  };
 };
 
 const formatDistance = (meters: number | null) => {
@@ -83,6 +66,7 @@ export default function AdminOrders({
   newOrderDocIds,
   deliveryAgents,
   onUpdateStatus,
+  onAssignAgent,
 }: AdminOrdersProps) {
   const [expandedOrderId, setExpandedOrderId] = useState('');
   const [assigningOrderDocId, setAssigningOrderDocId] = useState('');
@@ -194,125 +178,7 @@ export default function AdminOrders({
     setAssigningOrderDocId(order.doc_id);
 
     try {
-      await runTransaction(db, async transaction => {
-        const orderRef = doc(db, 'orders', order.doc_id);
-        const orderSnap = await transaction.get(orderRef);
-
-        if (!orderSnap.exists()) {
-          throw new Error('Order does not exist.');
-        }
-
-        const orderData = orderSnap.data() as Record<string, unknown>;
-        const trackingOrderId = getTrackingOrderId(order, orderData);
-        const currentStatus = typeof orderData.status === 'string'
-          ? orderData.status
-          : (orderData.orderStatus as string) || '';
-
-        if (currentStatus.trim().toUpperCase() !== 'PREPARING') {
-          throw new Error('Only preparing orders can be assigned to a delivery agent.');
-        }
-
-        const selectedAgentRef = doc(db, 'agents', selectedAgent.id);
-        const sessionRef = doc(db, 'delivery_sessions', trackingOrderId);
-        const locationRef = doc(db, 'agent_locations', trackingOrderId);
-        const selectedAgentSnap = await transaction.get(selectedAgentRef);
-
-        if (!selectedAgentSnap.exists()) {
-          throw new Error('Selected delivery agent does not exist.');
-        }
-
-        const agentData = selectedAgentSnap.data() as Record<string, unknown>;
-        const agentStatusValue = typeof agentData.status === 'string'
-          ? agentData.status.toLowerCase()
-          : '';
-        const isAgentActive = agentData.isActive !== false;
-
-        if (!isAgentActive || agentStatusValue === 'busy') {
-          throw new Error('Selected delivery agent is not available.');
-        }
-
-        const previousAgentId =
-          (
-            (orderData.assignedAgentId as string) ||
-            (orderData.deliveryAgentId as string) ||
-            order.delivery_agent_id ||
-            ''
-          ).trim();
-        const agentName = (agentData.name as string) || selectedAgent.name;
-        const agentPhone = (agentData.phone as string) || selectedAgent.phone || '';
-        const agentEmail = (agentData.email as string) || selectedAgent.email || '';
-        const agentVehicle = (agentData.vehicle as string) || selectedAgent.vehicle_type || '';
-        const orderUpdate: Record<string, unknown> = {
-          assignedAgentId: selectedAgent.id,
-          assignedAgentName: agentName,
-          orderStatus: 'OUT_FOR_DELIVERY',
-          rejectionReason: '',
-          status: 'OUT_FOR_DELIVERY',
-          updatedAt: serverTimestamp(),
-        };
-
-        if (!orderData.assignedAt && !orderData.deliveryAssignedAt) {
-          orderUpdate.assignedAt = serverTimestamp();
-          orderUpdate.deliveryAssignedAt = serverTimestamp();
-        }
-
-        if (!orderData.outForDeliveryAt && !orderData.deliveryOutForDeliveryAt) {
-          orderUpdate.outForDeliveryAt = serverTimestamp();
-          orderUpdate.deliveryOutForDeliveryAt = serverTimestamp();
-        }
-
-        transaction.update(orderRef, orderUpdate);
-
-        transaction.set(
-          selectedAgentRef,
-          {
-            currentOrderId: trackingOrderId,
-            isActive: true,
-            name: agentName,
-            phone: agentPhone,
-            email: agentEmail,
-            status: 'BUSY',
-            vehicle: agentVehicle,
-            updatedAt: serverTimestamp(),
-          },
-          { merge: true },
-        );
-
-        if (previousAgentId && previousAgentId !== selectedAgent.id) {
-          transaction.set(
-            doc(db, 'agents', previousAgentId),
-            {
-              currentOrderId: '',
-              status: 'AVAILABLE',
-              updatedAt: serverTimestamp(),
-            },
-            { merge: true },
-          );
-        }
-
-        transaction.set(
-          sessionRef,
-          {
-            agentId: selectedAgent.id,
-            agentName,
-            agentPhone,
-            agentEmail,
-            agentVehicle,
-            completedAt: null,
-            customerLocation:
-              orderData.customerLocation ?? toSerializableLocation(order.customer_location),
-            lastLocation: null,
-            orderDocId: order.doc_id,
-            orderId: trackingOrderId,
-            startedAt: null,
-            status: 'assigned',
-            updatedAt: serverTimestamp(),
-          },
-          { merge: true },
-        );
-
-        transaction.delete(locationRef);
-      });
+      await onAssignAgent(order.doc_id, selectedAgent.id);
 
       setToastMessage('Delivery agent assigned');
       setExpandedOrderId('');

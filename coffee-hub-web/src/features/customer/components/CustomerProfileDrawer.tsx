@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from 'motion/react';
 import { CheckCircle2, LogOut, Mail, MapPin, Phone, User, X } from 'lucide-react';
+import { NotificationSettingsPanel, type PushPermissionState } from '../../../components/NotificationSettingsPanel';
 import { ensureProfileAddresses } from '../../app/lib/firestoreMappers';
 import type { CustomerProfile } from '../../app/types';
 
@@ -10,9 +11,14 @@ type CustomerProfileDrawerProps = {
   isProfileSaving: boolean;
   isProfileSavedToastVisible: boolean;
   isProfileAddressExpanded: boolean;
+  notificationPermissionState: PushPermissionState;
+  isNotificationSyncing: boolean;
+  notificationSyncError: string;
   onClose: () => void;
   onLogout: () => void;
   onSave: () => void;
+  onEnablePushNotifications: () => void;
+  onNotificationSettingsChange: (settings: CustomerProfile['notificationSettings']) => void;
   onProfileDraftChange: (profile: CustomerProfile) => void;
   onProfileAddressExpandedChange: (isExpanded: boolean) => void;
 };
@@ -24,9 +30,14 @@ export const CustomerProfileDrawer = ({
   isProfileSaving,
   isProfileSavedToastVisible,
   isProfileAddressExpanded,
+  notificationPermissionState,
+  isNotificationSyncing,
+  notificationSyncError,
   onClose,
   onLogout,
   onSave,
+  onEnablePushNotifications,
+  onNotificationSettingsChange,
   onProfileDraftChange,
   onProfileAddressExpandedChange,
 }: CustomerProfileDrawerProps) => (
@@ -208,6 +219,15 @@ export const CustomerProfileDrawer = ({
                 {isProfileAddressExpanded ? 'Hide Addresses' : 'View More Addresses'}
               </button>
             </div>
+
+            <NotificationSettingsPanel
+              settings={profileDraft.notificationSettings}
+              permissionState={notificationPermissionState}
+              isSyncing={isNotificationSyncing}
+              syncError={notificationSyncError}
+              onEnablePush={onEnablePushNotifications}
+              onSettingsChange={onNotificationSettingsChange}
+            />
 
             {profileError && (
               <div className="rounded-[22px] border border-primary/25 bg-primary/10 px-4 py-3 text-sm font-semibold text-primary">

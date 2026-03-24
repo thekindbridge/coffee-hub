@@ -4,6 +4,12 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { ApiError } from '../_lib/errors.js';
 import { getAdminDb, verifyAdminRequest } from '../_lib/firebaseAdmin.js';
 import {
+  buildCustomerOrderNotification,
+  getCustomerRecipient,
+  queueCollapsedCustomerStatusNotification,
+  sendPushNotification,
+} from '../_lib/notifications.js';
+import {
   mapOrderRecordToResponse,
   type StoredOrderRecord,
 } from '../_lib/responseMappers.js';
@@ -242,10 +248,49 @@ export default async function handler(request: VercelRequest, response: VercelRe
       throw new Error('Order was updated but could not be reloaded.');
     }
 
+    const updatedOrder = updatedOrderSnapshot.data() as StoredOrderRecord;
+
+    try {
+      if (updatedOrder.userId) {
+        const customerRecipient = await getCustomerRecipient(adminDb, updatedOrder.userId);
+
+        if (customerRecipient) {
+          if (status === 'ACCEPTED' || status === 'PREPARING') {
+            const notification = buildCustomerOrderNotification({
+              orderId,
+              status,
+            });
+
+            await queueCollapsedCustomerStatusNotification(adminDb, {
+              body: notification.body,
+              orderId,
+              preferenceKey: notification.preferenceKey,
+              tag: notification.tag || `order-${orderId}`,
+              title: notification.title,
+              url: notification.url || '/?tab=tracking',
+              userId: updatedOrder.userId,
+            });
+          } else {
+            await sendPushNotification(
+              adminDb,
+              [customerRecipient],
+              buildCustomerOrderNotification({
+                orderId,
+                rejectionReason,
+                status,
+              }),
+            );
+          }
+        }
+      }
+    } catch (notificationError) {
+      console.error('Order status updated but notification dispatch failed', notificationError);
+    }
+
     response.status(200).json({
       order: mapOrderRecordToResponse(
         updatedOrderSnapshot.id,
-        updatedOrderSnapshot.data() as StoredOrderRecord,
+        updatedOrder,
       ),
     });
   } catch (error) {

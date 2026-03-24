@@ -20,10 +20,12 @@ If Razorpay support is required, add dedicated payment order creation and paymen
 
 1. Install dependencies with `npm install`.
 2. Create `.env.local` with Firebase web config values.
+   - `VITE_FIREBASE_VAPID_KEY` for Firebase Cloud Messaging web push.
 3. Configure Vercel server env vars for Firebase Admin:
    - `FIREBASE_ADMIN_PROJECT_ID`
    - `FIREBASE_ADMIN_CLIENT_EMAIL`
    - `FIREBASE_ADMIN_PRIVATE_KEY`
+   - `CRON_SECRET` for the notification flush cron endpoint
 4. Start the web app with `npm run dev`.
 5. Run validation with `npm run lint` and `npm run build`.
 
@@ -39,6 +41,12 @@ If Razorpay support is required, add dedicated payment order creation and paymen
   Authenticated order creation with server-side pricing validation.
 - `POST /api/create-order`
   Backward-compatible alias for the same order creation handler.
+- `POST /api/orders/assign-agent`
+  Admin-only delivery assignment with agent/customer notification triggers.
+- `POST /api/orders/complete-delivery`
+  Assigned-agent or admin completion endpoint for delivery closeout + customer notification.
+- `POST /api/notifications/register-token`
+  Authenticated FCM token sync for the current user/device.
 - `POST /api/admin/update-shop-timing`
   Admin-only shop timing updates.
 

@@ -20,6 +20,7 @@ interface AdminDashboardProps {
     status: OrderStatusCode;
     rejectionReason?: string;
   }) => Promise<void>;
+  onAssignAgent: (orderDocId: string, agentId: string) => Promise<void>;
   onCreateOffer: (offerInput: OfferInput) => Promise<void>;
   onUpdateOffer: (offerId: string, offerInput: OfferInput) => Promise<void>;
   onDeleteOffer: (offerId: string) => Promise<void>;
@@ -57,6 +58,7 @@ export default function AdminDashboard({
   newOrderDocIds,
   deliveryAgents,
   onUpdateStatus,
+  onAssignAgent,
   onCreateOffer,
   onUpdateOffer,
   onDeleteOffer,
@@ -117,6 +119,7 @@ export default function AdminDashboard({
             orders={orders}
             newOrderDocIds={newOrderDocIds}
             deliveryAgents={deliveryAgents}
+            onAssignAgent={onAssignAgent}
             onUpdateStatus={onUpdateStatus}
           />
         )}

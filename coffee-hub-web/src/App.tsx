@@ -14,13 +14,16 @@ import type { MenuItem, Offer, Order } from './types';
 import { useOffers } from './hooks/useOffers';
 import AdminDashboard from './components/AdminDashboard';
 import AgentDashboard from './components/AgentDashboard';
+import { ForegroundNotificationToast } from './components/ForegroundNotificationToast';
 import MyOrders from './components/MyOrders';
+import { NotificationPermissionBanner } from './components/NotificationPermissionBanner';
 import { CURRENCY_SYMBOL } from './features/app/lib/constants';
 import { useRealtimeAppData } from './features/app/hooks/useRealtimeAppData';
 import { useOrderOperations } from './features/app/hooks/useOrderOperations';
 import { useProfileManager } from './features/app/hooks/useProfileManager';
 import { useAccessManager } from './features/app/hooks/useAccessManager';
 import { useShopTimingManager } from './features/app/hooks/useShopTimingManager';
+import { usePushNotifications } from './features/app/hooks/usePushNotifications';
 import type { CustomerTab } from './features/app/types';
 import { useCheckoutFlow } from './features/customer/hooks/useCheckoutFlow';
 import { AuthLoadingPage } from './features/customer/pages/AuthLoadingPage';
@@ -51,6 +54,11 @@ export default function App() {
   const installPrompt = useInstallPrompt();
 
   const appData = useRealtimeAppData();
+  const pushNotifications = usePushNotifications({
+    isAuthReady: appData.isAuthReady,
+    isLoggedIn: appData.isLoggedIn,
+    currentUserId: appData.currentUserId,
+  });
 
   const {
     offers,
@@ -229,6 +237,41 @@ export default function App() {
     setActiveTab('tracking');
   };
 
+  useEffect(() => {
+    if (!appData.isLoggedIn || appData.isAdmin || appData.isDeliveryAgent) {
+      return;
+    }
+
+    const searchParams = new URLSearchParams(window.location.search);
+    const requestedTab = searchParams.get('tab');
+    const requestedOrderId = (searchParams.get('orderId') || '').trim().toUpperCase();
+
+    if (requestedTab === 'tracking' && requestedOrderId) {
+      if (appData.isUserOrdersLoading) {
+        return;
+      }
+
+      const matchedOrder = appData.userOrders.find(order => order.id === requestedOrderId) || null;
+      setActiveTab('tracking');
+      setTrackingOrderId(requestedOrderId);
+      setOrderStatus(matchedOrder);
+      setTrackingError(matchedOrder ? '' : 'Order not found. Please check the ID.');
+      window.history.replaceState({}, document.title, window.location.pathname);
+      return;
+    }
+
+    if (requestedTab === 'orders') {
+      setActiveTab('orders');
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, [
+    appData.isAdmin,
+    appData.isDeliveryAgent,
+    appData.isLoggedIn,
+    appData.isUserOrdersLoading,
+    appData.userOrders,
+  ]);
+
   // --- Shared StaffProfileDrawer props ---
   const staffDrawerProps = {
     isOpen: profileManager.isStaffProfileOpen,
@@ -256,10 +299,19 @@ export default function App() {
     isDeliveryAccessSaving: accessManager.isDeliveryAccessSaving,
     adminAccessRemovingId: accessManager.adminAccessRemovingId,
     deliveryAccessRemovingId: accessManager.deliveryAccessRemovingId,
+    notificationPermissionState: pushNotifications.permissionState,
+    isNotificationSyncing: pushNotifications.isSyncing,
+    notificationSyncError: pushNotifications.syncError,
     onClose: () => profileManager.setIsStaffProfileOpen(false),
     onLogout: () => {
       profileManager.setIsStaffProfileOpen(false);
       void orderOperations.handleLogout();
+    },
+    onEnablePushNotifications: () => {
+      void pushNotifications.requestPermission();
+    },
+    onNotificationSettingsChange: (settings: typeof profileManager.staffProfileDraft.notificationSettings) => {
+      void profileManager.handleSaveStaffNotificationSettings(settings);
     },
     onSave: () => void profileManager.handleSaveStaffProfile(),
     onStaffProfileDraftChange: profileManager.setStaffProfileDraft,
@@ -307,6 +359,18 @@ export default function App() {
         </header>
 
         <main className="mx-auto max-w-screen-md">
+          {pushNotifications.isPermissionBannerVisible && (
+            <div className="px-4 pt-20 sm:px-6">
+              <NotificationPermissionBanner
+                isSyncing={pushNotifications.isSyncing}
+                onDismiss={pushNotifications.dismissPermissionBanner}
+                onEnable={() => {
+                  void pushNotifications.requestPermission();
+                }}
+              />
+            </div>
+          )}
+
           <AdminDashboard
             orders={appData.adminOrders}
             offers={offers as Offer[]}
@@ -314,6 +378,9 @@ export default function App() {
             offersError={offersError}
             newOrderDocIds={appData.newOrderDocIds}
             deliveryAgents={appData.deliveryAgents}
+            onAssignAgent={async (orderDocId, agentId) => {
+              await orderOperations.assignAgentToOrder(orderDocId, agentId);
+            }}
             onUpdateStatus={async ({ orderId, status, rejectionReason }) => {
               await orderOperations.updateOrderStatus({ orderId, status, rejectionReason });
             }}
@@ -350,6 +417,17 @@ export default function App() {
         </header>
 
         <main className="mx-auto max-w-screen-md">
+          {pushNotifications.isPermissionBannerVisible && (
+            <div className="px-4 pt-20 sm:px-6">
+              <NotificationPermissionBanner
+                isSyncing={pushNotifications.isSyncing}
+                onDismiss={pushNotifications.dismissPermissionBanner}
+                onEnable={() => {
+                  void pushNotifications.requestPermission();
+                }}
+              />
+            </div>
+          )}
           <AgentDashboard
             activeOrder={appData.currentDeliveryOrder}
             deliveryAgent={appData.currentDeliveryAgent}
@@ -396,6 +474,18 @@ export default function App() {
       </header>
 
       <main className="mx-auto max-w-screen-md">
+        {pushNotifications.isPermissionBannerVisible && (
+          <div className="px-4 pt-20 sm:px-6">
+            <NotificationPermissionBanner
+              isSyncing={pushNotifications.isSyncing}
+              onDismiss={pushNotifications.dismissPermissionBanner}
+              onEnable={() => {
+                void pushNotifications.requestPermission();
+              }}
+            />
+          </div>
+        )}
+
         {shouldShowShopClosedBanner && (
           <div className="px-4 pt-20 sm:px-6">
             <ShopStatusBanner
@@ -553,12 +643,21 @@ export default function App() {
         isProfileSaving={profileManager.isProfileSaving}
         isProfileSavedToastVisible={profileManager.isProfileSavedToastVisible}
         isProfileAddressExpanded={profileManager.isProfileAddressExpanded}
+        notificationPermissionState={pushNotifications.permissionState}
+        isNotificationSyncing={pushNotifications.isSyncing}
+        notificationSyncError={pushNotifications.syncError}
         onClose={() => {
           profileManager.setIsProfileOpen(false);
         }}
         onLogout={() => {
           profileManager.setIsProfileOpen(false);
           void orderOperations.handleLogout();
+        }}
+        onEnablePushNotifications={() => {
+          void pushNotifications.requestPermission();
+        }}
+        onNotificationSettingsChange={settings => {
+          void profileManager.handleSaveProfileNotificationSettings(settings);
         }}
         onSave={() => void profileManager.handleSaveProfile()}
         onProfileDraftChange={profileManager.setProfileDraft}
@@ -620,6 +719,10 @@ export default function App() {
       />
 
       <BrewingOverlay visible={checkout.isPlacingOrder && checkout.checkoutStep !== 'success'} />
+      <ForegroundNotificationToast
+        notification={pushNotifications.foregroundNotification}
+        onDismiss={pushNotifications.dismissForegroundNotification}
+      />
     </div>
   );
 }

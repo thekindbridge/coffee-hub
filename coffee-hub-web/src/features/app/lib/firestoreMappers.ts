@@ -22,6 +22,7 @@ import type {
   AgentStatus,
   AgentVehicleType,
   CustomerProfile,
+  NotificationSettings,
   StaffProfile,
   StaffRole,
 } from '../types';
@@ -184,6 +185,10 @@ export const EMPTY_PROFILE: CustomerProfile = {
   phone: '',
   email: '',
   addresses: ['', '', ''],
+  notificationSettings: {
+    orderUpdates: true,
+    offers: false,
+  },
 };
 
 export const EMPTY_STAFF_PROFILE: StaffProfile = {
@@ -194,6 +199,10 @@ export const EMPTY_STAFF_PROFILE: StaffProfile = {
   adminLocation: '',
   vehicleType: '',
   status: 'Available',
+  notificationSettings: {
+    orderUpdates: true,
+    offers: false,
+  },
 };
 
 export const ensureProfileAddresses = (addresses: string[] = []) => {
@@ -202,6 +211,20 @@ export const ensureProfileAddresses = (addresses: string[] = []) => {
     normalized.push('');
   }
   return normalized.slice(0, 3);
+};
+
+export const normalizeNotificationSettings = (
+  value?: unknown,
+): NotificationSettings => {
+  if (!value || typeof value !== 'object') {
+    return { ...EMPTY_PROFILE.notificationSettings };
+  }
+
+  const data = value as Record<string, unknown>;
+  return {
+    orderUpdates: data.orderUpdates !== false,
+    offers: data.offers === true,
+  };
 };
 
 export const mapProfileDocToProfile = (
@@ -224,6 +247,7 @@ export const mapProfileDocToProfile = (
       (addressRecord.address2 as string) || '',
       (addressRecord.address3 as string) || '',
     ]),
+    notificationSettings: normalizeNotificationSettings(data.notificationSettings),
   };
 };
 
@@ -253,6 +277,7 @@ export const mapStaffProfileDocToProfile = (
   adminLocation: (data?.adminLocation as string) || '',
   vehicleType: normalizeVehicleType(data?.vehicleType),
   status: normalizeAgentStatus(data?.status),
+  notificationSettings: normalizeNotificationSettings(data?.notificationSettings),
 });
 
 const stripPhonePrefix = (phone: string) => phone.replace(/^\+91\s*/i, '');

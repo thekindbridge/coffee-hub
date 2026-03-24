@@ -7,11 +7,22 @@ export type CustomerTab =
   | 'about'
   | 'contact';
 
+export type NotificationSettings = {
+  orderUpdates: boolean;
+  offers: boolean;
+};
+
+export const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
+  orderUpdates: true,
+  offers: false,
+};
+
 export type CustomerProfile = {
   name: string;
   phone: string;
   email: string;
   addresses: string[];
+  notificationSettings: NotificationSettings;
 };
 
 export type StaffRole = 'admin' | 'agent';
@@ -26,6 +37,7 @@ export type StaffProfile = {
   adminLocation: string;
   vehicleType: AgentVehicleType;
   status: AgentStatus;
+  notificationSettings: NotificationSettings;
 };
 
 export type AccessEntry = {

@@ -1,7 +1,12 @@
 import { useEffect, useState } from 'react';
 import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { db } from '../../../services/firebase';
-import type { CustomerProfile, StaffProfile, StaffRole } from '../types';
+import type {
+  CustomerProfile,
+  NotificationSettings,
+  StaffProfile,
+  StaffRole,
+} from '../types';
 import {
   buildProfileDraft,
   buildStaffProfileDraft,
@@ -41,6 +46,8 @@ export type ProfileManagerState = {
   handleOpenStaffProfile: () => void;
   handleSaveProfile: () => Promise<void>;
   handleSaveStaffProfile: () => Promise<void>;
+  handleSaveProfileNotificationSettings: (settings: NotificationSettings) => Promise<void>;
+  handleSaveStaffNotificationSettings: (settings: NotificationSettings) => Promise<void>;
   setIsProfileOpen: (open: boolean) => void;
   setProfileDraft: (draft: CustomerProfile) => void;
   setIsProfileAddressExpanded: (expanded: boolean) => void;
@@ -136,6 +143,7 @@ export const useProfileManager = ({
           name: profileDraft.name.trim(),
           phone: formatPhoneWithPrefix(profileDraft.phone),
           email: profileDraft.email.trim(),
+          notificationSettings: profileDraft.notificationSettings,
           addresses: {
             address1: trimmedAddresses[0] || '',
             address2: trimmedAddresses[1] || '',
@@ -154,6 +162,33 @@ export const useProfileManager = ({
     }
   };
 
+  const handleSaveProfileNotificationSettings = async (settings: NotificationSettings) => {
+    if (!currentUserId) {
+      setProfileError('Please sign in to update notification settings.');
+      return;
+    }
+
+    setProfileDraft(prev => ({
+      ...prev,
+      notificationSettings: settings,
+    }));
+    setProfileError('');
+
+    try {
+      await setDoc(
+        doc(db, 'users', currentUserId),
+        {
+          notificationSettings: settings,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      );
+    } catch (error) {
+      console.error('Failed to save customer notification settings', error);
+      setProfileError('Unable to save notification settings right now.');
+    }
+  };
+
   const handleSaveStaffProfile = async () => {
     if (!currentUserId) {
       setStaffProfileError('Please sign in to save your profile.');
@@ -168,6 +203,7 @@ export const useProfileManager = ({
         name: staffProfileDraft.name.trim(),
         phone: formatPhoneWithPrefix(staffProfileDraft.phone),
         email: staffProfileDraft.email.trim(),
+        notificationSettings: staffProfileDraft.notificationSettings,
         updatedAt: serverTimestamp(),
       };
 
@@ -202,6 +238,7 @@ export const useProfileManager = ({
           name: staffProfileDraft.name.trim(),
           phone: formatPhoneWithPrefix(staffProfileDraft.phone),
           email: normalizedEmail,
+          notificationSettings: staffProfileDraft.notificationSettings,
           vehicle: staffProfileDraft.vehicleType,
           status: agentStatus,
           isActive: !shouldMarkOffline,
@@ -223,6 +260,52 @@ export const useProfileManager = ({
     }
   };
 
+  const handleSaveStaffNotificationSettings = async (settings: NotificationSettings) => {
+    if (!currentUserId) {
+      setStaffProfileError('Please sign in to update notification settings.');
+      return;
+    }
+
+    const role: StaffRole = isAdmin ? 'admin' : 'agent';
+    setStaffProfileDraft(prev => ({
+      ...prev,
+      notificationSettings: settings,
+    }));
+    setStaffProfileError('');
+
+    try {
+      await setDoc(
+        doc(db, 'users', currentUserId),
+        {
+          notificationSettings: settings,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      );
+
+      if (role === 'agent') {
+        const normalizedEmail = (staffProfileDraft.email || currentUserEmail || '')
+          .trim()
+          .toLowerCase();
+
+        if (normalizedEmail) {
+          await setDoc(
+            doc(db, 'agents', normalizedEmail),
+            {
+              email: normalizedEmail,
+              notificationSettings: settings,
+              updatedAt: serverTimestamp(),
+            },
+            { merge: true },
+          );
+        }
+      }
+    } catch (error) {
+      console.error('Failed to save staff notification settings', error);
+      setStaffProfileError('Unable to save notification settings right now.');
+    }
+  };
+
   return {
     isProfileOpen,
     profileDraft,
@@ -239,6 +322,8 @@ export const useProfileManager = ({
     handleOpenStaffProfile,
     handleSaveProfile,
     handleSaveStaffProfile,
+    handleSaveProfileNotificationSettings,
+    handleSaveStaffNotificationSettings,
     setIsProfileOpen,
     setProfileDraft,
     setIsProfileAddressExpanded,

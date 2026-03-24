@@ -23,6 +23,7 @@ import {
   formatShopTimingRange,
   type ShopTiming,
 } from '../../../../shared/shopTiming';
+import { NotificationSettingsPanel, type PushPermissionState } from '../../../components/NotificationSettingsPanel';
 
 type StaffProfileDrawerProps = {
   isOpen: boolean;
@@ -33,6 +34,9 @@ type StaffProfileDrawerProps = {
   staffProfileError: string;
   isStaffProfileSaving: boolean;
   isStaffProfileSavedToastVisible: boolean;
+  notificationPermissionState: PushPermissionState;
+  isNotificationSyncing: boolean;
+  notificationSyncError: string;
   shopTiming: ShopTiming;
   shopTimingDraft: ShopTimingDraft;
   shopTimingError: string;
@@ -53,6 +57,8 @@ type StaffProfileDrawerProps = {
   onClose: () => void;
   onLogout: () => void;
   onSave: () => void;
+  onEnablePushNotifications: () => void;
+  onNotificationSettingsChange: (settings: StaffProfile['notificationSettings']) => void;
   onStaffProfileDraftChange: (profile: StaffProfile) => void;
   onShopTimingDraftChange: (draft: ShopTimingDraft) => void;
   onSaveShopTiming: () => void;
@@ -73,6 +79,9 @@ export const StaffProfileDrawer = ({
   staffProfileError,
   isStaffProfileSaving,
   isStaffProfileSavedToastVisible,
+  notificationPermissionState,
+  isNotificationSyncing,
+  notificationSyncError,
   shopTiming,
   shopTimingDraft,
   shopTimingError,
@@ -93,6 +102,8 @@ export const StaffProfileDrawer = ({
   onClose,
   onLogout,
   onSave,
+  onEnablePushNotifications,
+  onNotificationSettingsChange,
   onStaffProfileDraftChange,
   onShopTimingDraftChange,
   onSaveShopTiming,
@@ -522,6 +533,15 @@ export const StaffProfileDrawer = ({
                     </div>
                   </div>
                 )}
+
+                <NotificationSettingsPanel
+                  settings={staffProfileDraft.notificationSettings}
+                  permissionState={notificationPermissionState}
+                  isSyncing={isNotificationSyncing}
+                  syncError={notificationSyncError}
+                  onEnablePush={onEnablePushNotifications}
+                  onSettingsChange={onNotificationSettingsChange}
+                />
 
                 {staffProfileError && (
                   <div className="rounded-[22px] border border-primary/25 bg-primary/10 px-4 py-3 text-sm font-semibold text-primary">

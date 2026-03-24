@@ -5,6 +5,13 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { ApiError } from './_lib/errors.js';
 import { getAdminDb, verifyRequestUser } from './_lib/firebaseAdmin.js';
 import {
+  buildAdminNewOrderNotification,
+  buildCustomerOrderNotification,
+  getAdminRecipients,
+  getCustomerRecipient,
+  sendPushNotification,
+} from './_lib/notifications.js';
+import {
   mapOrderRecordToResponse,
   type StoredOrderRecord,
 } from './_lib/responseMappers.js';
@@ -109,6 +116,34 @@ export default async function handler(request: VercelRequest, response: VercelRe
     const createdOrder = await loadExistingOrder(adminDb, orderDraft.orderId);
     if (!createdOrder) {
       throw new Error('Order was created, but could not be loaded afterwards.');
+    }
+
+    try {
+      const [customerRecipient, adminRecipients] = await Promise.all([
+        getCustomerRecipient(adminDb, userId),
+        getAdminRecipients(adminDb),
+      ]);
+
+      if (customerRecipient) {
+        await sendPushNotification(
+          adminDb,
+          [customerRecipient],
+          buildCustomerOrderNotification({
+            orderId: orderDraft.orderId,
+            status: 'PENDING',
+          }),
+        );
+      }
+
+      if (adminRecipients.length > 0) {
+        await sendPushNotification(
+          adminDb,
+          adminRecipients,
+          buildAdminNewOrderNotification(orderDraft.orderId),
+        );
+      }
+    } catch (notificationError) {
+      console.error('Order created but notification dispatch failed', notificationError);
     }
 
     response.status(200).json({
