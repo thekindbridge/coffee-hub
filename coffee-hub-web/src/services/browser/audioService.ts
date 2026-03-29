@@ -1,18 +1,19 @@
-export const createBrowserAudio = (src: string) => {
+import type { AudioHandle } from '../platform/audioAdapter';
+
+export const createBrowserAudio = (src: string): AudioHandle | null => {
   if (typeof Audio === 'undefined') {
     return null;
   }
 
   const audio = new Audio(src);
   audio.preload = 'auto';
-  return audio;
-};
-
-export const playBrowserAudio = async (audio: HTMLAudioElement | null) => {
-  if (!audio) {
-    return;
-  }
-
-  audio.currentTime = 0;
-  await audio.play();
+  return {
+    play: async () => {
+      audio.currentTime = 0;
+      await audio.play();
+    },
+    reset: () => {
+      audio.currentTime = 0;
+    },
+  };
 };

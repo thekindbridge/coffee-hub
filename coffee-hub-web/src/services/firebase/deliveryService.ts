@@ -11,6 +11,7 @@ import {
   mapDeliverySessionRecordToSession,
   mapOrderDocToOrder,
 } from '../../features/app/lib/firestoreMappers';
+import { toAppServiceError } from '../platform/serviceError';
 import { db } from './index';
 
 export const subscribeToDeliveryAgents = (
@@ -25,7 +26,7 @@ export const subscribeToDeliveryAgents = (
     onData(agents);
   },
   error => {
-    onError(error instanceof Error ? error : new Error('Unable to subscribe to delivery agents.'));
+    onError(toAppServiceError(error, 'Unable to subscribe to delivery agents.'));
   },
 );
 
@@ -47,7 +48,7 @@ export const subscribeToAgentOrdersByStatus = (
     onData(mappedOrders);
   },
   error => {
-    onError(error instanceof Error ? error : new Error(`Unable to subscribe to ${status} agent orders.`));
+    onError(toAppServiceError(error, `Unable to subscribe to ${status} agent orders.`));
   },
 );
 
@@ -71,6 +72,6 @@ export const subscribeToCurrentDeliverySession = (
     ]);
   },
   error => {
-    onError(error instanceof Error ? error : new Error('Unable to subscribe to the delivery session.'));
+    onError(toAppServiceError(error, 'Unable to subscribe to the delivery session.'));
   },
 );

@@ -1,17 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { getCurrentUserIdToken } from '../../../services/firebase/authService';
 import {
-  clearPushPermissionBannerDismissal,
-  detectBrowserMessagingSupport,
-  dismissPushPermissionBanner,
-  getBrowserPushPermissionState,
-  isPushPermissionBannerDismissed,
-  requestBrowserPushPermission,
-  subscribeToForegroundMessages,
-  syncBrowserPushRegistration,
+  pushNotificationsPlatformService,
   type ForegroundNotification,
   type PushPermissionState,
-} from '../../../services/browser/pushNotificationsService';
+} from '../../../services/platform/pushNotificationsService';
 
 type UsePushNotificationsParams = {
   isAuthReady: boolean;
@@ -37,7 +30,7 @@ export const usePushNotifications = ({
   currentUserId,
 }: UsePushNotificationsParams): PushNotificationsState => {
   const [permissionState, setPermissionState] = useState<PushPermissionState>(
-    getBrowserPushPermissionState(),
+    pushNotificationsPlatformService.getPermissionState(),
   );
   const [isMessagingSupported, setIsMessagingSupported] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -45,19 +38,19 @@ export const usePushNotifications = ({
   const [foregroundNotification, setForegroundNotification] =
     useState<ForegroundNotification | null>(null);
   const [isPermissionBannerDismissed, setIsPermissionBannerDismissed] =
-    useState(isPushPermissionBannerDismissed);
+    useState(pushNotificationsPlatformService.isPushPermissionBannerDismissed);
   const lastSyncedKeyRef = useRef('');
 
   useEffect(() => {
     let isMounted = true;
 
-    void detectBrowserMessagingSupport().then(supported => {
+    void pushNotificationsPlatformService.detectMessagingSupport().then(supported => {
       if (!isMounted) {
         return;
       }
 
       setIsMessagingSupported(supported);
-      setPermissionState(supported ? getBrowserPushPermissionState() : 'unsupported');
+      setPermissionState(supported ? pushNotificationsPlatformService.getPermissionState() : 'unsupported');
     }).catch(error => {
       console.error('Failed to detect Firebase Messaging support', error);
       if (!isMounted) {
@@ -79,7 +72,7 @@ export const usePushNotifications = ({
       return undefined;
     }
 
-    return subscribeToForegroundMessages(nextNotification => {
+    return pushNotificationsPlatformService.subscribeToForegroundMessages(nextNotification => {
       if (nextNotification) {
         setForegroundNotification(nextNotification);
       }
@@ -113,7 +106,7 @@ export const usePushNotifications = ({
       setSyncError('');
 
       try {
-        await syncBrowserPushRegistration({
+        await pushNotificationsPlatformService.syncRegistration({
           idToken,
           permissionState,
         });
@@ -160,10 +153,10 @@ export const usePushNotifications = ({
 
     try {
       setSyncError('');
-      const nextPermission = await requestBrowserPushPermission();
+      const nextPermission = await pushNotificationsPlatformService.requestPermission();
       setPermissionState(nextPermission);
       setIsPermissionBannerDismissed(false);
-      clearPushPermissionBannerDismissal();
+      pushNotificationsPlatformService.clearPushPermissionBannerDismissal();
     } catch (error) {
       console.error('Notification permission request failed', error);
       setSyncError('Unable to request browser notification permission.');
@@ -172,7 +165,7 @@ export const usePushNotifications = ({
 
   const dismissPermissionBanner = () => {
     setIsPermissionBannerDismissed(true);
-    dismissPushPermissionBanner();
+    pushNotificationsPlatformService.dismissPushPermissionBanner();
   };
 
   const isPermissionBannerVisible = useMemo(

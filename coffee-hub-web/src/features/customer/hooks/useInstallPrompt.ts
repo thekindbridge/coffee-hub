@@ -1,25 +1,22 @@
 import { useEffect, useState } from 'react';
 import {
-  clearInstallPromptDismissal,
-  dismissInstallPrompt,
-  isInstallPromptDismissed,
-  isStandaloneInstallMode,
-  subscribeToInstallPromptEvents,
-  type BeforeInstallPromptEvent,
-} from '../../../services/browser/installPromptService';
+  installPromptAdapter,
+  type InstallPromptEvent,
+} from '../../../services/platform/installPromptAdapter';
 
 export const useInstallPrompt = () => {
-  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  // Web-only: React Native should replace this with a native store/install entry point.
+  const [deferredPrompt, setDeferredPrompt] = useState<InstallPromptEvent | null>(null);
   const [isInstalled, setIsInstalled] = useState(false);
   const [isDismissed, setIsDismissed] = useState(false);
 
   useEffect(() => {
-    setIsInstalled(isStandaloneInstallMode());
-    setIsDismissed(isInstallPromptDismissed());
+    setIsInstalled(installPromptAdapter.isStandalone());
+    setIsDismissed(installPromptAdapter.isDismissed());
 
-    return subscribeToInstallPromptEvents({
+    return installPromptAdapter.subscribe({
       onBeforeInstallPrompt: installEvent => {
-        if (isStandaloneInstallMode() || isInstallPromptDismissed()) {
+        if (installPromptAdapter.isStandalone() || installPromptAdapter.isDismissed()) {
           return;
         }
 
@@ -29,13 +26,13 @@ export const useInstallPrompt = () => {
         setIsInstalled(true);
         setIsDismissed(false);
         setDeferredPrompt(null);
-        clearInstallPromptDismissal();
+        installPromptAdapter.clearDismissal();
       },
     });
   }, []);
 
   const dismissPrompt = () => {
-    dismissInstallPrompt();
+    installPromptAdapter.dismiss();
     setIsDismissed(true);
   };
 
@@ -50,7 +47,7 @@ export const useInstallPrompt = () => {
 
     if (choice.outcome === 'accepted') {
       setIsInstalled(true);
-      clearInstallPromptDismissal();
+      installPromptAdapter.clearDismissal();
       return true;
     }
 

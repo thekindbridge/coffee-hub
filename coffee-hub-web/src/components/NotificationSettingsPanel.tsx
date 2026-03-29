@@ -1,10 +1,10 @@
 import { Bell, BellOff, Megaphone, PackageCheck } from 'lucide-react';
 import type { NotificationSettings } from '../features/app/types';
-import type { PushPermissionState } from '../services/browser/pushNotificationsService';
+import type { NotificationPermissionState } from '../services/platform/notificationAdapter';
 
 type NotificationSettingsPanelProps = {
   settings: NotificationSettings;
-  permissionState: PushPermissionState;
+  permissionState: NotificationPermissionState;
   isSyncing: boolean;
   syncError: string;
   onSettingsChange: (settings: NotificationSettings) => void;
@@ -53,7 +53,7 @@ const ToggleRow = ({
   </button>
 );
 
-const getPermissionLabel = (permissionState: PushPermissionState) => {
+const getPermissionLabel = (permissionState: NotificationPermissionState) => {
   if (permissionState === 'granted') {
     return 'Push notifications enabled';
   }

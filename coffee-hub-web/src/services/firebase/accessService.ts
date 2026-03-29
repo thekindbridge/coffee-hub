@@ -7,6 +7,7 @@ import {
   setDoc,
 } from 'firebase/firestore';
 import type { AccessEntry } from '../../features/app/types';
+import { toAppServiceError } from '../platform/serviceError';
 import { db } from './index';
 
 const mapAccessEntries = (
@@ -14,16 +15,20 @@ const mapAccessEntries = (
 ) => entries.sort((a, b) => a.email.localeCompare(b.email));
 
 export const seedMainAdminAccess = async (adminEmail: string) => {
-  await setDoc(
-    doc(db, 'admin_access', adminEmail),
-    {
-      email: adminEmail,
-      role: 'admin',
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    },
-    { merge: true },
-  );
+  try {
+    await setDoc(
+      doc(db, 'admin_access', adminEmail),
+      {
+        email: adminEmail,
+        role: 'admin',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    );
+  } catch (error) {
+    throw toAppServiceError(error, 'Unable to seed admin access.', 'network');
+  }
 };
 
 export const subscribeToAdminAccessStatus = (
@@ -36,7 +41,7 @@ export const subscribeToAdminAccessStatus = (
     onData(snapshot.exists());
   },
   error => {
-    onError(error instanceof Error ? error : new Error('Unable to verify admin access.'));
+    onError(toAppServiceError(error, 'Unable to verify admin access.'));
   },
 );
 
@@ -50,7 +55,7 @@ export const subscribeToDeliveryAccessStatus = (
     onData(snapshot.exists());
   },
   error => {
-    onError(error instanceof Error ? error : new Error('Unable to verify delivery access.'));
+    onError(toAppServiceError(error, 'Unable to verify delivery access.'));
   },
 );
 
@@ -79,7 +84,7 @@ export const subscribeToAdminAccessEntries = (
     onData(mapAccessEntries(entries));
   },
   error => {
-    onError(error instanceof Error ? error : new Error('Unable to load admin access entries.'));
+    onError(toAppServiceError(error, 'Unable to load admin access entries.'));
   },
 );
 
@@ -107,43 +112,59 @@ export const subscribeToDeliveryAccessEntries = (
     onData(mapAccessEntries(entries));
   },
   error => {
-    onError(error instanceof Error ? error : new Error('Unable to load delivery access entries.'));
+    onError(toAppServiceError(error, 'Unable to load delivery access entries.'));
   },
 );
 
 export const addAdminAccessEntry = async (normalizedEmail: string) => {
-  await setDoc(
-    doc(db, 'admin_access', normalizedEmail),
-    {
-      email: normalizedEmail,
-      role: 'admin',
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    },
-    { merge: true },
-  );
+  try {
+    await setDoc(
+      doc(db, 'admin_access', normalizedEmail),
+      {
+        email: normalizedEmail,
+        role: 'admin',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    );
+  } catch (error) {
+    throw toAppServiceError(error, 'Unable to add admin access.', 'network');
+  }
 };
 
 export const removeAdminAccessEntry = async (entryId: string) => {
-  await deleteDoc(doc(db, 'admin_access', entryId));
+  try {
+    await deleteDoc(doc(db, 'admin_access', entryId));
+  } catch (error) {
+    throw toAppServiceError(error, 'Unable to remove admin access.', 'network');
+  }
 };
 
 export const addDeliveryAccessEntry = async (normalizedEmail: string) => {
-  await setDoc(
-    doc(db, 'agents', normalizedEmail),
-    {
-      email: normalizedEmail,
-      role: 'delivery',
-      accessOnly: true,
-      isActive: false,
-      status: 'OFFLINE',
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    },
-    { merge: true },
-  );
+  try {
+    await setDoc(
+      doc(db, 'agents', normalizedEmail),
+      {
+        email: normalizedEmail,
+        role: 'delivery',
+        accessOnly: true,
+        isActive: false,
+        status: 'OFFLINE',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    );
+  } catch (error) {
+    throw toAppServiceError(error, 'Unable to add delivery access.', 'network');
+  }
 };
 
 export const removeDeliveryAccessEntry = async (entryId: string) => {
-  await deleteDoc(doc(db, 'agents', entryId));
+  try {
+    await deleteDoc(doc(db, 'agents', entryId));
+  } catch (error) {
+    throw toAppServiceError(error, 'Unable to remove delivery access.', 'network');
+  }
 };

@@ -8,6 +8,7 @@ import {
 } from 'firebase/firestore';
 import type { Order } from '../../types';
 import { mapOrderDocToOrder } from '../../features/app/lib/firestoreMappers';
+import { toAppServiceError } from '../platform/serviceError';
 import { db } from './index';
 
 export const subscribeToAdminOrders = (
@@ -30,7 +31,7 @@ export const subscribeToAdminOrders = (
     });
   },
   error => {
-    onError(error instanceof Error ? error : new Error('Unable to subscribe to admin orders.'));
+    onError(toAppServiceError(error, 'Unable to subscribe to admin orders.'));
   },
 );
 
@@ -76,7 +77,7 @@ export const subscribeToUserOrders = (
           return;
         }
 
-        onError(error instanceof Error ? error : new Error('Unable to subscribe to user orders.'));
+        onError(toAppServiceError(error, 'Unable to subscribe to user orders.'));
       },
     );
   };

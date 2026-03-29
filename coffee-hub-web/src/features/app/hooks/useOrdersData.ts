@@ -1,16 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import type { Order } from '../../../types';
-import {
-  createBrowserAudio,
-  playBrowserAudio,
-} from '../../../services/browser/audioService';
-import {
-  getDesktopNotificationPermissionState,
-  requestDesktopNotificationPermission,
-  showDesktopNotification,
-} from '../../../services/browser/desktopNotificationService';
 import { fetchOrderItemsMap } from '../../../services/firebase/orderItemsService';
+import type { AudioHandle } from '../../../services/platform/audioAdapter';
+import { audioAdapter } from '../../../services/platform/audioAdapter';
+import { notificationAdapter } from '../../../services/platform/notificationAdapter';
 import {
   subscribeToAdminOrders,
   subscribeToUserOrders,
@@ -42,7 +36,7 @@ export const useOrdersData = (
 
   const previousAdminOrderCountRef = useRef(0);
   const hasInitializedAdminOrdersRef = useRef(false);
-  const orderAlertAudioRef = useRef<ReturnType<typeof createBrowserAudio>>(null);
+  const orderAlertAudioRef = useRef<AudioHandle | null>(null);
   const adminOrdersSnapshotVersionRef = useRef(0);
   const userOrdersSnapshotVersionRef = useRef(0);
 
@@ -59,11 +53,11 @@ export const useOrdersData = (
 
     // Pre-load audio alert for admins
     if (!orderAlertAudioRef.current) {
-      orderAlertAudioRef.current = createBrowserAudio('/order-alert.mp3');
+      orderAlertAudioRef.current = audioAdapter.create('/order-alert.mp3');
     }
 
-    if (getDesktopNotificationPermissionState() === 'default') {
-      void requestDesktopNotificationPermission().catch(error => {
+    if (notificationAdapter.getPermissionState() === 'default') {
+      void notificationAdapter.requestPermission().catch(error => {
         console.error('Notification permission request failed', error);
       });
     }
@@ -106,12 +100,12 @@ export const useOrdersData = (
             highlightTimeoutIds.push(timeoutId);
 
             if (orderAlertAudioRef.current) {
-              void playBrowserAudio(orderAlertAudioRef.current).catch(error => {
+              void orderAlertAudioRef.current.play().catch(error => {
                 console.error('Unable to play order alert sound', error);
               });
             }
 
-            showDesktopNotification({
+            notificationAdapter.show({
               title: 'New Order Received',
               body: 'A new order has been placed.',
               icon: '/logo.png',

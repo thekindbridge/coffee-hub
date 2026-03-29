@@ -1,6 +1,7 @@
 import { collection, onSnapshot } from 'firebase/firestore';
 import type { MenuItem } from '../../types';
 import { mapMenuDocToMenuItem } from '../../features/app/lib/firestoreMappers';
+import { toAppServiceError } from '../platform/serviceError';
 import { db } from './index';
 
 export const subscribeToAvailableMenuItems = (
@@ -15,6 +16,6 @@ export const subscribeToAvailableMenuItems = (
     onData(items);
   },
   error => {
-    onError(error instanceof Error ? error : new Error('Unable to load menu items.'));
+    onError(toAppServiceError(error, 'Unable to load menu items.'));
   },
 );

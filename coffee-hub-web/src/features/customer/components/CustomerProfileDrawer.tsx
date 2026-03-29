@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from 'motion/react';
 import { CheckCircle2, LogOut, Mail, MapPin, Phone, User, X } from 'lucide-react';
 import { NotificationSettingsPanel } from '../../../components/NotificationSettingsPanel';
-import type { PushPermissionState } from '../../../services/browser/pushNotificationsService';
+import type { NotificationPermissionState } from '../../../services/platform/notificationAdapter';
 import { ensureProfileAddresses } from '../../app/lib/firestoreMappers';
 import type { CustomerProfile } from '../../app/types';
 
@@ -12,7 +12,7 @@ type CustomerProfileDrawerProps = {
   isProfileSaving: boolean;
   isProfileSavedToastVisible: boolean;
   isProfileAddressExpanded: boolean;
-  notificationPermissionState: PushPermissionState;
+  notificationPermissionState: NotificationPermissionState;
   isNotificationSyncing: boolean;
   notificationSyncError: string;
   onClose: () => void;

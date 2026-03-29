@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import { createOrderRequest } from '../../../services/api/ordersService';
-import { getCurrentBrowserLocation } from '../../../services/browser/geolocationService';
-import { scrollToSectionOrTop } from '../../../services/browser/navigationService';
 import { getCurrentUserIdToken } from '../../../services/firebase/authService';
 import { getNextOrderId } from '../../../services/firebase/orderCounterService';
+import { locationAdapter } from '../../../services/platform/locationAdapter';
+import { navigationAdapter } from '../../../services/platform/navigationAdapter';
+import { getAppServiceErrorMessage } from '../../../services/platform/serviceError';
 import { calculateDiscount } from '../../../utils/calculateDiscount';
 import type {
   CartItem,
@@ -228,12 +229,14 @@ export const usePaymentFlow = ({
     setCustomerLocationError('');
     setCheckoutError('');
     try {
-      const nextLocation = await getCurrentBrowserLocation();
+      const nextLocation = await locationAdapter.getCurrentLocation();
       setCustomerDetails(prev => ({ ...prev, location: nextLocation }));
       return nextLocation;
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : 'Unable to capture your location right now.';
+      const message = getAppServiceErrorMessage(
+        error,
+        'Unable to capture your location right now.',
+      );
       console.error('Failed to capture customer location', error);
       setCustomerLocationError(message);
       return null;
@@ -252,7 +255,7 @@ export const usePaymentFlow = ({
     setCheckoutStep('cart');
     setCheckoutError('');
     setDraftOrderId('');
-    scrollToSectionOrTop('menu-section');
+    navigationAdapter.scrollToSectionOrTop('menu-section');
   };
 
   const resetAfterSuccess = (nextOrder: Order) => {
@@ -293,18 +296,25 @@ export const usePaymentFlow = ({
     let couponCodeValue = '';
 
     if (appliedCouponCode) {
-      const matchingOffer = await findActiveOfferByCode(appliedCouponCode);
-      if (matchingOffer && cartTotal >= matchingOffer.minOrderAmount) {
-        const recalculated = calculateDiscount(cartTotal, matchingOffer);
-        discountValue = recalculated.discount;
-        discountedSubtotal = recalculated.finalTotal;
-        couponCodeValue = matchingOffer.couponCode;
-        setAppliedOffer(matchingOffer);
-      } else {
-        setAppliedCouponCode('');
-        setAppliedOffer(null);
-        setCouponSuccess('');
-        setCouponError('Coupon was removed because it is no longer valid.');
+      try {
+        const matchingOffer = await findActiveOfferByCode(appliedCouponCode);
+        if (matchingOffer && cartTotal >= matchingOffer.minOrderAmount) {
+          const recalculated = calculateDiscount(cartTotal, matchingOffer);
+          discountValue = recalculated.discount;
+          discountedSubtotal = recalculated.finalTotal;
+          couponCodeValue = matchingOffer.couponCode;
+          setAppliedOffer(matchingOffer);
+        } else {
+          setAppliedCouponCode('');
+          setAppliedOffer(null);
+          setCouponSuccess('');
+          setCouponError('Coupon was removed because it is no longer valid.');
+        }
+      } catch (error) {
+        console.error('Failed to validate coupon before checkout', error);
+        setCouponError('Unable to validate your coupon right now.');
+        setCheckoutError('Unable to validate your coupon right now.');
+        return null;
       }
     }
 
@@ -364,9 +374,19 @@ export const usePaymentFlow = ({
       return;
     }
 
-    const preparedOrder = await buildDraft();
-    if (!preparedOrder) return;
-    await placeCodOrder(preparedOrder.order);
+    try {
+      const preparedOrder = await buildDraft();
+      if (!preparedOrder) return;
+      await placeCodOrder(preparedOrder.order);
+    } catch (error) {
+      console.error('Failed to prepare checkout draft', error);
+      setCheckoutError(
+        getAppServiceErrorMessage(
+          error,
+          'Unable to prepare your order right now. Please try again.',
+        ),
+      );
+    }
   };
 
   return {

@@ -18,7 +18,7 @@ import {
   saveStaffNotificationSettings,
   saveStaffProfile,
 } from '../../../services/firebase/profileService';
-import { setBodyScrollLocked } from '../../../services/browser/domService';
+import { bodyScrollAdapter } from '../../../services/platform/bodyScrollAdapter';
 
 type UseProfileManagerParams = {
   currentUserId: string;
@@ -108,11 +108,11 @@ export const useProfileManager = ({
     return () => clearTimeout(id);
   }, [isProfileSavedToastVisible]);
 
-  // Lock body scroll while staff profile drawer is open
+  // Lock body scroll while either profile drawer is open
   useEffect(() => {
-    setBodyScrollLocked(isStaffProfileOpen);
-    return () => { setBodyScrollLocked(false); };
-  }, [isStaffProfileOpen]);
+    bodyScrollAdapter.setLocked(isProfileOpen || isStaffProfileOpen);
+    return () => { bodyScrollAdapter.setLocked(false); };
+  }, [isProfileOpen, isStaffProfileOpen]);
 
   const handleOpenProfile = () => {
     setProfileDraft(buildProfileDraft(profileSaved));
@@ -155,6 +155,7 @@ export const useProfileManager = ({
       return;
     }
 
+    const previousSettings = profileDraft.notificationSettings;
     setProfileDraft(prev => ({
       ...prev,
       notificationSettings: settings,
@@ -165,6 +166,10 @@ export const useProfileManager = ({
       await saveCustomerNotificationSettings(currentUserId, settings);
     } catch (error) {
       console.error('Failed to save customer notification settings', error);
+      setProfileDraft(prev => ({
+        ...prev,
+        notificationSettings: previousSettings,
+      }));
       setProfileError('Unable to save notification settings right now.');
     }
   };
@@ -200,7 +205,7 @@ export const useProfileManager = ({
       return;
     }
 
-    const role: StaffRole = isAdmin ? 'admin' : 'agent';
+    const previousSettings = staffProfileDraft.notificationSettings;
     setStaffProfileDraft(prev => ({
       ...prev,
       notificationSettings: settings,
@@ -220,6 +225,10 @@ export const useProfileManager = ({
       });
     } catch (error) {
       console.error('Failed to save staff notification settings', error);
+      setStaffProfileDraft(prev => ({
+        ...prev,
+        notificationSettings: previousSettings,
+      }));
       setStaffProfileError('Unable to save notification settings right now.');
     }
   };

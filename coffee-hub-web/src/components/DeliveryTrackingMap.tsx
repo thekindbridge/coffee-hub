@@ -30,6 +30,15 @@ import {
   TrackingMapStatusOverlay,
 } from './DeliveryTrackingMap.helpers';
 
+const requestFrame = (callback: FrameRequestCallback) =>
+  globalThis.requestAnimationFrame(callback);
+
+const cancelFrame = (frameId: number | null) => {
+  if (frameId !== null) {
+    globalThis.cancelAnimationFrame(frameId);
+  }
+};
+
 export interface DeliveryTrackingMapProps {
   orderId: string;
   orderDocId?: string;
@@ -55,6 +64,7 @@ export default function DeliveryTrackingMap({
   agentIconUrl = DEFAULT_AGENT_ICON_URL,
   onRouteMetricsChange,
 }: DeliveryTrackingMapProps) {
+  // Web-only: this component depends on the Google Maps JS SDK.
   const normalizedOrderId = orderId.trim().toUpperCase();
   const normalizedOrderDocId = orderDocId?.trim().toUpperCase() || '';
   const normalizedAgentId = agentId?.trim() || '';
@@ -219,8 +229,8 @@ export default function DeliveryTrackingMap({
 
     const unsubscribe = subscribeToDeliveryLocation({
       agentId: normalizedAgentId,
-      onData: snapshotData => {
-        if (!snapshotData) {
+      onData: nextLocation => {
+        if (!nextLocation) {
           setSubscribedAgentLocation(null);
           setAnimatedAgentLocation(null);
           setAnimatedRoutePath([]);
@@ -229,22 +239,7 @@ export default function DeliveryTrackingMap({
           return;
         }
 
-        const locationRecord = normalizedOrderDocId
-          ? snapshotData.deliveryLocation
-          : normalizedAgentId
-          ? snapshotData.currentLocation ?? snapshotData.lastLocation
-          : snapshotData;
-        const nextLocation = normalizeLocationRecord(locationRecord);
-        if (!nextLocation) {
-          setSubscribedAgentLocation(null);
-          setAnimatedAgentLocation(null);
-          setAnimatedRoutePath([]);
-          setTrackingLabel('Waiting for a live GPS ping from the rider.');
-          onRouteMetricsChange?.(null);
-          return;
-        }
-
-        setSubscribedAgentLocation(nextLocation);
+        setSubscribedAgentLocation(normalizeLocationRecord(nextLocation));
         setTrackingLabel('Rider is live on the route.');
       },
       onError: error => {
@@ -269,10 +264,8 @@ export default function DeliveryTrackingMap({
   ]);
 
   useEffect(() => {
-    if (animationFrameRef.current !== null) {
-      window.cancelAnimationFrame(animationFrameRef.current);
-      animationFrameRef.current = null;
-    }
+    cancelFrame(animationFrameRef.current);
+    animationFrameRef.current = null;
 
     if (!agentLocation) {
       animatedLocationRef.current = null;
@@ -305,33 +298,27 @@ export default function DeliveryTrackingMap({
       mapRef.current?.panTo(nextAnimatedLocation);
 
       if (progress < 1) {
-        animationFrameRef.current = window.requestAnimationFrame(animate);
+        animationFrameRef.current = requestFrame(animate);
       }
     };
 
-    animationFrameRef.current = window.requestAnimationFrame(animate);
+    animationFrameRef.current = requestFrame(animate);
 
     return () => {
-      if (animationFrameRef.current !== null) {
-        window.cancelAnimationFrame(animationFrameRef.current);
-        animationFrameRef.current = null;
-      }
+      cancelFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
     };
   }, [agentLocation]);
 
   useEffect(() => {
     return () => {
-      if (routeAnimationFrameRef.current !== null) {
-        window.cancelAnimationFrame(routeAnimationFrameRef.current);
-      }
+      cancelFrame(routeAnimationFrameRef.current);
     };
   }, []);
 
   const animateRoutePath = (path: google.maps.LatLngLiteral[]) => {
-    if (routeAnimationFrameRef.current !== null) {
-      window.cancelAnimationFrame(routeAnimationFrameRef.current);
-      routeAnimationFrameRef.current = null;
-    }
+    cancelFrame(routeAnimationFrameRef.current);
+    routeAnimationFrameRef.current = null;
 
     if (path.length <= 2) {
       setAnimatedRoutePath(path);
@@ -349,11 +336,11 @@ export default function DeliveryTrackingMap({
       setAnimatedRoutePath(path.slice(0, pointCount));
 
       if (progress < 1) {
-        routeAnimationFrameRef.current = window.requestAnimationFrame(animate);
+        routeAnimationFrameRef.current = requestFrame(animate);
       }
     };
 
-    routeAnimationFrameRef.current = window.requestAnimationFrame(animate);
+    routeAnimationFrameRef.current = requestFrame(animate);
   };
 
   useEffect(() => {
@@ -446,9 +433,7 @@ export default function DeliveryTrackingMap({
 
   useEffect(() => {
     return () => {
-      if (animationFrameRef.current !== null) {
-        window.cancelAnimationFrame(animationFrameRef.current);
-      }
+      cancelFrame(animationFrameRef.current);
     };
   }, []);
 

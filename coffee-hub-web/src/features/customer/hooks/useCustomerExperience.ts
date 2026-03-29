@@ -4,10 +4,7 @@ import type { MenuItem, Offer, Order, ShopTiming } from '../../../types';
 import type { CustomerProfile } from '../../app/types';
 import type { CustomerTab } from '../../../constants/routes';
 import { buildShopAvailabilityMessage } from '../../../../shared/shopTiming';
-import {
-  clearRequestedCustomerRoute,
-  getRequestedCustomerRoute,
-} from '../../../services/browser/urlStateService';
+import { urlStateAdapter } from '../../../services/platform/urlStateAdapter';
 import { useCheckoutFlow } from './useCheckoutFlow';
 
 type UseCustomerExperienceParams = {
@@ -113,7 +110,7 @@ export const useCustomerExperience = ({
   ]);
 
   useEffect(() => {
-    const requestedRoute = getRequestedCustomerRoute();
+    const requestedRoute = urlStateAdapter.getRequestedCustomerRoute();
 
     if (requestedRoute.tab === 'tracking' && requestedRoute.orderId) {
       if (isUserOrdersLoading) {
@@ -125,13 +122,13 @@ export const useCustomerExperience = ({
       setTrackingOrderId(requestedRoute.orderId);
       setOrderStatus(matchedOrder);
       setTrackingError(matchedOrder ? '' : 'Order not found. Please check the ID.');
-      clearRequestedCustomerRoute();
+      urlStateAdapter.clearRequestedCustomerRoute();
       return;
     }
 
     if (requestedRoute.tab === 'orders') {
       setActiveTab('orders');
-      clearRequestedCustomerRoute();
+      urlStateAdapter.clearRequestedCustomerRoute();
     }
   }, [isUserOrdersLoading, setOrderStatus, userOrders]);
 

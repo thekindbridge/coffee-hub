@@ -19,7 +19,7 @@ import type {
 } from '../../app/types';
 import { type ShopTiming } from '../../../../shared/shopTiming';
 import { NotificationSettingsPanel } from '../../../components/NotificationSettingsPanel';
-import type { PushPermissionState } from '../../../services/browser/pushNotificationsService';
+import type { NotificationPermissionState } from '../../../services/platform/notificationAdapter';
 import { StaffProfileAdminControls } from './StaffProfileAdminControls';
 
 type StaffProfileDrawerProps = {
@@ -31,7 +31,7 @@ type StaffProfileDrawerProps = {
   staffProfileError: string;
   isStaffProfileSaving: boolean;
   isStaffProfileSavedToastVisible: boolean;
-  notificationPermissionState: PushPermissionState;
+  notificationPermissionState: NotificationPermissionState;
   isNotificationSyncing: boolean;
   notificationSyncError: string;
   shopTiming: ShopTiming;

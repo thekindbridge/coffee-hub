@@ -1,10 +1,9 @@
-export type DesktopNotificationPermissionState =
-  | 'default'
-  | 'denied'
-  | 'granted'
-  | 'unsupported';
+import type {
+  NotificationPayload,
+  NotificationPermissionState,
+} from '../platform/notificationAdapter';
 
-export const getDesktopNotificationPermissionState = (): DesktopNotificationPermissionState => {
+export const getDesktopNotificationPermissionState = (): NotificationPermissionState => {
   if (typeof window === 'undefined' || typeof Notification === 'undefined') {
     return 'unsupported';
   }
@@ -12,7 +11,7 @@ export const getDesktopNotificationPermissionState = (): DesktopNotificationPerm
   return Notification.permission;
 };
 
-export const requestDesktopNotificationPermission = async (): Promise<DesktopNotificationPermissionState> => {
+export const requestDesktopNotificationPermission = async (): Promise<NotificationPermissionState> => {
   if (typeof Notification === 'undefined') {
     return 'unsupported';
   }
@@ -24,11 +23,7 @@ export const showDesktopNotification = ({
   body,
   icon,
   title,
-}: {
-  title: string;
-  body?: string;
-  icon?: string;
-}) => {
+}: NotificationPayload) => {
   if (getDesktopNotificationPermissionState() !== 'granted') {
     return null;
   }

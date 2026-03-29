@@ -45,6 +45,21 @@ export const MAP_OPTIONS: google.maps.MapOptions = {
 export const joinClassNames = (...classNames: Array<string | undefined>) =>
   classNames.filter(Boolean).join(' ');
 
+const toFiniteNumber = (value: unknown) => {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+
+  return null;
+};
+
 const isCoordinateInRange = (value: number, minimum: number, maximum: number) =>
   value >= minimum && value <= maximum;
 
@@ -54,13 +69,13 @@ export const normalizeLocationRecord = (value: unknown): DeliveryLocation | null
   }
 
   const data = value as Record<string, unknown>;
-  const lat = Number(data.lat);
-  const lng = Number(data.lng);
-  const accuracy = Number(data.accuracy);
+  const lat = toFiniteNumber(data.lat);
+  const lng = toFiniteNumber(data.lng);
+  const accuracy = toFiniteNumber(data.accuracy);
 
   if (
-    !Number.isFinite(lat) ||
-    !Number.isFinite(lng) ||
+    lat === null ||
+    lng === null ||
     !isCoordinateInRange(lat, -90, 90) ||
     !isCoordinateInRange(lng, -180, 180) ||
     (lat === 0 && lng === 0)
@@ -71,7 +86,7 @@ export const normalizeLocationRecord = (value: unknown): DeliveryLocation | null
   return {
     lat,
     lng,
-    accuracy: Number.isFinite(accuracy) ? accuracy : undefined,
+    accuracy: accuracy ?? undefined,
   };
 };
 

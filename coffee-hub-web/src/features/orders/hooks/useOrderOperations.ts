@@ -5,12 +5,12 @@ import {
   completeDeliveryRequest,
   updateOrderStatusRequest,
 } from '../../../services/api/ordersService';
-import { alertInBrowser } from '../../../services/browser/dialogService';
 import {
   getCurrentUserIdToken,
   logoutCurrentUser,
 } from '../../../services/firebase/authService';
 import { persistActiveDeliverySession } from '../../../services/firebase/orderCounterService';
+import { dialogAdapter } from '../../../services/platform/dialogAdapter';
 import {
   createAgentTracker,
   type AgentTrackerPermissionState,
@@ -95,12 +95,12 @@ export const useOrderOperations = ({
 
   const handleStartDelivery = async () => {
     if (!currentDeliveryOrder?.customer_location) {
-      alertInBrowser('This order is missing customer coordinates, so live delivery cannot start.');
+      dialogAdapter.alert('This order is missing customer coordinates, so live delivery cannot start.');
       return;
     }
 
     if (currentDeliveryOrder.status_code !== 'OUT_FOR_DELIVERY') {
-      alertInBrowser('Tracking can only start once the order is out for delivery.');
+      dialogAdapter.alert('Tracking can only start once the order is out for delivery.');
       return;
     }
 
@@ -109,54 +109,67 @@ export const useOrderOperations = ({
       currentDeliveryAgent?.id ||
       normalizedCurrentEmail;
     if (!agentId) {
-      alertInBrowser('Unable to identify the assigned delivery agent for this order.');
+      dialogAdapter.alert('Unable to identify the assigned delivery agent for this order.');
       return;
     }
 
-    agentTrackerRef.current?.stop();
+    try {
+      agentTrackerRef.current?.stop();
 
-    const tracker = createAgentTracker({
-      agentId,
-      onError: message => {
-        console.error('Agent tracker error', message);
-      },
-      onLocation: location => {
-        setAgentLastTrackedLocation(location);
-      },
-      onPermissionChange: permissionState => {
-        setAgentPermissionState(permissionState);
-      },
-      onStatusChange: status => {
-        setAgentTrackerStatus(status);
-        setIsAgentTracking(
-          status.lifecycle === 'starting' ||
-            status.lifecycle === 'watching' ||
-            status.lifecycle === 'restarting',
-        );
-      },
-      orderDocId: currentDeliveryOrder.doc_id,
-      orderId: currentDeliveryOrder.id,
-    });
+      const tracker = createAgentTracker({
+        agentId,
+        onError: message => {
+          console.error('Agent tracker error', message);
+        },
+        onLocation: location => {
+          setAgentLastTrackedLocation(location);
+        },
+        onPermissionChange: permissionState => {
+          setAgentPermissionState(permissionState);
+        },
+        onStatusChange: status => {
+          setAgentTrackerStatus(status);
+          setIsAgentTracking(
+            status.lifecycle === 'starting' ||
+              status.lifecycle === 'watching' ||
+              status.lifecycle === 'restarting',
+          );
+        },
+        orderDocId: currentDeliveryOrder.doc_id,
+        orderId: currentDeliveryOrder.id,
+      });
 
-    agentTrackerRef.current = tracker;
-    const didStart = await tracker.start();
-    if (!didStart) {
+      agentTrackerRef.current = tracker;
+      const didStart = await tracker.start();
+      if (!didStart) {
+        setIsAgentTracking(false);
+        return;
+      }
+
+      trackedOrderIdRef.current = currentDeliveryOrder.id;
+
+      await persistActiveDeliverySession({
+        agentId,
+        agentName:
+          currentDeliveryAgent?.name ||
+          currentDeliveryOrder.delivery_agent_name ||
+          'Assigned agent',
+        customerLocation: currentDeliveryOrder.customer_location,
+        orderDocId: currentDeliveryOrder.doc_id,
+        orderId: currentDeliveryOrder.id,
+      });
+    } catch (error) {
+      console.error('Failed to start delivery tracking', error);
+      agentTrackerRef.current?.stop();
+      agentTrackerRef.current = null;
+      trackedOrderIdRef.current = '';
       setIsAgentTracking(false);
-      return;
+      setAgentTrackerStatus({
+        lifecycle: 'error',
+        message: 'Unable to start live delivery tracking right now.',
+      });
+      dialogAdapter.alert('Unable to start live delivery tracking right now.');
     }
-
-    trackedOrderIdRef.current = currentDeliveryOrder.id;
-
-    await persistActiveDeliverySession({
-      agentId,
-      agentName:
-        currentDeliveryAgent?.name ||
-        currentDeliveryOrder.delivery_agent_name ||
-        'Assigned agent',
-      customerLocation: currentDeliveryOrder.customer_location,
-      orderDocId: currentDeliveryOrder.doc_id,
-      orderId: currentDeliveryOrder.id,
-    });
   };
 
   const handleEndDelivery = async (orderDocId: string) => {
@@ -167,7 +180,7 @@ export const useOrderOperations = ({
       (orderStatus?.doc_id === orderDocId ? orderStatus : null);
 
     if (!orderToComplete) {
-      alertInBrowser('Unable to find the order for this delivery.');
+      dialogAdapter.alert('Unable to find the order for this delivery.');
       return;
     }
 
@@ -177,10 +190,6 @@ export const useOrderOperations = ({
         throw new Error('Please sign in again before ending the delivery.');
       }
 
-      agentTrackerRef.current?.stop();
-      agentTrackerRef.current = null;
-      trackedOrderIdRef.current = '';
-      setIsAgentTracking(false);
       const response = await completeDeliveryRequest(
         {
           orderId: orderToComplete.doc_id,
@@ -191,6 +200,10 @@ export const useOrderOperations = ({
         idToken,
       );
 
+      agentTrackerRef.current?.stop();
+      agentTrackerRef.current = null;
+      trackedOrderIdRef.current = '';
+      setIsAgentTracking(false);
       replaceOrderLocalState(response.order);
       setAgentTrackerStatus({
         lifecycle: 'completed',
@@ -198,7 +211,7 @@ export const useOrderOperations = ({
       });
     } catch (error) {
       console.error('Failed to end delivery', error);
-      alertInBrowser('Unable to end this delivery right now.');
+      dialogAdapter.alert('Unable to end this delivery right now.');
     }
   };
 
@@ -315,7 +328,7 @@ export const useOrderOperations = ({
       onAfterLogout?.();
     } catch (error) {
       console.error('Logout failed', error);
-      alertInBrowser('Unable to log out right now.');
+      dialogAdapter.alert('Unable to log out right now.');
     }
   };
 

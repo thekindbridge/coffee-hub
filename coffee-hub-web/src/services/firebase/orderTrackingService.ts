@@ -1,10 +1,17 @@
 import { doc, onSnapshot } from 'firebase/firestore';
-import type { DeliveryAgent, DeliverySession, Order } from '../../types';
+import type {
+  DeliveryAgent,
+  DeliveryLocation,
+  DeliverySession,
+  Order,
+} from '../../types';
 import {
   mapAgentRecordToAgent,
   mapDeliverySessionRecordToSession,
+  mapLocationRecord,
   mapOrderRecordToOrder,
 } from '../../features/app/lib/firestoreMappers';
+import { toAppServiceError } from '../platform/serviceError';
 import { db } from './index';
 
 export const subscribeToTrackedOrder = (
@@ -26,7 +33,7 @@ export const subscribeToTrackedOrder = (
     );
   },
   error => {
-    onError(error instanceof Error ? error : new Error('Unable to subscribe to the order.'));
+    onError(toAppServiceError(error, 'Unable to subscribe to the order.'));
   },
 );
 
@@ -50,7 +57,7 @@ export const subscribeToDeliverySession = (
     );
   },
   error => {
-    onError(error instanceof Error ? error : new Error('Unable to subscribe to the delivery session.'));
+    onError(toAppServiceError(error, 'Unable to subscribe to the delivery session.'));
   },
 );
 
@@ -74,7 +81,7 @@ export const subscribeToDeliveryAgent = (
     );
   },
   error => {
-    onError(error instanceof Error ? error : new Error('Unable to subscribe to the delivery agent.'));
+    onError(toAppServiceError(error, 'Unable to subscribe to the delivery agent.'));
   },
 );
 
@@ -88,7 +95,7 @@ export const subscribeToDeliveryLocation = ({
   orderDocId?: string;
   agentId?: string;
   orderId?: string;
-  onData: (data: Record<string, unknown> | null) => void;
+  onData: (location: DeliveryLocation | null) => void;
   onError: (error: Error) => void;
 }) => {
   const normalizedOrderDocId = orderDocId?.trim().toUpperCase() || '';
@@ -114,14 +121,17 @@ export const subscribeToDeliveryLocation = ({
         return;
       }
 
-      onData(snapshot.data() as Record<string, unknown>);
+      const snapshotData = snapshot.data() as Record<string, unknown>;
+      const locationRecord = normalizedOrderDocId
+        ? snapshotData.deliveryLocation
+        : normalizedAgentId
+          ? snapshotData.currentLocation ?? snapshotData.lastLocation
+          : snapshotData;
+
+      onData(mapLocationRecord(locationRecord));
     },
     error => {
-      onError(
-        error instanceof Error
-          ? error
-          : new Error('Unable to subscribe to the delivery location.'),
-      );
+      onError(toAppServiceError(error, 'Unable to subscribe to the delivery location.'));
     },
   );
 };

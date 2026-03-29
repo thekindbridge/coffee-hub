@@ -4,6 +4,7 @@ import {
   signInWithPopup,
   signOut,
 } from 'firebase/auth';
+import { toAppServiceError } from '../platform/serviceError';
 import { auth } from './firebaseConfig';
 
 const provider = new GoogleAuthProvider();
@@ -15,8 +16,12 @@ export type AuthSessionSnapshot = {
 };
 
 export const loginWithGoogle = async () => {
-  const result = await signInWithPopup(auth, provider);
-  return result.user;
+  try {
+    const result = await signInWithPopup(auth, provider);
+    return result.user;
+  } catch (error) {
+    throw toAppServiceError(error, 'Unable to sign in with Google.', 'network');
+  }
 };
 
 export const subscribeToAuthSession = (
@@ -38,7 +43,18 @@ export const subscribeToAuthSession = (
   });
 });
 
-export const getCurrentUserIdToken = async (forceRefresh = false) =>
-  auth.currentUser?.getIdToken(forceRefresh) || '';
+export const getCurrentUserIdToken = async (forceRefresh = false) => {
+  try {
+    return auth.currentUser?.getIdToken(forceRefresh) || '';
+  } catch (error) {
+    throw toAppServiceError(error, 'Unable to refresh your session.', 'network');
+  }
+};
 
-export const logoutCurrentUser = () => signOut(auth);
+export const logoutCurrentUser = async () => {
+  try {
+    await signOut(auth);
+  } catch (error) {
+    throw toAppServiceError(error, 'Unable to log out right now.', 'network');
+  }
+};

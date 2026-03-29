@@ -1,8 +1,4 @@
-import {
-  readBrowserStorage,
-  removeBrowserStorage,
-  writeBrowserStorage,
-} from './storageService';
+import { storageAdapter } from '../platform/storageAdapter';
 
 export type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -30,14 +26,14 @@ export const isStandaloneInstallMode = () => {
 };
 
 export const isInstallPromptDismissed = () =>
-  readBrowserStorage(DISMISS_STORAGE_KEY) === '1';
+  storageAdapter.read(DISMISS_STORAGE_KEY) === '1';
 
 export const dismissInstallPrompt = () => {
-  writeBrowserStorage(DISMISS_STORAGE_KEY, '1');
+  storageAdapter.write(DISMISS_STORAGE_KEY, '1');
 };
 
 export const clearInstallPromptDismissal = () => {
-  removeBrowserStorage(DISMISS_STORAGE_KEY);
+  storageAdapter.remove(DISMISS_STORAGE_KEY);
 };
 
 export const subscribeToInstallPromptEvents = ({

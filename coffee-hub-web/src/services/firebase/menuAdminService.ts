@@ -10,6 +10,7 @@ import {
 } from 'firebase/firestore';
 import type { MenuItem } from '../../types';
 import { mapMenuDocToMenuItem } from '../../features/app/lib/firestoreMappers';
+import { toAppServiceError } from '../platform/serviceError';
 import { db } from './index';
 
 const MENU_COLLECTION = 'menu_items';
@@ -32,20 +33,24 @@ export const subscribeToAdminMenuItems = (
     onData(snapshot.docs.map(mapMenuDocToMenuItem));
   },
   error => {
-    onError(error instanceof Error ? error : new Error('Unable to load menu items.'));
+    onError(toAppServiceError(error, 'Unable to load menu items.'));
   },
 );
 
 export const createAdminMenuItem = async (input: AdminMenuItemInput) => {
-  await addDoc(collection(db, MENU_COLLECTION), {
-    name: input.name.trim(),
-    category: input.category.trim(),
-    price: input.price,
-    image: input.image.trim(),
-    spiceLevel: input.spiceLevel,
-    veg: input.veg,
-    isAvailable: true,
-  });
+  try {
+    await addDoc(collection(db, MENU_COLLECTION), {
+      name: input.name.trim(),
+      category: input.category.trim(),
+      price: input.price,
+      image: input.image.trim(),
+      spiceLevel: input.spiceLevel,
+      veg: input.veg,
+      isAvailable: true,
+    });
+  } catch (error) {
+    throw toAppServiceError(error, 'Unable to create the menu item.', 'network');
+  }
 };
 
 export const updateAdminMenuItem = async (
@@ -53,24 +58,36 @@ export const updateAdminMenuItem = async (
   input: AdminMenuItemInput,
   isAvailable: boolean,
 ) => {
-  await updateDoc(doc(db, MENU_COLLECTION, menuItemId), {
-    name: input.name.trim(),
-    category: input.category.trim(),
-    price: input.price,
-    image: input.image.trim(),
-    spiceLevel: input.spiceLevel,
-    veg: input.veg,
-    isAvailable,
-  });
+  try {
+    await updateDoc(doc(db, MENU_COLLECTION, menuItemId), {
+      name: input.name.trim(),
+      category: input.category.trim(),
+      price: input.price,
+      image: input.image.trim(),
+      spiceLevel: input.spiceLevel,
+      veg: input.veg,
+      isAvailable,
+    });
+  } catch (error) {
+    throw toAppServiceError(error, 'Unable to update the menu item.', 'network');
+  }
 };
 
 export const deleteAdminMenuItem = async (menuItemId: string) => {
-  await deleteDoc(doc(db, MENU_COLLECTION, menuItemId));
+  try {
+    await deleteDoc(doc(db, MENU_COLLECTION, menuItemId));
+  } catch (error) {
+    throw toAppServiceError(error, 'Unable to delete the menu item.', 'network');
+  }
 };
 
 export const setAdminMenuItemAvailability = async (
   menuItemId: string,
   isAvailable: boolean,
 ) => {
-  await updateDoc(doc(db, MENU_COLLECTION, menuItemId), { isAvailable });
+  try {
+    await updateDoc(doc(db, MENU_COLLECTION, menuItemId), { isAvailable });
+  } catch (error) {
+    throw toAppServiceError(error, 'Unable to update item availability.', 'network');
+  }
 };

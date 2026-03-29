@@ -1,6 +1,6 @@
 import { Plus, Pencil, Trash2 } from 'lucide-react';
 import { useAdminMenuManager } from '../../../features/admin/hooks/useAdminMenuManager';
-import { confirmInBrowser } from '../../../services/browser/dialogService';
+import { dialogAdapter } from '../../../services/platform/dialogAdapter';
 
 const CURRENCY_SYMBOL = '\u20B9';
 
@@ -98,7 +98,7 @@ export default function AdminMenuManager() {
             {editingId && (
               <button
                 onClick={() => {
-                  if (!confirmInBrowser('Delete this product permanently?')) {
+                  if (!dialogAdapter.confirm('Delete this product permanently?')) {
                     return;
                   }
 

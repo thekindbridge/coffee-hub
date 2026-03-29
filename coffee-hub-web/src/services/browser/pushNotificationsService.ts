@@ -8,16 +8,13 @@ import {
 import { app } from '../firebase';
 import { registerPushToken } from '../api/notificationsService';
 import {
-  readBrowserStorage,
-  removeBrowserStorage,
-  writeBrowserStorage,
-} from './storageService';
+  notificationAdapter,
+  type NotificationPermissionState,
+} from '../platform/notificationAdapter';
+import { toAppServiceError } from '../platform/serviceError';
+import { storageAdapter } from '../platform/storageAdapter';
 
-export type PushPermissionState =
-  | 'default'
-  | 'denied'
-  | 'granted'
-  | 'unsupported';
+export type PushPermissionState = NotificationPermissionState;
 
 export type ForegroundNotification = {
   id: string;
@@ -29,11 +26,7 @@ export type ForegroundNotification = {
 const PUSH_PROMPT_DISMISS_KEY = 'coffee_hub_push_prompt_dismissed';
 
 export const getBrowserPushPermissionState = (): PushPermissionState => {
-  if (typeof window === 'undefined' || typeof Notification === 'undefined') {
-    return 'unsupported';
-  }
-
-  return Notification.permission;
+  return notificationAdapter.getPermissionState();
 };
 
 export const detectBrowserMessagingSupport = async () => {
@@ -95,53 +88,57 @@ export const syncBrowserPushRegistration = async ({
   idToken: string;
   permissionState: Exclude<PushPermissionState, 'unsupported' | 'default'>;
 }) => {
-  let token = '';
+  try {
+    let token = '';
 
-  if (permissionState === 'granted') {
-    const vapidKey = (import.meta.env.VITE_FIREBASE_VAPID_KEY || '').trim();
-    if (!vapidKey) {
-      throw new Error('VITE_FIREBASE_VAPID_KEY is missing.');
+    if (permissionState === 'granted') {
+      const vapidKey = (import.meta.env.VITE_FIREBASE_VAPID_KEY || '').trim();
+      if (!vapidKey) {
+        throw new Error('VITE_FIREBASE_VAPID_KEY is missing.');
+      }
+
+      const registration = await getPushServiceWorkerRegistration();
+      if (!registration) {
+        throw new Error('Push service worker registration failed.');
+      }
+
+      token = await getToken(getMessaging(app), {
+        vapidKey,
+        serviceWorkerRegistration: registration,
+      });
+
+      if (!token) {
+        throw new Error('Browser did not return an FCM token.');
+      }
     }
 
-    const registration = await getPushServiceWorkerRegistration();
-    if (!registration) {
-      throw new Error('Push service worker registration failed.');
-    }
-
-    token = await getToken(getMessaging(app), {
-      vapidKey,
-      serviceWorkerRegistration: registration,
-    });
-
-    if (!token) {
-      throw new Error('Browser did not return an FCM token.');
-    }
+    await registerPushToken(
+      {
+        permission: permissionState,
+        token,
+      },
+      idToken,
+    );
+  } catch (error) {
+    throw toAppServiceError(
+      error,
+      'Unable to enable browser notifications right now.',
+      'network',
+    );
   }
-
-  await registerPushToken(
-    {
-      permission: permissionState,
-      token,
-    },
-    idToken,
-  );
 };
 
 export const requestBrowserPushPermission = async (): Promise<PushPermissionState> => {
-  if (typeof Notification === 'undefined') {
-    return 'unsupported';
-  }
-
-  return Notification.requestPermission();
+  return notificationAdapter.requestPermission();
 };
 
 export const isPushPermissionBannerDismissed = () =>
-  readBrowserStorage(PUSH_PROMPT_DISMISS_KEY) === 'true';
+  storageAdapter.read(PUSH_PROMPT_DISMISS_KEY) === 'true';
 
 export const dismissPushPermissionBanner = () => {
-  writeBrowserStorage(PUSH_PROMPT_DISMISS_KEY, 'true');
+  storageAdapter.write(PUSH_PROMPT_DISMISS_KEY, 'true');
 };
 
 export const clearPushPermissionBannerDismissal = () => {
-  removeBrowserStorage(PUSH_PROMPT_DISMISS_KEY);
+  storageAdapter.remove(PUSH_PROMPT_DISMISS_KEY);
 };

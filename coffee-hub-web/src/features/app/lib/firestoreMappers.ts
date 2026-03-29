@@ -20,6 +20,8 @@ import type {
   StaffRole,
 } from '../types';
 
+const FALLBACK_TIMESTAMP_ISO = new Date(0).toISOString();
+
 const mapTimestampToIsoString = (value: unknown) => {
   if (
     value &&
@@ -32,22 +34,39 @@ const mapTimestampToIsoString = (value: unknown) => {
   return '';
 };
 
+const toFiniteNumber = (value: unknown) => {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+
+  return null;
+};
+
 export const mapLocationRecord = (value: unknown): DeliveryLocation | null => {
   if (!value || typeof value !== 'object') {
     return null;
   }
 
   const data = value as Record<string, unknown>;
-  const lat = Number(data.lat);
-  const lng = Number(data.lng);
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+  const lat = toFiniteNumber(data.lat);
+  const lng = toFiniteNumber(data.lng);
+  if (lat === null || lng === null) {
     return null;
   }
+
+  const accuracy = toFiniteNumber(data.accuracy);
 
   return {
     lat,
     lng,
-    accuracy: Number.isFinite(Number(data.accuracy)) ? Number(data.accuracy) : undefined,
+    accuracy: accuracy ?? undefined,
     updated_at: mapTimestampToIsoString(data.updatedAt),
   };
 };
@@ -318,6 +337,8 @@ export const mapOrderRecordToOrder = (
 ): Order => {
   const createdAtValue = data.createdAt as Timestamp | undefined;
   const updatedAtValue = data.updatedAt as Timestamp | undefined;
+  const createdAt = createdAtValue?.toDate()?.toISOString() || FALLBACK_TIMESTAMP_ISO;
+  const updatedAt = updatedAtValue?.toDate()?.toISOString() || '';
   const orderId = ((data.orderId as string) || docId).toUpperCase();
   const statusCode = normalizeOrderStatusCode(data.status ?? data.orderStatus);
   const subtotal = Number(data.subtotal ?? data.totalAmount ?? data.finalTotal ?? data.total ?? 0);
@@ -392,8 +413,8 @@ export const mapOrderRecordToOrder = (
     cancellation_reason: ((data.cancellationReason as string) || '').trim(),
     payment_method: normalizePaymentMethod(data.paymentMode ?? data.paymentMethod),
     payment_status: normalizePaymentStatus(data.paymentStatus),
-    created_at: createdAtValue?.toDate()?.toISOString() || new Date().toISOString(),
-    updated_at: updatedAtValue?.toDate()?.toISOString() || '',
+    created_at: createdAt,
+    updated_at: updatedAt,
     cancelled_at: cancelledAt,
     user_id: (data.userId as string) || '',
     delivery_agent_id: agentId,

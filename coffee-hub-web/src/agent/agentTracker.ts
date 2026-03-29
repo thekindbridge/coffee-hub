@@ -1,15 +1,13 @@
+import { persistAgentTrackingLocation } from '../services/firebase/agentTrackingService';
 import {
-  doc,
-  serverTimestamp,
-  setDoc,
-} from 'firebase/firestore';
-import { db } from '../services/firebase';
+  locationAdapter,
+  type LocationAdapterError,
+  type LocationPermissionState,
+  type LocationRequestOptions,
+} from '../services/platform/locationAdapter';
 import type { DeliveryLocation } from '../types';
 
-export type AgentTrackerPermissionState =
-  | PermissionState
-  | 'unsupported'
-  | 'unavailable';
+export type AgentTrackerPermissionState = LocationPermissionState;
 
 export type AgentTrackerLifecycle =
   | 'idle'
@@ -36,7 +34,7 @@ export interface AgentTrackerOptions {
   maximumAcceptedAccuracyMeters?: number;
   restartAfterMs?: number;
   restartDelayMs?: number;
-  geolocationOptions?: PositionOptions;
+  geolocationOptions?: LocationRequestOptions;
   onLocation?: (location: DeliveryLocation) => void;
   onStatusChange?: (status: AgentTrackerStatus) => void;
   onPermissionChange?: (permissionState: AgentTrackerPermissionState) => void;
@@ -69,14 +67,6 @@ export const calculateDistanceMeters = (
   return 2 * earthRadiusMeters * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine));
 };
 
-const toDeliveryLocation = (position: GeolocationPosition): DeliveryLocation => ({
-  lat: position.coords.latitude,
-  lng: position.coords.longitude,
-  accuracy: Number.isFinite(position.coords.accuracy)
-    ? Number(position.coords.accuracy.toFixed(1))
-    : undefined,
-});
-
 const createStatus = (lifecycle: AgentTrackerLifecycle, message: string): AgentTrackerStatus => ({
   lifecycle,
   message,
@@ -104,8 +94,8 @@ export class AgentTracker {
     >;
 
   private watchId: number | null = null;
-  private restartTimeoutId: number | null = null;
-  private healthIntervalId: number | null = null;
+  private restartTimeoutId: ReturnType<typeof setTimeout> | null = null;
+  private healthIntervalId: ReturnType<typeof setInterval> | null = null;
   private lastPersistedLocation: DeliveryLocation | null = null;
   private lastPersistedAt = 0;
   private lastPositionSeenAt = 0;
@@ -128,14 +118,14 @@ export class AgentTracker {
       restartDelayMs: options.restartDelayMs ?? DEFAULT_RESTART_DELAY_MS,
       geolocationOptions: options.geolocationOptions ?? {
         enableHighAccuracy: true,
-        maximumAge: 0,
-        timeout: 15000,
+        maximumAgeMs: 0,
+        timeoutMs: 15000,
       },
     };
   }
 
   async start() {
-    if (typeof window === 'undefined' || !('geolocation' in navigator)) {
+    if (!locationAdapter.isSupported()) {
       this.permissionState = 'unsupported';
       this.emitPermission();
       this.emitStatus(createStatus('error', 'Geolocation is not supported on this device.'));
@@ -151,12 +141,12 @@ export class AgentTracker {
       this.emitStatus(
         createStatus('denied', 'Location permission is blocked. Enable GPS permission to start delivery.'),
       );
-      this.emitError('Location permission is blocked for this browser.');
+      this.emitError('Location permission is blocked for this device.');
       return false;
     }
 
     this.beginWatch('watching', 'Streaming live delivery location...');
-    return true;
+    return this.watchId !== null;
   }
 
   stop() {
@@ -168,22 +158,9 @@ export class AgentTracker {
   }
 
   private async syncPermissionState() {
-    if (!('permissions' in navigator) || typeof navigator.permissions.query !== 'function') {
-      this.permissionState = 'unavailable';
-      this.emitPermission();
-      return;
-    }
-
     try {
-      const permissionResult = await navigator.permissions.query({
-        name: 'geolocation' as PermissionName,
-      });
-      this.permissionState = permissionResult.state;
+      this.permissionState = await locationAdapter.queryPermission();
       this.emitPermission();
-      permissionResult.onchange = () => {
-        this.permissionState = permissionResult.state;
-        this.emitPermission();
-      };
     } catch (error) {
       console.error('Unable to query geolocation permission', error);
       this.permissionState = 'unavailable';
@@ -196,18 +173,26 @@ export class AgentTracker {
     this.clearRestartTimer();
     this.lastPositionSeenAt = Date.now();
 
-    this.watchId = navigator.geolocation.watchPosition(
-      position => {
+    this.watchId = locationAdapter.watchLocation({
+      onLocation: location => {
         this.lastPositionSeenAt = Date.now();
-        this.handlePosition(position);
+        this.handleLocation(location);
       },
-      error => {
-        this.handlePositionError(error);
+      onError: error => {
+        this.handleLocationError(error);
       },
-      this.options.geolocationOptions,
-    );
+      options: this.options.geolocationOptions,
+    });
 
-    this.healthIntervalId = window.setInterval(() => {
+    if (this.watchId === null) {
+      this.permissionState = 'unsupported';
+      this.emitPermission();
+      this.emitStatus(createStatus('error', 'Unable to start live delivery tracking.'));
+      this.emitError('Unable to start live delivery tracking.');
+      return;
+    }
+
+    this.healthIntervalId = globalThis.setInterval(() => {
       if (this.hasStopped) {
         return;
       }
@@ -222,12 +207,11 @@ export class AgentTracker {
     this.emitStatus(createStatus(lifecycle, message));
   }
 
-  private handlePosition(position: GeolocationPosition) {
+  private handleLocation(nextLocation: DeliveryLocation) {
     if (this.hasStopped) {
       return;
     }
 
-    const nextLocation = toDeliveryLocation(position);
     this.options.onLocation?.(nextLocation);
 
     if (
@@ -272,79 +256,20 @@ export class AgentTracker {
   }
 
   private async persistLocation(location: DeliveryLocation) {
-    await Promise.all([
-      setDoc(
-        doc(db, 'orders', this.options.orderDocId),
-        {
-          deliveryLocation: {
-            lat: location.lat,
-            lng: location.lng,
-            accuracy: location.accuracy ?? null,
-            updatedAt: serverTimestamp(),
-          },
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true },
-      ),
-      setDoc(
-        doc(db, 'agent_locations', this.options.orderId),
-        {
-          lat: location.lat,
-          lng: location.lng,
-          accuracy: location.accuracy ?? null,
-          agentId: this.options.agentId,
-          orderDocId: this.options.orderDocId,
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true },
-      ),
-      setDoc(
-        doc(db, 'agents', this.options.agentId),
-        {
-          isActive: true,
-          currentOrderId: this.options.orderId,
-          currentLocation: {
-            lat: location.lat,
-            lng: location.lng,
-            accuracy: location.accuracy ?? null,
-            updatedAt: serverTimestamp(),
-          },
-          lastLocation: {
-            lat: location.lat,
-            lng: location.lng,
-            accuracy: location.accuracy ?? null,
-            updatedAt: serverTimestamp(),
-          },
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true },
-      ),
-      setDoc(
-        doc(db, 'delivery_sessions', this.options.orderId),
-        {
-          orderId: this.options.orderId,
-          orderDocId: this.options.orderDocId,
-          agentId: this.options.agentId,
-          status: 'active',
-          updatedAt: serverTimestamp(),
-          lastLocation: {
-            lat: location.lat,
-            lng: location.lng,
-            accuracy: location.accuracy ?? null,
-            updatedAt: serverTimestamp(),
-          },
-        },
-        { merge: true },
-      ),
-    ]);
+    await persistAgentTrackingLocation({
+      agentId: this.options.agentId,
+      location,
+      orderDocId: this.options.orderDocId,
+      orderId: this.options.orderId,
+    });
   }
 
-  private handlePositionError(error: GeolocationPositionError) {
+  private handleLocationError(error: LocationAdapterError) {
     if (this.hasStopped) {
       return;
     }
 
-    if (error.code === error.PERMISSION_DENIED) {
+    if (error.code === 'permission_denied') {
       this.permissionState = 'denied';
       this.emitPermission();
       this.clearWatch();
@@ -370,7 +295,7 @@ export class AgentTracker {
     this.clearWatch();
     this.emitStatus(createStatus('restarting', message));
 
-    this.restartTimeoutId = window.setTimeout(() => {
+    this.restartTimeoutId = globalThis.setTimeout(() => {
       this.restartTimeoutId = null;
       if (this.hasStopped) {
         return;
@@ -382,21 +307,21 @@ export class AgentTracker {
 
   private clearWatch() {
     if (this.watchId !== null) {
-      navigator.geolocation.clearWatch(this.watchId);
+      locationAdapter.clearWatch(this.watchId);
       this.watchId = null;
     }
   }
 
   private clearRestartTimer() {
     if (this.restartTimeoutId !== null) {
-      window.clearTimeout(this.restartTimeoutId);
+      globalThis.clearTimeout(this.restartTimeoutId);
       this.restartTimeoutId = null;
     }
   }
 
   private clearHealthInterval() {
     if (this.healthIntervalId !== null) {
-      window.clearInterval(this.healthIntervalId);
+      globalThis.clearInterval(this.healthIntervalId);
       this.healthIntervalId = null;
     }
   }

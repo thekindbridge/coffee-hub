@@ -15,9 +15,11 @@ import {
 } from 'firebase/firestore';
 import type { DocumentData, QueryDocumentSnapshot, Timestamp } from 'firebase/firestore';
 import type { Offer, OfferInput } from '../../types';
+import { toAppServiceError } from '../platform/serviceError';
 import { db } from './index';
 
 const OFFERS_COLLECTION = 'offers';
+const FALLBACK_TIMESTAMP_ISO = new Date(0).toISOString();
 
 const mapOfferDoc = (snapshot: QueryDocumentSnapshot<DocumentData>): Offer => {
   const data = snapshot.data() as Record<string, unknown>;
@@ -34,7 +36,7 @@ const mapOfferDoc = (snapshot: QueryDocumentSnapshot<DocumentData>): Offer => {
     minOrderAmount: Number(data.minOrderAmount || 0),
     maxDiscountAmount: typeof maxDiscountRaw === 'number' ? maxDiscountRaw : undefined,
     isActive: data.isActive !== false,
-    createdAt: createdAtValue?.toDate()?.toISOString() || new Date().toISOString(),
+    createdAt: createdAtValue?.toDate()?.toISOString() || FALLBACK_TIMESTAMP_ISO,
   };
 };
 
@@ -59,7 +61,7 @@ export const subscribeToOffers = (
       onData(mappedOffers);
     },
     error => {
-      onError(error instanceof Error ? error : new Error('Unable to load offers.'));
+      onError(toAppServiceError(error, 'Unable to load offers.'));
     },
   );
 };
@@ -68,62 +70,82 @@ export const assertCouponCodeUnique = async (
   couponCode: string,
   offerIdToIgnore = '',
 ) => {
-  const normalizedCouponCode = normalizeCouponCode(couponCode);
-  const duplicateSnapshot = await getDocs(
-    query(collection(db, OFFERS_COLLECTION), where('couponCode', '==', normalizedCouponCode)),
-  );
-  const hasDuplicate = duplicateSnapshot.docs.some(document => document.id !== offerIdToIgnore);
-  if (hasDuplicate) {
-    throw new Error('Coupon code already exists.');
+  try {
+    const normalizedCouponCode = normalizeCouponCode(couponCode);
+    const duplicateSnapshot = await getDocs(
+      query(collection(db, OFFERS_COLLECTION), where('couponCode', '==', normalizedCouponCode)),
+    );
+    const hasDuplicate = duplicateSnapshot.docs.some(document => document.id !== offerIdToIgnore);
+    if (hasDuplicate) {
+      throw new Error('Coupon code already exists.');
+    }
+  } catch (error) {
+    throw toAppServiceError(error, 'Unable to validate the coupon code.', 'validation');
   }
 };
 
 export const createOfferRecord = async (offerInput: OfferInput) => {
-  const normalizedCouponCode = normalizeCouponCode(offerInput.couponCode);
-  await assertCouponCodeUnique(normalizedCouponCode);
+  try {
+    const normalizedCouponCode = normalizeCouponCode(offerInput.couponCode);
+    await assertCouponCodeUnique(normalizedCouponCode);
 
-  const payload: Record<string, unknown> = {
-    title: offerInput.title.trim(),
-    description: offerInput.description.trim(),
-    couponCode: normalizedCouponCode,
-    discountType: offerInput.discountType,
-    discountValue: offerInput.discountValue,
-    minOrderAmount: offerInput.minOrderAmount,
-    isActive: offerInput.isActive,
-    createdAt: serverTimestamp(),
-  };
+    const payload: Record<string, unknown> = {
+      title: offerInput.title.trim(),
+      description: offerInput.description.trim(),
+      couponCode: normalizedCouponCode,
+      discountType: offerInput.discountType,
+      discountValue: offerInput.discountValue,
+      minOrderAmount: offerInput.minOrderAmount,
+      isActive: offerInput.isActive,
+      createdAt: serverTimestamp(),
+    };
 
-  if (typeof offerInput.maxDiscountAmount === 'number') {
-    payload.maxDiscountAmount = offerInput.maxDiscountAmount;
+    if (typeof offerInput.maxDiscountAmount === 'number') {
+      payload.maxDiscountAmount = offerInput.maxDiscountAmount;
+    }
+
+    await addDoc(collection(db, OFFERS_COLLECTION), payload);
+  } catch (error) {
+    throw toAppServiceError(error, 'Unable to create the offer.', 'network');
   }
-
-  await addDoc(collection(db, OFFERS_COLLECTION), payload);
 };
 
 export const updateOfferRecord = async (offerId: string, offerInput: OfferInput) => {
-  const normalizedCouponCode = normalizeCouponCode(offerInput.couponCode);
-  await assertCouponCodeUnique(normalizedCouponCode, offerId);
+  try {
+    const normalizedCouponCode = normalizeCouponCode(offerInput.couponCode);
+    await assertCouponCodeUnique(normalizedCouponCode, offerId);
 
-  await updateDoc(doc(db, OFFERS_COLLECTION, offerId), {
-    title: offerInput.title.trim(),
-    description: offerInput.description.trim(),
-    couponCode: normalizedCouponCode,
-    discountType: offerInput.discountType,
-    discountValue: offerInput.discountValue,
-    minOrderAmount: offerInput.minOrderAmount,
-    isActive: offerInput.isActive,
-    maxDiscountAmount: typeof offerInput.maxDiscountAmount === 'number'
-      ? offerInput.maxDiscountAmount
-      : deleteField(),
-  });
+    await updateDoc(doc(db, OFFERS_COLLECTION, offerId), {
+      title: offerInput.title.trim(),
+      description: offerInput.description.trim(),
+      couponCode: normalizedCouponCode,
+      discountType: offerInput.discountType,
+      discountValue: offerInput.discountValue,
+      minOrderAmount: offerInput.minOrderAmount,
+      isActive: offerInput.isActive,
+      maxDiscountAmount: typeof offerInput.maxDiscountAmount === 'number'
+        ? offerInput.maxDiscountAmount
+        : deleteField(),
+    });
+  } catch (error) {
+    throw toAppServiceError(error, 'Unable to update the offer.', 'network');
+  }
 };
 
 export const deleteOfferRecord = async (offerId: string) => {
-  await deleteDoc(doc(db, OFFERS_COLLECTION, offerId));
+  try {
+    await deleteDoc(doc(db, OFFERS_COLLECTION, offerId));
+  } catch (error) {
+    throw toAppServiceError(error, 'Unable to delete the offer.', 'network');
+  }
 };
 
 export const toggleOfferRecordStatus = async (offerId: string, isActive: boolean) => {
-  await updateDoc(doc(db, OFFERS_COLLECTION, offerId), { isActive });
+  try {
+    await updateDoc(doc(db, OFFERS_COLLECTION, offerId), { isActive });
+  } catch (error) {
+    throw toAppServiceError(error, 'Unable to update offer status.', 'network');
+  }
 };
 
 export const findActiveOfferRecordByCode = async (couponCode: string) => {
@@ -145,7 +167,7 @@ export const findActiveOfferRecordByCode = async (couponCode: string) => {
   } catch (error) {
     const shouldFallback = error instanceof FirebaseError && error.code === 'failed-precondition';
     if (!shouldFallback) {
-      throw error;
+      throw toAppServiceError(error, 'Unable to load the offer.', 'network');
     }
 
     matchingOfferSnapshot = await getDocs(
