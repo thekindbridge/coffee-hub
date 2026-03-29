@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from 'motion/react';
 import { CheckCircle2, LogOut, Mail, MapPin, Phone, User, X } from 'lucide-react';
-import { NotificationSettingsPanel, type PushPermissionState } from '../../../components/NotificationSettingsPanel';
+import { NotificationSettingsPanel } from '../../../components/NotificationSettingsPanel';
+import type { PushPermissionState } from '../../../services/browser/pushNotificationsService';
 import { ensureProfileAddresses } from '../../app/lib/firestoreMappers';
 import type { CustomerProfile } from '../../app/types';
 

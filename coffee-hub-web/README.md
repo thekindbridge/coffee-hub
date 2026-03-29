@@ -1,66 +1,90 @@
-# Coffee HUB
+# Coffee HUB Web
 
-Coffee HUB is a React + Vite ordering app backed by Vercel APIs, Firebase Auth, Firestore, and a mobile-friendly PWA shell. The legacy Bubblewrap/TWA Android wrapper has been removed so the codebase can evolve cleanly toward React Native and additional role-based clients.
+Coffee HUB Web is a React + Vite ordering application backed by Firebase and Vercel APIs.
 
-## Architecture
+## Stack
 
-- Web app: React 19 + Vite + TypeScript
-- Backend: Vercel serverless APIs in `api/`
-- Data: Firebase Authentication + Firestore
-- Realtime operations: Firestore subscriptions for menu, orders, delivery state
-- Mobile installability: PWA manifest + service worker + install prompt
+- React 19
+- TypeScript
+- Vite
+- Firebase Auth
+- Firestore
+- Vercel Functions
+- Tailwind-based styling
 
-## Current checkout mode
+## Features
 
-The checkout flow in this repository currently creates authenticated cash-on-delivery orders through `/api/orders/create`.
+- Customer ordering flow
+- Cart and coupon handling
+- Cash-on-delivery checkout
+- Order history and tracking
+- Admin order and offer management
+- Delivery agent workflow
+- Browser notifications
+- PWA install prompt
 
-If Razorpay support is required, add dedicated payment order creation and payment verification endpoints before wiring a native client to online payments.
+## Project structure
 
-## Setup
+```text
+src/
+  app/                # bootstrap, router, shells
+  pages/              # page containers + page-local components
+  components/         # reusable shared UI
+  features/           # business logic and stateful hooks
+  services/           # firebase, browser, and API integrations
+  hooks/              # shared hook entrypoints
+  store/              # shared stores / compatibility shims
+  utils/              # pure helpers
 
-1. Install dependencies with `npm install`.
-2. Create `.env.local` with Firebase web config values.
-   - `VITE_FIREBASE_VAPID_KEY` for Firebase Cloud Messaging web push.
-3. Configure Vercel server env vars for Firebase Admin:
-   - `FIREBASE_ADMIN_PROJECT_ID`
-   - `FIREBASE_ADMIN_CLIENT_EMAIL`
-   - `FIREBASE_ADMIN_PRIVATE_KEY`
-   - `CRON_SECRET` for the notification flush cron endpoint
-4. Start the web app with `npm run dev`.
-5. Run validation with `npm run lint` and `npm run build`.
+api/                  # Vercel routes
+shared/               # shared order/shop rules
+```
 
-## API surface
+## Commands
+
+```bash
+npm install
+npm run dev
+npm run typecheck
+npm run build
+```
+
+## Core APIs
 
 - `GET /api/menu`
-  Returns clean menu JSON for web or mobile clients.
 - `GET /api/orders`
-  Returns authenticated order history for the signed-in user.
-- `GET /api/orders?scope=all`
-  Admin-only order listing for future dashboards and staff apps.
 - `POST /api/orders/create`
-  Authenticated order creation with server-side pricing validation.
 - `POST /api/create-order`
-  Backward-compatible alias for the same order creation handler.
+- `POST /api/orders/update-status`
 - `POST /api/orders/assign-agent`
-  Admin-only delivery assignment with agent/customer notification triggers.
+- `POST /api/orders/cancel`
 - `POST /api/orders/complete-delivery`
-  Assigned-agent or admin completion endpoint for delivery closeout + customer notification.
 - `POST /api/notifications/register-token`
-  Authenticated FCM token sync for the current user/device.
 - `POST /api/admin/update-shop-timing`
-  Admin-only shop timing updates.
 
-## Firestore collections
+## Environment
 
-- `menu_items`
-- `orders`
-- `offers`
-- `customer_profiles`
-- `agents`
-- `delivery_sessions`
-- `admin_access`
-- `delivery_access`
+Client:
 
-## Future mobile direction
+- `VITE_API_KEY` or `VITE_FIREBASE_API_KEY`
+- `VITE_AUTH_DOMAIN` or `VITE_FIREBASE_AUTH_DOMAIN`
+- `VITE_PROJECT_ID` or `VITE_FIREBASE_PROJECT_ID`
+- `VITE_STORAGE_BUCKET` or `VITE_FIREBASE_STORAGE_BUCKET`
+- `VITE_MESSAGING_SENDER_ID` or `VITE_FIREBASE_MESSAGING_SENDER_ID`
+- `VITE_APP_ID` or `VITE_FIREBASE_APP_ID`
+- `VITE_FIREBASE_VAPID_KEY`
+- `VITE_GOOGLE_MAP_KEY`
+- `VITE_ADMIN_EMAIL`
 
-The backend now exposes reusable JSON endpoints for menu and order retrieval, so the next phase can move shared business rules into APIs while React Native and delivery/admin clients consume the same contract.
+Server:
+
+- `FIREBASE_ADMIN_PROJECT_ID`
+- `FIREBASE_ADMIN_CLIENT_EMAIL`
+- `FIREBASE_ADMIN_PRIVATE_KEY`
+- `CRON_SECRET`
+
+## Notes
+
+- This package is web-only.
+- There is no Android, iOS, Expo, or React Native application in the current project.
+- The lockfile may still contain optional peer metadata from third-party packages, but the app itself does not declare or use any mobile runtime dependencies.

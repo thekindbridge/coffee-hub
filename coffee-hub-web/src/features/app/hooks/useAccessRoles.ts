@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react';
-import { collection, doc, onSnapshot } from 'firebase/firestore';
-import { db } from '../../../services/firebase';
+import {
+  subscribeToAdminAccessEntries,
+  subscribeToAdminAccessStatus,
+  subscribeToDeliveryAccessEntries,
+  subscribeToDeliveryAccessStatus,
+} from '../../../services/firebase/accessService';
 import { ADMIN_EMAIL } from '../lib/constants';
 import type { AccessEntry } from '../types';
 
@@ -37,10 +41,10 @@ export const useAccessRoles = (
 
     const normalizedEmail = currentUserEmail.trim().toLowerCase();
 
-    const unsubscribeAdmin = onSnapshot(
-      doc(db, 'admin_access', normalizedEmail),
-      snapshot => {
-        setIsAdmin(snapshot.exists() || normalizedEmail === ADMIN_EMAIL);
+    const unsubscribeAdmin = subscribeToAdminAccessStatus(
+      normalizedEmail,
+      hasAccess => {
+        setIsAdmin(hasAccess || normalizedEmail === ADMIN_EMAIL);
       },
       error => {
         console.error('Failed to verify admin access', error);
@@ -48,11 +52,9 @@ export const useAccessRoles = (
       },
     );
 
-    const unsubscribeDelivery = onSnapshot(
-      doc(db, 'agents', normalizedEmail),
-      snapshot => {
-        setIsDeliveryAgent(snapshot.exists());
-      },
+    const unsubscribeDelivery = subscribeToDeliveryAccessStatus(
+      normalizedEmail,
+      setIsDeliveryAgent,
       error => {
         console.error('Failed to verify delivery agent access', error);
         setIsDeliveryAgent(false);
@@ -73,45 +75,16 @@ export const useAccessRoles = (
       return;
     }
 
-    const unsubscribeAdmins = onSnapshot(
-      collection(db, 'admin_access'),
-      snapshot => {
-        const entries = snapshot.docs
-          .flatMap(docSnapshot => {
-            const data = docSnapshot.data() as Record<string, unknown>;
-            const emailValue = ((data.email as string) || docSnapshot.id || '')
-              .trim()
-              .toLowerCase();
-            if (!emailValue) return [];
-            return [{ id: docSnapshot.id, email: emailValue, role: 'admin' } satisfies AccessEntry];
-          })
-          .sort((a, b) => a.email.localeCompare(b.email));
-        setAdminAccessEntries(entries);
-      },
+    const unsubscribeAdmins = subscribeToAdminAccessEntries(
+      setAdminAccessEntries,
       error => {
         console.error('Failed to load admin access list', error);
         setAdminAccessEntries([]);
       },
     );
 
-    const unsubscribeAgents = onSnapshot(
-      collection(db, 'agents'),
-      snapshot => {
-        const entries = snapshot.docs
-          .flatMap(docSnapshot => {
-            const data = docSnapshot.data() as Record<string, unknown>;
-            const emailValue = ((data.email as string) || '').trim().toLowerCase();
-            if (!emailValue) return [];
-            return [{
-              id: docSnapshot.id,
-              email: emailValue,
-              role: ((data.role as AccessEntry['role']) || 'delivery'),
-              accessOnly: data.accessOnly === true,
-            } satisfies AccessEntry];
-          })
-          .sort((a, b) => a.email.localeCompare(b.email));
-        setDeliveryAccessEntries(entries);
-      },
+    const unsubscribeAgents = subscribeToDeliveryAccessEntries(
+      setDeliveryAccessEntries,
       error => {
         console.error('Failed to load delivery access list', error);
         setDeliveryAccessEntries([]);

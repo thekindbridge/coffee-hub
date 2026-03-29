@@ -1,18 +1,13 @@
 import { useEffect, useState } from 'react';
-import {
-  collection,
-  doc,
-  onSnapshot,
-  serverTimestamp,
-  setDoc,
-} from 'firebase/firestore';
-import { db } from '../../../services/firebase';
 import type { CustomerProfile, StaffProfile, StaffRole } from '../types';
+import { seedMainAdminAccess } from '../../../services/firebase/accessService';
+import {
+  subscribeToCustomerProfile,
+  subscribeToStaffProfile,
+} from '../../../services/firebase/profileService';
 import {
   EMPTY_PROFILE,
   EMPTY_STAFF_PROFILE,
-  mapProfileDocToProfile,
-  mapStaffProfileDocToProfile,
 } from '../lib/firestoreMappers';
 
 export type ProfileData = {
@@ -40,16 +35,7 @@ export const useProfileData = (
   // Seed main admin doc on first login
   useEffect(() => {
     if (!isMainAdmin) return;
-    void setDoc(
-      doc(db, 'admin_access', adminEmail),
-      {
-        email: adminEmail,
-        role: 'admin',
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true },
-    ).catch(error => {
+    void seedMainAdminAccess(adminEmail).catch(error => {
       console.error('Failed to seed main admin access', error);
     });
   }, [isMainAdmin, adminEmail]);
@@ -61,24 +47,16 @@ export const useProfileData = (
       return;
     }
 
-    const unsubscribe = onSnapshot(
-      doc(db, 'users', currentUserId),
-      snapshot => {
-        if (!snapshot.exists()) {
-          setProfileSaved(EMPTY_PROFILE);
-          return;
-        }
-        setProfileSaved(mapProfileDocToProfile(snapshot.data() as Record<string, unknown>));
-      },
+    const unsubscribe = subscribeToCustomerProfile(
+      currentUserId,
+      setProfileSaved,
       error => {
         console.error('Failed to load customer profile', error);
         setProfileSaved(EMPTY_PROFILE);
       },
     );
 
-    return () => {
-      unsubscribe();
-    };
+    return unsubscribe;
   }, [currentUserId]);
 
   // Staff profile subscription
@@ -91,29 +69,17 @@ export const useProfileData = (
       return;
     }
 
-    const unsubscribe = onSnapshot(
-      doc(db, 'users', currentUserId),
-      snapshot => {
-        if (!snapshot.exists()) {
-          setStaffProfileSaved({ ...EMPTY_STAFF_PROFILE, role: fallbackRole });
-          return;
-        }
-        setStaffProfileSaved(
-          mapStaffProfileDocToProfile(
-            snapshot.data() as Record<string, unknown>,
-            fallbackRole,
-          ),
-        );
-      },
+    const unsubscribe = subscribeToStaffProfile(
+      currentUserId,
+      fallbackRole,
+      setStaffProfileSaved,
       error => {
         console.error('Failed to load staff profile', error);
         setStaffProfileSaved({ ...EMPTY_STAFF_PROFILE, role: fallbackRole });
       },
     );
 
-    return () => {
-      unsubscribe();
-    };
+    return unsubscribe;
   }, [currentUserId, isAdmin, isDeliveryAgent]);
 
   return { profileSaved, staffProfileSaved };

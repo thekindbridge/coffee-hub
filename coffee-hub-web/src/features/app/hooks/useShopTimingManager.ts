@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
-import { auth } from '../../../services/firebase';
-import { postApi } from '../../../utils/apiClient';
+import { updateShopTimingRequest } from '../../../services/api/shopService';
+import { getCurrentUserIdToken } from '../../../services/firebase/authService';
 import type { ShopTimingDraft } from '../types';
-import type { UpdateShopTimingResponse } from '../../../types';
 import {
   validateShopTiming,
   type ShopTiming,
@@ -51,8 +50,8 @@ export const useShopTimingManager = ({
       return;
     }
 
-    const timeoutId = window.setTimeout(() => setShopTimingSuccess(''), 2500);
-    return () => window.clearTimeout(timeoutId);
+    const timeoutId = setTimeout(() => setShopTimingSuccess(''), 2500);
+    return () => clearTimeout(timeoutId);
   }, [shopTimingSuccess]);
 
   const handleShopTimingDraftChange = (draft: ShopTimingDraft) => {
@@ -87,17 +86,13 @@ export const useShopTimingManager = ({
     setShopTimingSuccess('');
 
     try {
-      const idToken = await auth.currentUser?.getIdToken(true);
+      const idToken = await getCurrentUserIdToken(true);
       if (!idToken) {
         setShopTimingError('Please sign in again before updating shop timing.');
         return;
       }
 
-      const response = await postApi<UpdateShopTimingResponse>(
-        '/api/admin/update-shop-timing',
-        { openTime, closeTime },
-        idToken,
-      );
+      const response = await updateShopTimingRequest({ openTime, closeTime }, idToken);
 
       setShopTimingDraft(buildDraft(response.shopTiming));
       setShopTimingSuccess(response.message || 'Shop timing updated successfully.');

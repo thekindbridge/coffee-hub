@@ -1,8 +1,6 @@
 import { useEffect, useState } from 'react';
-import { collection, onSnapshot } from 'firebase/firestore';
-import { db } from '../../../services/firebase';
 import type { MenuItem } from '../../../types';
-import { mapMenuDocToMenuItem } from '../lib/firestoreMappers';
+import { subscribeToAvailableMenuItems } from '../../../services/firebase/menuService';
 
 export type MenuData = {
   menu: MenuItem[];
@@ -25,12 +23,8 @@ export const useMenuData = (isLoggedIn: boolean): MenuData => {
     }
 
     setIsMenuLoading(true);
-    const unsubscribe = onSnapshot(
-      collection(db, 'menu_items'),
-      snapshot => {
-        const items = snapshot.docs
-          .map(mapMenuDocToMenuItem)
-          .filter(item => item.is_available);
+    const unsubscribe = subscribeToAvailableMenuItems(
+      items => {
         setMenu(items);
         setIsMenuLoading(false);
       },
@@ -39,10 +33,7 @@ export const useMenuData = (isLoggedIn: boolean): MenuData => {
         setIsMenuLoading(false);
       },
     );
-
-    return () => {
-      unsubscribe();
-    };
+    return unsubscribe;
   }, [isLoggedIn]);
 
   return { menu, isMenuLoading };

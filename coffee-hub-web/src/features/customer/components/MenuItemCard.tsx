@@ -1,4 +1,4 @@
-import type { FC } from 'react';
+import { memo } from 'react';
 import { motion } from 'motion/react';
 import { Coffee, Flame, Leaf, Minus, Plus, Star } from 'lucide-react';
 import { CURRENCY_SYMBOL } from '../../app/lib/constants';
@@ -24,13 +24,14 @@ const SpiceMeter = ({ level }: { level: number }) => (
   </div>
 );
 
-export const MenuItemCard: FC<MenuItemCardProps> = ({
+export const MenuItemCard = memo(function MenuItemCard({
   item,
   cartQuantity,
   isShopOpen,
   shopAvailabilityMessage,
   onAdd,
-}) => (
+}: MenuItemCardProps) {
+  return (
   <motion.article
     layout
     whileHover={isShopOpen ? { y: -4, scale: 1.01 } : undefined}
@@ -133,4 +134,5 @@ export const MenuItemCard: FC<MenuItemCardProps> = ({
       </div>
     </div>
   </motion.article>
-);
+  );
+});

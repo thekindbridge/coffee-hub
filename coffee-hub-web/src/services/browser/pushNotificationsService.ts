@@ -1,0 +1,147 @@
+import {
+  getMessaging,
+  getToken,
+  isSupported,
+  onMessage,
+  type MessagePayload,
+} from 'firebase/messaging';
+import { app } from '../firebase';
+import { registerPushToken } from '../api/notificationsService';
+import {
+  readBrowserStorage,
+  removeBrowserStorage,
+  writeBrowserStorage,
+} from './storageService';
+
+export type PushPermissionState =
+  | 'default'
+  | 'denied'
+  | 'granted'
+  | 'unsupported';
+
+export type ForegroundNotification = {
+  id: string;
+  title: string;
+  body: string;
+  url: string;
+};
+
+const PUSH_PROMPT_DISMISS_KEY = 'coffee_hub_push_prompt_dismissed';
+
+export const getBrowserPushPermissionState = (): PushPermissionState => {
+  if (typeof window === 'undefined' || typeof Notification === 'undefined') {
+    return 'unsupported';
+  }
+
+  return Notification.permission;
+};
+
+export const detectBrowserMessagingSupport = async () => {
+  try {
+    return await isSupported();
+  } catch (error) {
+    console.error('Failed to detect Firebase Messaging support', error);
+    return false;
+  }
+};
+
+export const parseForegroundMessage = (
+  payload: MessagePayload,
+): ForegroundNotification | null => {
+  const data = payload.data || {};
+  const title = (data.title || payload.notification?.title || '').trim();
+  const body = (data.body || payload.notification?.body || '').trim();
+  const url = (data.url || '').trim();
+
+  if (!title && !body) {
+    return null;
+  }
+
+  return {
+    id: `${Date.now()}`,
+    title: title || 'Coffee HUB',
+    body,
+    url,
+  };
+};
+
+export const subscribeToForegroundMessages = (
+  onData: (notification: ForegroundNotification | null) => void,
+) => {
+  const messaging = getMessaging(app);
+
+  return onMessage(messaging, payload => {
+    onData(parseForegroundMessage(payload));
+  });
+};
+
+const getPushServiceWorkerRegistration = async () => {
+  if (typeof window === 'undefined' || !('serviceWorker' in navigator)) {
+    return null;
+  }
+
+  const existingRegistration = await navigator.serviceWorker.getRegistration('/');
+  if (existingRegistration) {
+    return existingRegistration;
+  }
+
+  return navigator.serviceWorker.register('/sw.js');
+};
+
+export const syncBrowserPushRegistration = async ({
+  idToken,
+  permissionState,
+}: {
+  idToken: string;
+  permissionState: Exclude<PushPermissionState, 'unsupported' | 'default'>;
+}) => {
+  let token = '';
+
+  if (permissionState === 'granted') {
+    const vapidKey = (import.meta.env.VITE_FIREBASE_VAPID_KEY || '').trim();
+    if (!vapidKey) {
+      throw new Error('VITE_FIREBASE_VAPID_KEY is missing.');
+    }
+
+    const registration = await getPushServiceWorkerRegistration();
+    if (!registration) {
+      throw new Error('Push service worker registration failed.');
+    }
+
+    token = await getToken(getMessaging(app), {
+      vapidKey,
+      serviceWorkerRegistration: registration,
+    });
+
+    if (!token) {
+      throw new Error('Browser did not return an FCM token.');
+    }
+  }
+
+  await registerPushToken(
+    {
+      permission: permissionState,
+      token,
+    },
+    idToken,
+  );
+};
+
+export const requestBrowserPushPermission = async (): Promise<PushPermissionState> => {
+  if (typeof Notification === 'undefined') {
+    return 'unsupported';
+  }
+
+  return Notification.requestPermission();
+};
+
+export const isPushPermissionBannerDismissed = () =>
+  readBrowserStorage(PUSH_PROMPT_DISMISS_KEY) === 'true';
+
+export const dismissPushPermissionBanner = () => {
+  writeBrowserStorage(PUSH_PROMPT_DISMISS_KEY, 'true');
+};
+
+export const clearPushPermissionBannerDismissal = () => {
+  removeBrowserStorage(PUSH_PROMPT_DISMISS_KEY);
+};

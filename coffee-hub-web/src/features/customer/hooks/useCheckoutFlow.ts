@@ -5,7 +5,8 @@
  * usePaymentFlow (checkout steps + address selection + COD order placement)
  * into a single API, preserving full backward compatibility.
  */
-import { useCart } from './useCart';
+import { useCallback } from 'react';
+import { useCart } from '../../cart/hooks/useCart';
 import { usePaymentFlow } from './usePaymentFlow';
 import type { MenuItem, Offer, Order, ShopTiming } from '../../../types';
 import type { CustomerProfile } from '../../app/types';
@@ -47,13 +48,13 @@ export const useCheckoutFlow = ({
     onOrderPlaced,
   });
 
-  const handleAddToCart = (item: MenuItem, delta: number) => {
+  const handleAddToCart = useCallback((item: MenuItem, delta: number) => {
     if (delta > 0 && !orderFlow.isShopOpen) {
       return;
     }
 
     cart.handleAddToCart(item, delta);
-  };
+  }, [cart.handleAddToCart, orderFlow.isShopOpen]);
 
   return {
     // Cart

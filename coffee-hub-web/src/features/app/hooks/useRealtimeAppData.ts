@@ -12,7 +12,7 @@
  *   useProfileData    → customer & staff profile documents
  *   useDeliveryData   → agents, sessions, GPS tracker
  */
-import { useAuthState } from './useAuthState';
+import { useAuth } from '../../auth/hooks/useAuth';
 import { useAccessRoles } from './useAccessRoles';
 import { useMenuData } from './useMenuData';
 import { useOrdersData } from './useOrdersData';
@@ -22,7 +22,7 @@ import { useShopTiming } from './useShopTiming';
 import { ADMIN_EMAIL } from '../lib/constants';
 
 export const useRealtimeAppData = () => {
-  const auth = useAuthState();
+  const auth = useAuth();
 
   const roles = useAccessRoles(auth.currentUserEmail, auth.normalizedCurrentEmail);
 

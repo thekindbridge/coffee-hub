@@ -1,7 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
-import { collection, doc, onSnapshot, query, where } from 'firebase/firestore';
-import { db } from '../../../services/firebase';
 import {
   createAgentTracker,
   type AgentTrackerPermissionState,
@@ -9,12 +7,12 @@ import {
 } from '../../../agent/agentTracker';
 import type { DeliveryAgent, DeliveryLocation, DeliverySession, Order } from '../../../types';
 import { DEFAULT_TRACKER_STATUS } from '../lib/constants';
+import { fetchOrderItemsMap } from '../../../services/firebase/orderItemsService';
 import {
-  fetchOrderItemsMap,
-  mapDeliveryAgentDocToAgent,
-  mapDeliverySessionRecordToSession,
-  mapOrderDocToOrder,
-} from '../lib/firestoreMappers';
+  subscribeToAgentOrdersByStatus,
+  subscribeToCurrentDeliverySession,
+  subscribeToDeliveryAgents,
+} from '../../../services/firebase/deliveryService';
 
 export type DeliveryData = {
   deliveryAgents: DeliveryAgent[];
@@ -71,12 +69,8 @@ export const useDeliveryData = (
       return;
     }
 
-    const unsubscribe = onSnapshot(
-      collection(db, 'agents'),
-      snapshot => {
-        const agents = snapshot.docs
-          .filter(d => (d.data() as Record<string, unknown>).accessOnly !== true)
-          .map(mapDeliveryAgentDocToAgent);
+    const unsubscribe = subscribeToDeliveryAgents(
+      agents => {
         setDeliveryAgents(agents);
       },
       error => {
@@ -107,17 +101,10 @@ export const useDeliveryData = (
     agentId: string,
     setOrders: Dispatch<SetStateAction<Order[]>>,
     snapshotVersionRef: React.MutableRefObject<number>,
-  ) => onSnapshot(
-    query(
-      collection(db, 'orders'),
-      where('assignedAgentId', '==', agentId),
-      where('status', '==', status),
-    ),
-    snapshot => {
-      const mappedOrders = snapshot.docs
-        .map(mapOrderDocToOrder)
-        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-
+  ) => subscribeToAgentOrdersByStatus(
+    agentId,
+    status,
+    mappedOrders => {
       setOrders(mappedOrders);
 
       const snapshotVersion = snapshotVersionRef.current + 1;
@@ -191,30 +178,16 @@ export const useDeliveryData = (
       return;
     }
 
-    const unsubscribe = onSnapshot(
-      doc(db, 'delivery_sessions', currentDeliveryOrder.id),
-      snapshot => {
-        if (!snapshot.exists()) {
-          setDeliverySessions([]);
-          return;
-        }
-
-        setDeliverySessions([
-          mapDeliverySessionRecordToSession(
-            snapshot.id,
-            snapshot.data() as Record<string, unknown>,
-          ),
-        ]);
-      },
+    const unsubscribe = subscribeToCurrentDeliverySession(
+      currentDeliveryOrder.id,
+      setDeliverySessions,
       error => {
         console.error('Failed to subscribe to current delivery session', error);
         setDeliverySessions([]);
       },
     );
 
-    return () => {
-      unsubscribe();
-    };
+    return unsubscribe;
   }, [currentDeliveryOrder?.id]);
 
   // Stop tracker on unmount

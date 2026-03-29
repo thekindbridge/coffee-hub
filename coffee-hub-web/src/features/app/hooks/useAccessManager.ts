@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react';
-import { deleteDoc, doc, serverTimestamp, setDoc } from 'firebase/firestore';
-import { db } from '../../../services/firebase';
+import {
+  addAdminAccessEntry,
+  addDeliveryAccessEntry,
+  removeAdminAccessEntry,
+  removeDeliveryAccessEntry,
+} from '../../../services/firebase/accessService';
 import type { AccessEntry } from '../types';
 
 type UseAccessManagerParams = {
@@ -63,14 +67,14 @@ export const useAccessManager = ({
   // Auto-dismiss success toasts
   useEffect(() => {
     if (!adminAccessSuccess) return;
-    const id = window.setTimeout(() => setAdminAccessSuccess(''), 2500);
-    return () => window.clearTimeout(id);
+    const id = setTimeout(() => setAdminAccessSuccess(''), 2500);
+    return () => clearTimeout(id);
   }, [adminAccessSuccess]);
 
   useEffect(() => {
     if (!deliveryAccessSuccess) return;
-    const id = window.setTimeout(() => setDeliveryAccessSuccess(''), 2500);
-    return () => window.clearTimeout(id);
+    const id = setTimeout(() => setDeliveryAccessSuccess(''), 2500);
+    return () => clearTimeout(id);
   }, [deliveryAccessSuccess]);
 
   const handleAddAdminAccess = async () => {
@@ -89,11 +93,7 @@ export const useAccessManager = ({
     setAdminAccessError('');
     setAdminAccessSuccess('');
     try {
-      await setDoc(
-        doc(db, 'admin_access', normalizedEmail),
-        { email: normalizedEmail, role: 'admin', createdAt: serverTimestamp(), updatedAt: serverTimestamp() },
-        { merge: true },
-      );
+      await addAdminAccessEntry(normalizedEmail);
       setAdminAccessInput('');
       setAdminAccessSuccess('Admin access added.');
     } catch (err) {
@@ -112,7 +112,7 @@ export const useAccessManager = ({
     setAdminAccessError('');
     setAdminAccessSuccess('');
     try {
-      await deleteDoc(doc(db, 'admin_access', entry.id));
+      await removeAdminAccessEntry(entry.id);
       setAdminAccessSuccess('Admin access removed.');
     } catch (err) {
       console.error('Failed to remove admin access', err);
@@ -137,19 +137,7 @@ export const useAccessManager = ({
     setDeliveryAccessError('');
     setDeliveryAccessSuccess('');
     try {
-      await setDoc(
-        doc(db, 'agents', normalizedEmail),
-        {
-          email: normalizedEmail,
-          role: 'delivery',
-          accessOnly: true,
-          isActive: false,
-          status: 'BUSY',
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true },
-      );
+      await addDeliveryAccessEntry(normalizedEmail);
       setDeliveryAccessInput('');
       setDeliveryAccessSuccess('Delivery agent access added.');
     } catch (err) {
@@ -168,7 +156,7 @@ export const useAccessManager = ({
     setDeliveryAccessError('');
     setDeliveryAccessSuccess('');
     try {
-      await deleteDoc(doc(db, 'agents', entry.id));
+      await removeDeliveryAccessEntry(entry.id);
       setDeliveryAccessSuccess('Delivery agent access removed.');
     } catch (err) {
       console.error('Failed to remove delivery agent access', err);

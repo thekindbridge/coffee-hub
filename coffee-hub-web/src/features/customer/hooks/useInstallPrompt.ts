@@ -1,26 +1,12 @@
 import { useEffect, useState } from 'react';
-
-type BeforeInstallPromptEvent = Event & {
-  prompt: () => Promise<void>;
-  userChoice: Promise<{
-    outcome: 'accepted' | 'dismissed';
-    platform: string;
-  }>;
-};
-
-const DISMISS_STORAGE_KEY = 'coffee-hub-install-dismissed';
-
-const isStandaloneMode = () => {
-  if (typeof window === 'undefined') {
-    return false;
-  }
-
-  const navigatorWithStandalone = window.navigator as Navigator & {
-    standalone?: boolean;
-  };
-
-  return window.matchMedia('(display-mode: standalone)').matches || navigatorWithStandalone.standalone === true;
-};
+import {
+  clearInstallPromptDismissal,
+  dismissInstallPrompt,
+  isInstallPromptDismissed,
+  isStandaloneInstallMode,
+  subscribeToInstallPromptEvents,
+  type BeforeInstallPromptEvent,
+} from '../../../services/browser/installPromptService';
 
 export const useInstallPrompt = () => {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
@@ -28,44 +14,28 @@ export const useInstallPrompt = () => {
   const [isDismissed, setIsDismissed] = useState(false);
 
   useEffect(() => {
-    if (typeof window === 'undefined') {
-      return;
-    }
+    setIsInstalled(isStandaloneInstallMode());
+    setIsDismissed(isInstallPromptDismissed());
 
-    setIsInstalled(isStandaloneMode());
-    setIsDismissed(window.localStorage.getItem(DISMISS_STORAGE_KEY) === '1');
+    return subscribeToInstallPromptEvents({
+      onBeforeInstallPrompt: installEvent => {
+        if (isStandaloneInstallMode() || isInstallPromptDismissed()) {
+          return;
+        }
 
-    const handleBeforeInstallPrompt = (event: Event) => {
-      const installEvent = event as BeforeInstallPromptEvent;
-      installEvent.preventDefault();
-
-      if (isStandaloneMode() || window.localStorage.getItem(DISMISS_STORAGE_KEY) === '1') {
-        return;
-      }
-
-      setDeferredPrompt(installEvent);
-    };
-
-    const handleAppInstalled = () => {
-      setIsInstalled(true);
-      setIsDismissed(false);
-      setDeferredPrompt(null);
-      window.localStorage.removeItem(DISMISS_STORAGE_KEY);
-    };
-
-    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt as EventListener);
-    window.addEventListener('appinstalled', handleAppInstalled);
-
-    return () => {
-      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt as EventListener);
-      window.removeEventListener('appinstalled', handleAppInstalled);
-    };
+        setDeferredPrompt(installEvent);
+      },
+      onAppInstalled: () => {
+        setIsInstalled(true);
+        setIsDismissed(false);
+        setDeferredPrompt(null);
+        clearInstallPromptDismissal();
+      },
+    });
   }, []);
 
   const dismissPrompt = () => {
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem(DISMISS_STORAGE_KEY, '1');
-    }
+    dismissInstallPrompt();
     setIsDismissed(true);
   };
 
@@ -80,9 +50,7 @@ export const useInstallPrompt = () => {
 
     if (choice.outcome === 'accepted') {
       setIsInstalled(true);
-      if (typeof window !== 'undefined') {
-        window.localStorage.removeItem(DISMISS_STORAGE_KEY);
-      }
+      clearInstallPromptDismissal();
       return true;
     }
 

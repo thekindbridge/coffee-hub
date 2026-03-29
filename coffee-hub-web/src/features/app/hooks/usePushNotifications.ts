@@ -1,21 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { getCurrentUserIdToken } from '../../../services/firebase/authService';
 import {
-  getMessaging,
-  getToken,
-  isSupported,
-  onMessage,
-  type MessagePayload,
-} from 'firebase/messaging';
-import { app, auth } from '../../../services/firebase';
-import { postApi } from '../../../utils/apiClient';
-import type { PushPermissionState } from '../../../components/NotificationSettingsPanel';
-
-type ForegroundNotification = {
-  id: string;
-  title: string;
-  body: string;
-  url: string;
-};
+  clearPushPermissionBannerDismissal,
+  detectBrowserMessagingSupport,
+  dismissPushPermissionBanner,
+  getBrowserPushPermissionState,
+  isPushPermissionBannerDismissed,
+  requestBrowserPushPermission,
+  subscribeToForegroundMessages,
+  syncBrowserPushRegistration,
+  type ForegroundNotification,
+  type PushPermissionState,
+} from '../../../services/browser/pushNotificationsService';
 
 type UsePushNotificationsParams = {
   isAuthReady: boolean;
@@ -35,81 +31,33 @@ type PushNotificationsState = {
   dismissForegroundNotification: () => void;
 };
 
-const PUSH_PROMPT_DISMISS_KEY = 'coffee_hub_push_prompt_dismissed';
-
-const getBrowserPermissionState = (): PushPermissionState => {
-  if (typeof window === 'undefined' || typeof Notification === 'undefined') {
-    return 'unsupported';
-  }
-
-  return Notification.permission;
-};
-
-const parseForegroundMessage = (
-  payload: MessagePayload,
-): ForegroundNotification | null => {
-  const data = payload.data || {};
-  const title = (data.title || payload.notification?.title || '').trim();
-  const body = (data.body || payload.notification?.body || '').trim();
-  const url = (data.url || '').trim();
-
-  if (!title && !body) {
-    return null;
-  }
-
-  return {
-    id: `${Date.now()}`,
-    title: title || 'Coffee HUB',
-    body,
-    url,
-  };
-};
-
-const getPushServiceWorkerRegistration = async () => {
-  if (typeof window === 'undefined' || !('serviceWorker' in navigator)) {
-    return null;
-  }
-
-  const existingRegistration = await navigator.serviceWorker.getRegistration('/');
-  if (existingRegistration) {
-    return existingRegistration;
-  }
-
-  return navigator.serviceWorker.register('/sw.js');
-};
-
 export const usePushNotifications = ({
   isAuthReady,
   isLoggedIn,
   currentUserId,
 }: UsePushNotificationsParams): PushNotificationsState => {
   const [permissionState, setPermissionState] = useState<PushPermissionState>(
-    getBrowserPermissionState(),
+    getBrowserPushPermissionState(),
   );
   const [isMessagingSupported, setIsMessagingSupported] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncError, setSyncError] = useState('');
   const [foregroundNotification, setForegroundNotification] =
     useState<ForegroundNotification | null>(null);
-  const [isPermissionBannerDismissed, setIsPermissionBannerDismissed] = useState(() => {
-    if (typeof window === 'undefined') {
-      return false;
-    }
-
-    return window.localStorage.getItem(PUSH_PROMPT_DISMISS_KEY) === 'true';
-  });
+  const [isPermissionBannerDismissed, setIsPermissionBannerDismissed] =
+    useState(isPushPermissionBannerDismissed);
   const lastSyncedKeyRef = useRef('');
 
   useEffect(() => {
     let isMounted = true;
 
-    void isSupported().then(supported => {
+    void detectBrowserMessagingSupport().then(supported => {
       if (!isMounted) {
         return;
       }
 
       setIsMessagingSupported(supported);
-      setPermissionState(supported ? getBrowserPermissionState() : 'unsupported');
+      setPermissionState(supported ? getBrowserPushPermissionState() : 'unsupported');
     }).catch(error => {
       console.error('Failed to detect Firebase Messaging support', error);
       if (!isMounted) {
@@ -131,19 +79,11 @@ export const usePushNotifications = ({
       return undefined;
     }
 
-    const messaging = getMessaging(app);
-    const unsubscribe = onMessage(messaging, payload => {
-      const nextNotification = parseForegroundMessage(payload);
-      if (!nextNotification) {
-        return;
+    return subscribeToForegroundMessages(nextNotification => {
+      if (nextNotification) {
+        setForegroundNotification(nextNotification);
       }
-
-      setForegroundNotification(nextNotification);
     });
-
-    return () => {
-      unsubscribe();
-    };
   }, [isMessagingSupported, isLoggedIn]);
 
   useEffect(() => {
@@ -164,7 +104,7 @@ export const usePushNotifications = ({
     let isCancelled = false;
 
     const syncRegistration = async () => {
-      const idToken = await auth.currentUser?.getIdToken();
+      const idToken = await getCurrentUserIdToken();
       if (!idToken || isCancelled) {
         return;
       }
@@ -173,41 +113,14 @@ export const usePushNotifications = ({
       setSyncError('');
 
       try {
-        let token = '';
-
-        if (permissionState === 'granted') {
-          const vapidKey = (import.meta.env.VITE_FIREBASE_VAPID_KEY || '').trim();
-          if (!vapidKey) {
-            throw new Error('VITE_FIREBASE_VAPID_KEY is missing.');
-          }
-
-          const registration = await getPushServiceWorkerRegistration();
-          if (!registration) {
-            throw new Error('Push service worker registration failed.');
-          }
-
-          token = await getToken(getMessaging(app), {
-            vapidKey,
-            serviceWorkerRegistration: registration,
-          });
-
-          if (!token) {
-            throw new Error('Browser did not return an FCM token.');
-          }
-        }
+        await syncBrowserPushRegistration({
+          idToken,
+          permissionState,
+        });
 
         if (isCancelled) {
           return;
         }
-
-        await postApi(
-          '/api/notifications/register-token',
-          {
-            permission: permissionState,
-            token,
-          },
-          idToken,
-        );
 
         lastSyncedKeyRef.current = syncKey;
       } catch (error) {
@@ -240,19 +153,17 @@ export const usePushNotifications = ({
   ]);
 
   const requestPermission = async () => {
-    if (!isMessagingSupported || typeof Notification === 'undefined') {
+    if (!isMessagingSupported) {
       setPermissionState('unsupported');
       return;
     }
 
     try {
       setSyncError('');
-      const nextPermission = await Notification.requestPermission();
+      const nextPermission = await requestBrowserPushPermission();
       setPermissionState(nextPermission);
       setIsPermissionBannerDismissed(false);
-      if (typeof window !== 'undefined') {
-        window.localStorage.removeItem(PUSH_PROMPT_DISMISS_KEY);
-      }
+      clearPushPermissionBannerDismissal();
     } catch (error) {
       console.error('Notification permission request failed', error);
       setSyncError('Unable to request browser notification permission.');
@@ -261,9 +172,7 @@ export const usePushNotifications = ({
 
   const dismissPermissionBanner = () => {
     setIsPermissionBannerDismissed(true);
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem(PUSH_PROMPT_DISMISS_KEY, 'true');
-    }
+    dismissPushPermissionBanner();
   };
 
   const isPermissionBannerVisible = useMemo(

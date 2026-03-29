@@ -1,6 +1,4 @@
 import { useEffect, useState } from 'react';
-import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
-import { db } from '../../../services/firebase';
 import type {
   CustomerProfile,
   NotificationSettings,
@@ -12,10 +10,15 @@ import {
   buildStaffProfileDraft,
   EMPTY_PROFILE,
   EMPTY_STAFF_PROFILE,
-  ensureProfileAddresses,
-  formatPhoneWithPrefix,
 } from '../lib/firestoreMappers';
 import type { DeliveryAgent } from '../../../types';
+import {
+  saveCustomerNotificationSettings,
+  saveCustomerProfile,
+  saveStaffNotificationSettings,
+  saveStaffProfile,
+} from '../../../services/firebase/profileService';
+import { setBodyScrollLocked } from '../../../services/browser/domService';
 
 type UseProfileManagerParams = {
   currentUserId: string;
@@ -101,14 +104,14 @@ export const useProfileManager = ({
   // Auto-dismiss customer profile toast
   useEffect(() => {
     if (!isProfileSavedToastVisible) return;
-    const id = window.setTimeout(() => setIsProfileSavedToastVisible(false), 1800);
-    return () => window.clearTimeout(id);
+    const id = setTimeout(() => setIsProfileSavedToastVisible(false), 1800);
+    return () => clearTimeout(id);
   }, [isProfileSavedToastVisible]);
 
   // Lock body scroll while staff profile drawer is open
   useEffect(() => {
-    document.body.style.overflow = isStaffProfileOpen ? 'hidden' : 'auto';
-    return () => { document.body.style.overflow = 'auto'; };
+    setBodyScrollLocked(isStaffProfileOpen);
+    return () => { setBodyScrollLocked(false); };
   }, [isStaffProfileOpen]);
 
   const handleOpenProfile = () => {
@@ -136,23 +139,7 @@ export const useProfileManager = ({
     setIsProfileSaving(true);
     setProfileError('');
     try {
-      const trimmedAddresses = ensureProfileAddresses(profileDraft.addresses).map(a => a.trim());
-      await setDoc(
-        doc(db, 'users', currentUserId),
-        {
-          name: profileDraft.name.trim(),
-          phone: formatPhoneWithPrefix(profileDraft.phone),
-          email: profileDraft.email.trim(),
-          notificationSettings: profileDraft.notificationSettings,
-          addresses: {
-            address1: trimmedAddresses[0] || '',
-            address2: trimmedAddresses[1] || '',
-            address3: trimmedAddresses[2] || '',
-          },
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true },
-      );
+      await saveCustomerProfile(currentUserId, profileDraft);
       setIsProfileSavedToastVisible(true);
     } catch (error) {
       console.error('Failed to save customer profile', error);
@@ -175,14 +162,7 @@ export const useProfileManager = ({
     setProfileError('');
 
     try {
-      await setDoc(
-        doc(db, 'users', currentUserId),
-        {
-          notificationSettings: settings,
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true },
-      );
+      await saveCustomerNotificationSettings(currentUserId, settings);
     } catch (error) {
       console.error('Failed to save customer notification settings', error);
       setProfileError('Unable to save notification settings right now.');
@@ -194,62 +174,16 @@ export const useProfileManager = ({
       setStaffProfileError('Please sign in to save your profile.');
       return;
     }
-    const role: StaffRole = isAdmin ? 'admin' : 'agent';
     setIsStaffProfileSaving(true);
     setStaffProfileError('');
     try {
-      const payload: Record<string, unknown> = {
-        role,
-        name: staffProfileDraft.name.trim(),
-        phone: formatPhoneWithPrefix(staffProfileDraft.phone),
-        email: staffProfileDraft.email.trim(),
-        notificationSettings: staffProfileDraft.notificationSettings,
-        updatedAt: serverTimestamp(),
-      };
-
-      if (role === 'admin') {
-        payload.adminLocation = staffProfileDraft.adminLocation.trim();
-      }
-      if (role === 'agent') {
-        payload.vehicleType = staffProfileDraft.vehicleType;
-        payload.status = staffProfileDraft.status;
-      }
-
-      await setDoc(doc(db, 'users', currentUserId), payload, { merge: true });
-
-      if (role === 'agent') {
-        const normalizedEmail = (staffProfileDraft.email || currentUserEmail || '')
-          .trim()
-          .toLowerCase();
-        if (!normalizedEmail) throw new Error('Agent email is required');
-
-        const existingAgent = deliveryAgents.find(
-          agent => agent.id === normalizedEmail || agent.email?.toLowerCase() === normalizedEmail,
-        );
-        const shouldMarkOffline = staffProfileDraft.status === 'Offline';
-        const shouldPreserveBusyAssignment =
-          existingAgent?.status === 'busy' && Boolean(existingAgent.current_order_id);
-        const agentStatus = shouldMarkOffline
-          ? 'BUSY'
-          : shouldPreserveBusyAssignment
-            ? 'BUSY'
-            : 'AVAILABLE';
-        const agentPayload: Record<string, unknown> = {
-          name: staffProfileDraft.name.trim(),
-          phone: formatPhoneWithPrefix(staffProfileDraft.phone),
-          email: normalizedEmail,
-          notificationSettings: staffProfileDraft.notificationSettings,
-          vehicle: staffProfileDraft.vehicleType,
-          status: agentStatus,
-          isActive: !shouldMarkOffline,
-          role: 'delivery',
-          accessOnly: false,
-          updatedAt: serverTimestamp(),
-        };
-        if (!existingAgent) agentPayload.createdAt = serverTimestamp();
-
-        await setDoc(doc(db, 'agents', normalizedEmail), agentPayload, { merge: true });
-      }
+      await saveStaffProfile({
+        currentUserEmail,
+        currentUserId,
+        deliveryAgents,
+        isAdmin,
+        staffProfileDraft,
+      });
 
       setIsStaffProfileSavedToastVisible(true);
     } catch (error) {
@@ -274,32 +208,16 @@ export const useProfileManager = ({
     setStaffProfileError('');
 
     try {
-      await setDoc(
-        doc(db, 'users', currentUserId),
-        {
+      await saveStaffNotificationSettings({
+        currentUserEmail,
+        currentUserId,
+        isAdmin,
+        settings,
+        staffProfileDraft: {
+          ...staffProfileDraft,
           notificationSettings: settings,
-          updatedAt: serverTimestamp(),
         },
-        { merge: true },
-      );
-
-      if (role === 'agent') {
-        const normalizedEmail = (staffProfileDraft.email || currentUserEmail || '')
-          .trim()
-          .toLowerCase();
-
-        if (normalizedEmail) {
-          await setDoc(
-            doc(db, 'agents', normalizedEmail),
-            {
-              email: normalizedEmail,
-              notificationSettings: settings,
-              updatedAt: serverTimestamp(),
-            },
-            { merge: true },
-          );
-        }
-      }
+      });
     } catch (error) {
       console.error('Failed to save staff notification settings', error);
       setStaffProfileError('Unable to save notification settings right now.');

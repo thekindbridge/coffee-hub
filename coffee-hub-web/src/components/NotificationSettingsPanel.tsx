@@ -1,9 +1,6 @@
 import { Bell, BellOff, Megaphone, PackageCheck } from 'lucide-react';
 import type { NotificationSettings } from '../features/app/types';
-
-export type PushPermissionState =
-  | NotificationPermission
-  | 'unsupported';
+import type { PushPermissionState } from '../services/browser/pushNotificationsService';
 
 type NotificationSettingsPanelProps = {
   settings: NotificationSettings;

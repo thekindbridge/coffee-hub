@@ -1,16 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
-import {
-  doc,
-  runTransaction,
-} from 'firebase/firestore';
-import { auth, db } from '../../../services/firebase';
-import { postApi } from '../../../utils/apiClient';
+import { createOrderRequest } from '../../../services/api/ordersService';
+import { getCurrentBrowserLocation } from '../../../services/browser/geolocationService';
+import { scrollToSectionOrTop } from '../../../services/browser/navigationService';
+import { getCurrentUserIdToken } from '../../../services/firebase/authService';
+import { getNextOrderId } from '../../../services/firebase/orderCounterService';
 import { calculateDiscount } from '../../../utils/calculateDiscount';
 import type {
   CartItem,
   CheckoutCustomerDetails,
-  CreateOrderResponse,
   CheckoutOrderDraft,
   CheckoutOrderItemPayload,
   Offer,
@@ -81,43 +79,6 @@ export type PaymentFlowState = {
   handleBrowseMenu: () => void;
   handleCaptureCustomerLocation: () => Promise<void>;
   handlePlaceOrder: () => Promise<void>;
-};
-
-const getCurrentBrowserLocation = () =>
-  new Promise<CheckoutCustomerDetails['location']>((resolve, reject) => {
-    if (typeof window === 'undefined' || !('geolocation' in navigator)) {
-      reject(new Error('Geolocation is not supported in this browser.'));
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      position => {
-        resolve({
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
-          accuracy: Number.isFinite(position.coords.accuracy)
-            ? Number(position.coords.accuracy.toFixed(1))
-            : undefined,
-        });
-      },
-      error => {
-        reject(new Error(error.message || 'Unable to access your location.'));
-      },
-      { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 },
-    );
-  });
-
-const getNextOrderId = async (): Promise<string> => {
-  const counterRef = doc(db, 'meta', 'orderCounter');
-  const nextNumber = await runTransaction(db, async transaction => {
-    const counterSnapshot = await transaction.get(counterRef);
-    const currentValue =
-      counterSnapshot.exists() && typeof counterSnapshot.data().nextOrderNumber === 'number'
-        ? counterSnapshot.data().nextOrderNumber
-        : 1001;
-    transaction.set(counterRef, { nextOrderNumber: currentValue + 1 }, { merge: true });
-    return currentValue;
-  });
-  return `COF${String(nextNumber).padStart(4, '0')}`;
 };
 
 /**
@@ -255,11 +216,11 @@ export const usePaymentFlow = ({
   }, [cart.length, checkoutStep]);
 
   useEffect(() => {
-    const intervalId = window.setInterval(() => {
+    const intervalId = setInterval(() => {
       setCurrentTime(Date.now());
     }, 60000);
 
-    return () => window.clearInterval(intervalId);
+    return () => clearInterval(intervalId);
   }, []);
 
   const captureLocation = async () => {
@@ -291,14 +252,7 @@ export const usePaymentFlow = ({
     setCheckoutStep('cart');
     setCheckoutError('');
     setDraftOrderId('');
-    window.setTimeout(() => {
-      const menuSection = document.getElementById('menu-section');
-      if (menuSection) {
-        menuSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        return;
-      }
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }, 50);
+    scrollToSectionOrTop('menu-section');
   };
 
   const resetAfterSuccess = (nextOrder: Order) => {
@@ -383,14 +337,13 @@ export const usePaymentFlow = ({
     setIsPlacingOrder(true);
     setCheckoutError('');
     try {
-      const idToken = await auth.currentUser?.getIdToken(true);
+      const idToken = await getCurrentUserIdToken(true);
       if (!idToken) {
         setCheckoutError('Please sign in again before placing your order.');
         return;
       }
 
-      const orderResponse = await postApi<CreateOrderResponse>(
-        '/api/orders/create',
+      const orderResponse = await createOrderRequest(
         { orderDraft: draft, userId: currentUserId },
         idToken,
       );
