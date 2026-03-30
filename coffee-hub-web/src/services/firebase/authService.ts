@@ -1,27 +1,14 @@
 import {
-  GoogleAuthProvider,
   onAuthStateChanged,
-  signInWithPopup,
   signOut,
 } from 'firebase/auth';
 import { toAppServiceError } from '../platform/serviceError';
 import { auth } from './firebaseConfig';
 
-const provider = new GoogleAuthProvider();
-
 export type AuthSessionSnapshot = {
   currentUserEmail: string;
   currentUserId: string;
   isLoggedIn: boolean;
-};
-
-export const loginWithGoogle = async () => {
-  try {
-    const result = await signInWithPopup(auth, provider);
-    return result.user;
-  } catch (error) {
-    throw toAppServiceError(error, 'Unable to sign in with Google.', 'network');
-  }
 };
 
 export const subscribeToAuthSession = (

@@ -43,21 +43,39 @@ export const getCurrentUserIdToken = async (forceRefresh = false) => {
   }
 };
 
-export const signInWithGoogleIdToken = async (idToken: string) => {
-  if (!idToken.trim()) {
+type GoogleTokenInput = {
+  accessToken?: string;
+  idToken?: string;
+};
+
+export const signInWithGoogleTokens = async ({
+  accessToken = '',
+  idToken = '',
+}: GoogleTokenInput) => {
+  const normalizedAccessToken = accessToken.trim();
+  const normalizedIdToken = idToken.trim();
+
+  if (!normalizedIdToken && !normalizedAccessToken) {
     throw toAppServiceError(
-      new Error('Google ID token is required to complete sign-in.'),
+      new Error('Google ID token or access token is required to complete sign-in.'),
       'Unable to sign in with Google.',
       'validation',
     );
   }
 
   try {
-    const credential = GoogleAuthProvider.credential(idToken);
+    const credential = GoogleAuthProvider.credential(
+      normalizedIdToken || null,
+      normalizedAccessToken || null,
+    );
     await signInWithCredential(auth, credential);
   } catch (error) {
     throw toAppServiceError(error, 'Unable to sign in with Google.', 'network');
   }
+};
+
+export const signInWithGoogleIdToken = async (idToken: string) => {
+  await signInWithGoogleTokens({ idToken });
 };
 
 export const logoutCurrentUser = async () => {

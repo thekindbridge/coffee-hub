@@ -8,7 +8,7 @@ import { useAccessManager } from '../features/app/hooks/useAccessManager';
 import { usePushNotifications } from '../features/app/hooks/usePushNotifications';
 import { useShopTimingManager } from '../features/app/hooks/useShopTimingManager';
 import { useInstallPrompt } from '../features/customer/hooks/useInstallPrompt';
-import { loginWithGoogle } from '../services/firebase/authService';
+import { useAuthActions } from '../features/auth/hooks/useAuthActions';
 import { Loader } from '../components/ui/Loader';
 import { lazyNamed } from '../utils/lazyNamed';
 import { AppRouter } from './router/AppRouter';
@@ -26,6 +26,7 @@ export default function App() {
   const session = useRealtimeAppData();
   const [orderStatus, setOrderStatus] = useState<Order | null>(null);
   const installPrompt = useInstallPrompt();
+  const authActions = useAuthActions();
 
   const pushNotifications = usePushNotifications({
     isAuthReady: session.isAuthReady,
@@ -91,7 +92,11 @@ export default function App() {
   if (!session.isLoggedIn) {
     return (
       <Suspense fallback={<Loader fullScreen label="Preparing sign in..." />}>
-        <LoginPage onLogin={() => { void loginWithGoogle(); }} />
+        <LoginPage
+          onLogin={() => { void authActions.handleLogin(); }}
+          isLoggingIn={authActions.isLoggingIn}
+          loginError={authActions.loginError}
+        />
       </Suspense>
     );
   }

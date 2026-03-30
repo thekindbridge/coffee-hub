@@ -5,8 +5,9 @@ import {
   useJsApiLoader,
 } from '@react-google-maps/api';
 import { SHOP_LOCATION } from '../config/shopLocation';
-import { subscribeToDeliveryLocation } from '../services/firebase/orderTrackingService';
+import { useLiveDeliveryLocation } from '../features/orders/hooks/useLiveDeliveryLocation';
 import type { DeliveryLocation, DeliveryRouteMetrics } from '../types';
+import { normalizeDeliveryLocation } from '../utils/deliveryLocation';
 import {
   AGENT_ANIMATION_DURATION_MS,
   buildImageMarkerIcon,
@@ -21,7 +22,6 @@ import {
   MAP_CONTAINER_STYLE,
   MAP_OPTIONS,
   MapMessage,
-  normalizeLocationRecord,
   ROUTE_ANIMATION_DURATION_MS,
   ROUTE_COLOR,
   ROUTE_THROTTLE_MS,
@@ -76,32 +76,31 @@ export default function DeliveryTrackingMap({
   const shopMarkerRef = useRef<google.maps.Marker | null>(null);
   const customerMarkerRef = useRef<google.maps.Marker | null>(null);
   const agentMarkerRef = useRef<google.maps.Marker | null>(null);
-  const [subscribedAgentLocation, setSubscribedAgentLocation] = useState<DeliveryLocation | null>(null);
   const [animatedAgentLocation, setAnimatedAgentLocation] = useState<DeliveryLocation | null>(null);
   const [animatedRoutePath, setAnimatedRoutePath] = useState<google.maps.LatLngLiteral[]>([]);
   const [routeStrokeColor, setRouteStrokeColor] = useState(ROUTE_COLOR);
-  const [trackingLabel, setTrackingLabel] = useState('Connecting to the rider...');
   const [routeError, setRouteError] = useState('');
   const [isMapReady, setIsMapReady] = useState(false);
   const lastRouteRequestRef = useRef<number>(0);
   const lastRouteOriginTypeRef = useRef<'agent' | 'shop' | ''>('');
   const routeAnimationFrameRef = useRef<number | null>(null);
   const normalizedCustomerLocation = useMemo(
-    () => normalizeLocationRecord(customerLocation),
+    () => normalizeDeliveryLocation(customerLocation),
     [customerLocation],
   );
-  const normalizedExternalAgentLocation = useMemo(
-    () => normalizeLocationRecord(liveAgentLocation),
-    [liveAgentLocation],
-  );
-  const agentLocation = normalizedExternalAgentLocation ?? subscribedAgentLocation;
   const resolvedCoffeeShopLocation = useMemo(
-    () => normalizeLocationRecord(coffeeShopLocation) ?? {
+    () => normalizeDeliveryLocation(coffeeShopLocation) ?? {
       lat: SHOP_LOCATION.lat,
       lng: SHOP_LOCATION.lng,
     },
     [coffeeShopLocation],
   );
+  const { agentLocation, trackingLabel } = useLiveDeliveryLocation({
+    agentId: normalizedAgentId,
+    liveAgentLocation,
+    orderDocId: normalizedOrderDocId,
+    orderId: normalizedOrderId,
+  });
 
   const { isLoaded, loadError } = useJsApiLoader({
     id: GOOGLE_MAPS_SCRIPT_ID,
@@ -210,58 +209,6 @@ export default function DeliveryTrackingMap({
       agentMarkerRef.current.setIcon(agentMarkerIcon);
     }
   }, [isLoaded, isMapReady, animatedAgentLocation, agentMarkerIcon]);
-
-  useEffect(() => {
-    if (normalizedExternalAgentLocation) {
-      setSubscribedAgentLocation(null);
-      setTrackingLabel('Rider is live on the route.');
-      return undefined;
-    }
-
-    if (!normalizedOrderDocId && !normalizedAgentId && !normalizedOrderId) {
-      setSubscribedAgentLocation(null);
-      setAnimatedAgentLocation(null);
-      setAnimatedRoutePath([]);
-      setTrackingLabel('Enter an order to load live tracking.');
-      onRouteMetricsChange?.(null);
-      return undefined;
-    }
-
-    const unsubscribe = subscribeToDeliveryLocation({
-      agentId: normalizedAgentId,
-      onData: nextLocation => {
-        if (!nextLocation) {
-          setSubscribedAgentLocation(null);
-          setAnimatedAgentLocation(null);
-          setAnimatedRoutePath([]);
-          setTrackingLabel('Waiting for the delivery partner to start sharing location.');
-          onRouteMetricsChange?.(null);
-          return;
-        }
-
-        setSubscribedAgentLocation(normalizeLocationRecord(nextLocation));
-        setTrackingLabel('Rider is live on the route.');
-      },
-      onError: error => {
-        console.error('Failed to subscribe to delivery location', error);
-        setSubscribedAgentLocation(null);
-        setAnimatedAgentLocation(null);
-        setAnimatedRoutePath([]);
-        setTrackingLabel('Unable to load the rider location right now.');
-        onRouteMetricsChange?.(null);
-      },
-      orderDocId: normalizedOrderDocId,
-      orderId: normalizedOrderId,
-    });
-
-    return unsubscribe;
-  }, [
-    normalizedExternalAgentLocation,
-    normalizedAgentId,
-    normalizedOrderDocId,
-    normalizedOrderId,
-    onRouteMetricsChange,
-  ]);
 
   useEffect(() => {
     cancelFrame(animationFrameRef.current);

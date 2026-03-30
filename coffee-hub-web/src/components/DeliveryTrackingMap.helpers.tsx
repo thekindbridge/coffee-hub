@@ -1,5 +1,6 @@
 import { Bike, MapPin, Store } from 'lucide-react';
 import type { DeliveryLocation, DeliveryRouteMetrics } from '../types';
+import { normalizeDeliveryLocation } from '../utils/deliveryLocation';
 
 export const GOOGLE_MAPS_SCRIPT_ID = 'coffee-hub-premium-delivery-tracking-map';
 export const DEFAULT_AGENT_ICON_URL = '/assets/icons/delivery-scooter.png';
@@ -45,50 +46,7 @@ export const MAP_OPTIONS: google.maps.MapOptions = {
 export const joinClassNames = (...classNames: Array<string | undefined>) =>
   classNames.filter(Boolean).join(' ');
 
-const toFiniteNumber = (value: unknown) => {
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return value;
-  }
-
-  if (typeof value === 'string' && value.trim()) {
-    const parsed = Number(value);
-    if (Number.isFinite(parsed)) {
-      return parsed;
-    }
-  }
-
-  return null;
-};
-
-const isCoordinateInRange = (value: number, minimum: number, maximum: number) =>
-  value >= minimum && value <= maximum;
-
-export const normalizeLocationRecord = (value: unknown): DeliveryLocation | null => {
-  if (!value || typeof value !== 'object') {
-    return null;
-  }
-
-  const data = value as Record<string, unknown>;
-  const lat = toFiniteNumber(data.lat);
-  const lng = toFiniteNumber(data.lng);
-  const accuracy = toFiniteNumber(data.accuracy);
-
-  if (
-    lat === null ||
-    lng === null ||
-    !isCoordinateInRange(lat, -90, 90) ||
-    !isCoordinateInRange(lng, -180, 180) ||
-    (lat === 0 && lng === 0)
-  ) {
-    return null;
-  }
-
-  return {
-    lat,
-    lng,
-    accuracy: accuracy ?? undefined,
-  };
-};
+export const normalizeLocationRecord = normalizeDeliveryLocation;
 
 export const easeOutCubic = (value: number) => 1 - ((1 - value) ** 3);
 

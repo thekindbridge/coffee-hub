@@ -27,7 +27,8 @@ export default function App() {
           <>
             <StatusBar style="light" />
             <LoginScreen
-              isAuthReady={auth.isAuthReady}
+              isGoogleReady={authActions.isGoogleAuthReady}
+              isSessionReady={auth.isAuthReady}
               isLoggingIn={authActions.isLoggingIn}
               loginError={authActions.loginError}
               onLogin={() => {

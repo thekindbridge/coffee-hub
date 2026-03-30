@@ -1,7 +1,10 @@
-import { nativeAuthAdapter } from '../native/authAdapter';
+import type { GoogleAuthUser } from '../googleAuthService';
+import { useNativeAuthAdapter } from '../native/authAdapter';
 
 export interface AuthAdapter {
-  loginWithGoogle(): Promise<void>;
+  googleUser: GoogleAuthUser | null;
+  isGoogleLoginReady: boolean;
+  loginWithGoogle(): Promise<GoogleAuthUser>;
 }
 
-export const authAdapter: AuthAdapter = nativeAuthAdapter;
+export const useAuthAdapter = (): AuthAdapter => useNativeAuthAdapter();

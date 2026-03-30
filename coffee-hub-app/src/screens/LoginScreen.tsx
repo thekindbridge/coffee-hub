@@ -14,20 +14,26 @@ const HERO_IMAGE =
   'https://res.cloudinary.com/ddfhaqeme/image/upload/v1772699634/e0818545-8027-4b28-8a1f-d521f79fdb6a_plei96.jpg';
 
 type LoginScreenProps = {
-  isAuthReady: boolean;
+  isGoogleReady: boolean;
+  isSessionReady: boolean;
   isLoggingIn?: boolean;
   loginError?: string;
   onLogin: () => void;
 };
 
 export function LoginScreen({
-  isAuthReady,
+  isGoogleReady,
+  isSessionReady,
   isLoggingIn = false,
   loginError = '',
   onLogin,
 }: LoginScreenProps) {
-  const buttonLabel = !isAuthReady
+  const isButtonEnabled = isSessionReady && isGoogleReady && !isLoggingIn;
+
+  const buttonLabel = !isSessionReady
     ? 'Restoring session...'
+    : !isGoogleReady
+      ? 'Preparing Google...'
     : isLoggingIn
       ? 'Signing in...'
       : 'Continue with Google';
@@ -73,22 +79,22 @@ export function LoginScreen({
           <View style={styles.panel}>
             <View style={styles.panelRow}>
               <Feather name="shield" size={16} color="#F3C897" />
-              <Text style={styles.panelEyebrow}>Secure Firebase sign-in</Text>
+              <Text style={styles.panelEyebrow}>Secure Google sign-in</Text>
             </View>
 
             <Text style={styles.panelText}>
-              Google login keeps your orders, offers, and checkout flow synced across sessions.
+              Continue with Google to sync your orders, offers, and checkout flow across sessions.
             </Text>
 
             <Pressable
               accessibilityRole="button"
               style={({ pressed }) => [
                 styles.googleButton,
-                (!isAuthReady || isLoggingIn) ? styles.googleButtonDisabled : null,
+                !isButtonEnabled ? styles.googleButtonDisabled : null,
                 pressed ? styles.googleButtonPressed : null,
               ]}
               onPress={onLogin}
-              disabled={!isAuthReady || isLoggingIn}
+              disabled={!isButtonEnabled}
             >
               <View style={styles.googleIconWrap}>
                 <Ionicons name="logo-google" size={19} color="#1F150F" />
@@ -103,9 +109,15 @@ export function LoginScreen({
               </View>
             ) : null}
 
-            {!loginError && !isAuthReady ? (
+            {!loginError && !isSessionReady ? (
               <Text style={styles.sessionHint}>
                 Checking for your saved Coffee Hub session...
+              </Text>
+            ) : null}
+
+            {!loginError && isSessionReady && !isGoogleReady ? (
+              <Text style={styles.sessionHint}>
+                Preparing the Google sign-in flow...
               </Text>
             ) : null}
           </View>
