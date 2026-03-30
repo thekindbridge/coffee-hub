@@ -1,12 +1,16 @@
+import { Feather } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useCartState } from '../app/providers/CartProvider';
 import { CartFloatingButton } from '../components/cart/CartFloatingButton';
 import { MenuCatalog } from '../components/menu/MenuCatalog';
 import { MenuToolbar } from '../components/menu/MenuToolbar';
+import { CardContainer } from '../components/ui/CardContainer';
+import { SectionHeader } from '../components/ui/SectionHeader';
 import { ROOT_ROUTES } from '../constants/routes';
-import { COLORS, SPACING } from '../constants/theme';
+import { COLORS, RADIUS, SPACING } from '../constants/theme';
 import { useMenuExperience } from '../hooks/useMenuExperience';
 import type { RootStackParamList } from '../navigation/types';
 
@@ -19,7 +23,6 @@ export function MenuScreen() {
     filteredMenu,
     isMenuLoading,
     isShopOpen,
-    refreshMenu,
     searchQuery,
     selectedCategory,
     setSearchQuery,
@@ -29,7 +32,7 @@ export function MenuScreen() {
   const { cartCount, cartQuantityById, handleAddToCart, payableCartTotal } = useCartState();
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView
         style={styles.container}
         contentContainerStyle={[
@@ -37,9 +40,31 @@ export function MenuScreen() {
           cartCount > 0 ? styles.contentWithCartButton : null,
         ]}
         showsVerticalScrollIndicator={false}
-        stickyHeaderIndices={[0]}
+        stickyHeaderIndices={[1]}
         keyboardShouldPersistTaps="handled"
       >
+        <View style={styles.heroSection}>
+          <CardContainer variant="dark" style={styles.heroCard}>
+            <View style={styles.heroTopRow}>
+              <View style={styles.locationChip}>
+                <Feather name="map-pin" size={14} color={COLORS.accentSoft} />
+                <Text style={styles.locationChipText}>Inkollu Coffee Kitchen</Text>
+              </View>
+
+              <View style={[styles.statusChip, isShopOpen ? styles.statusChipOpen : styles.statusChipClosed]}>
+                <Text style={styles.statusChipText}>{isShopOpen ? 'Fresh today' : 'Closed'}</Text>
+              </View>
+            </View>
+
+            <SectionHeader
+              eyebrow="Menu board"
+              title={selectedCategory === 'All' ? 'Crafted for today' : selectedCategory}
+              subtitle="Two-column cards, faster scanning, and one-tap add controls for quick ordering."
+              inverted
+            />
+          </CardContainer>
+        </View>
+
         <View style={styles.toolbarStickyWrap}>
           <MenuToolbar
             categories={categories}
@@ -51,12 +76,11 @@ export function MenuScreen() {
         </View>
 
         <View style={styles.titleSection}>
-          <View>
-            <Text style={styles.eyebrow}>Menu board</Text>
-            <Text style={styles.title}>
-              {selectedCategory === 'All' ? 'Everything fresh today' : selectedCategory}
-            </Text>
-          </View>
+          <SectionHeader
+            eyebrow="Daily menu"
+            title={selectedCategory === 'All' ? 'Fresh coffee and bites' : selectedCategory}
+            subtitle="Tap any card to build your cart with warm, premium coffee-house styling."
+          />
 
           <View style={styles.countBadge}>
             <Text style={styles.countBadgeText}>
@@ -65,14 +89,16 @@ export function MenuScreen() {
           </View>
         </View>
 
-        <MenuCatalog
-          cartQuantityById={cartQuantityById}
-          filteredMenu={filteredMenu}
-          isMenuLoading={isMenuLoading}
-          isShopOpen={isShopOpen}
-          onAddToCart={handleAddToCart}
-          shopAvailabilityMessage={shopAvailabilityMessage}
-        />
+        <View style={styles.catalogSection}>
+          <MenuCatalog
+            cartQuantityById={cartQuantityById}
+            filteredMenu={filteredMenu}
+            isMenuLoading={isMenuLoading}
+            isShopOpen={isShopOpen}
+            onAddToCart={handleAddToCart}
+            shopAvailabilityMessage={shopAvailabilityMessage}
+          />
+        </View>
       </ScrollView>
 
       {cartCount > 0 ? (
@@ -82,7 +108,7 @@ export function MenuScreen() {
           onPress={() => navigation.navigate(ROOT_ROUTES.CART)}
         />
       ) : null}
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -93,11 +119,56 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     paddingHorizontal: SPACING.lg,
-    paddingTop: SPACING.xl,
+    paddingTop: SPACING.md,
     paddingBottom: SPACING.xl,
   },
   contentWithCartButton: {
-    paddingBottom: 108,
+    paddingBottom: 120,
+  },
+  heroSection: {
+    marginBottom: SPACING.md,
+  },
+  heroCard: {
+    borderRadius: 30,
+    gap: SPACING.lg,
+  },
+  heroTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: SPACING.sm,
+  },
+  locationChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderRadius: RADIUS.pill,
+    backgroundColor: 'rgba(251, 246, 241, 0.08)',
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 8,
+  },
+  locationChipText: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.9,
+    textTransform: 'uppercase',
+    color: COLORS.inkInverse,
+  },
+  statusChip: {
+    borderRadius: RADIUS.pill,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 8,
+  },
+  statusChipOpen: {
+    backgroundColor: 'rgba(53, 107, 79, 0.18)',
+  },
+  statusChipClosed: {
+    backgroundColor: 'rgba(184, 92, 71, 0.18)',
+  },
+  statusChipText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: COLORS.inkInverse,
   },
   toolbarStickyWrap: {
     backgroundColor: COLORS.background,
@@ -110,28 +181,18 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: SPACING.sm,
   },
-  eyebrow: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-    color: COLORS.secondary,
-  },
-  title: {
-    marginTop: 4,
-    fontSize: 22,
-    fontWeight: '700',
-    color: COLORS.text,
-  },
   countBadge: {
-    borderRadius: 999,
-    backgroundColor: COLORS.surfaceDarkAlt,
+    borderRadius: RADIUS.pill,
+    backgroundColor: COLORS.primary,
     paddingHorizontal: SPACING.sm,
-    paddingVertical: 8,
+    paddingVertical: 10,
   },
   countBadgeText: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '800',
     color: COLORS.inkInverse,
+  },
+  catalogSection: {
+    marginTop: SPACING.sm,
   },
 });

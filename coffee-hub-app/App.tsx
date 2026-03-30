@@ -13,7 +13,7 @@ export default function App() {
   const auth = useAuth();
   const authActions = useAuthActions();
 
-  const isAuthenticated = auth.isAuthReady && auth.isLoggedIn;
+  const isAuthenticated = auth.isAuthReady && Boolean(auth.user);
 
   return (
     <GestureHandlerRootView style={styles.container}>
@@ -27,10 +27,7 @@ export default function App() {
           <>
             <StatusBar style="light" />
             <LoginScreen
-              isGoogleReady={authActions.isGoogleAuthReady}
-              isSessionReady={auth.isAuthReady}
-              isLoggingIn={authActions.isLoggingIn}
-              loginError={authActions.loginError}
+              isLoading={!auth.isAuthReady || authActions.isLoggingIn}
               onLogin={() => {
                 void authActions.handleLogin();
               }}

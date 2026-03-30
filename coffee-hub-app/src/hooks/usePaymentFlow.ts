@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
-import { getCurrentUserIdToken } from '../services/firebase/authService';
+import { getCurrentUserIdToken } from '../services/auth/authService';
 import { getNextOrderId } from '../services/firebase/orderCounterService';
 import { createOrderRequest } from '../services/ordersService';
 import { locationAdapter } from '../services/platform/locationAdapter';

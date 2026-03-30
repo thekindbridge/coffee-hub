@@ -43,9 +43,15 @@ export function MainTabNavigator() {
         tabBarStyle: {
           backgroundColor: COLORS.surface,
           borderTopColor: COLORS.border,
-          height: 72,
+          borderTopWidth: 1,
+          height: 78,
           paddingTop: 10,
-          paddingBottom: 10,
+          paddingBottom: 12,
+          shadowColor: COLORS.shadowStrong,
+          shadowOffset: { width: 0, height: -6 },
+          shadowOpacity: 0.18,
+          shadowRadius: 18,
+          elevation: 12,
         },
         tabBarLabelStyle: {
           fontSize: 12,

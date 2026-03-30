@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { getCurrentUserIdToken } from '../services/firebase/authService';
+import { getCurrentUserIdToken } from '../services/auth/authService';
 import { getOrdersRequest } from '../services/ordersService';
 import { toAppServiceError } from '../services/serviceError';
 import type { Order } from '../types';

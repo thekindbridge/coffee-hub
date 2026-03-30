@@ -1,15 +1,9 @@
-import { Feather } from '@expo/vector-icons';
 import { memo, useMemo } from 'react';
-import {
-  FlatList,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
-import { MenuItemCard } from '../MenuItemCard';
+import { FlatList, StyleSheet, View } from 'react-native';
 import { COLORS, RADIUS, SPACING } from '../../constants/theme';
 import type { MenuItem } from '../../types';
+import { MenuItemCard } from '../MenuItemCard';
+import { SectionHeader } from '../ui/SectionHeader';
 
 type QuickPicksSectionProps = {
   cartQuantityById: Map<string, number>;
@@ -25,6 +19,10 @@ const SkeletonCard = () => (
   <View style={styles.skeletonCard}>
     <View style={styles.skeletonImage} />
     <View style={styles.skeletonContent}>
+      <View style={styles.skeletonPillRow}>
+        <View style={styles.skeletonPill} />
+        <View style={styles.skeletonPillShort} />
+      </View>
       <View style={styles.skeletonTitle} />
       <View style={styles.skeletonLineFull} />
       <View style={styles.skeletonLineShort} />
@@ -47,20 +45,13 @@ export const QuickPicksSection = memo(function QuickPicksSection({
 
   return (
     <View style={styles.section}>
-      <View style={styles.headerRow}>
-        <View>
-          <Text style={styles.eyebrow}>Popular right now</Text>
-          <Text style={styles.title}>Quick picks</Text>
-        </View>
-
-        <Pressable
-          style={({ pressed }) => [styles.menuButton, pressed ? styles.pressed : null]}
-          onPress={onOpenMenu}
-        >
-          <Text style={styles.menuButtonText}>Menu</Text>
-          <Feather name="chevron-right" size={16} color={COLORS.inkInverse} />
-        </Pressable>
-      </View>
+      <SectionHeader
+        eyebrow="Popular right now"
+        title="Quick picks"
+        subtitle="Fresh brews and comfort bites ready for your next order."
+        actionLabel="Menu"
+        onActionPress={onOpenMenu}
+      />
 
       {isMenuLoading ? (
         <FlatList
@@ -98,48 +89,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.lg,
     paddingTop: SPACING.lg,
   },
-  headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-    gap: SPACING.sm,
-  },
-  eyebrow: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
-    color: COLORS.secondary,
-  },
-  title: {
-    marginTop: 4,
-    fontSize: 24,
-    fontWeight: '800',
-    color: COLORS.text,
-  },
-  menuButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    minHeight: 44,
-    gap: 4,
-    borderRadius: RADIUS.pill,
-    backgroundColor: COLORS.surfaceDark,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: 10,
-    shadowColor: COLORS.shadowStrong,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.14,
-    shadowRadius: 14,
-    elevation: 4,
-  },
-  menuButtonText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.inkInverse,
-  },
-  pressed: {
-    opacity: 0.82,
-  },
   listContent: {
     paddingTop: SPACING.md,
     paddingBottom: 4,
@@ -147,57 +96,74 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
   },
   cardWrap: {
-    width: 236,
+    width: 232,
   },
   skeletonCard: {
-    width: 236,
+    width: 232,
     overflow: 'hidden',
-    borderRadius: 26,
-    backgroundColor: COLORS.surfaceDark,
+    borderRadius: 22,
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: COLORS.border,
   },
   skeletonImage: {
-    height: 176,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    height: 150,
+    backgroundColor: COLORS.cardMuted,
   },
   skeletonContent: {
     padding: 14,
-    gap: 12,
+    gap: 10,
+  },
+  skeletonPillRow: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  skeletonPill: {
+    width: 58,
+    height: 22,
+    borderRadius: RADIUS.pill,
+    backgroundColor: COLORS.cardMuted,
+  },
+  skeletonPillShort: {
+    width: 74,
+    height: 22,
+    borderRadius: RADIUS.pill,
+    backgroundColor: COLORS.cardMuted,
   },
   skeletonTitle: {
     height: 16,
     width: '66%',
-    borderRadius: 999,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: RADIUS.pill,
+    backgroundColor: COLORS.cardMuted,
   },
   skeletonLineFull: {
     height: 12,
     width: '100%',
-    borderRadius: 999,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: RADIUS.pill,
+    backgroundColor: COLORS.cardMuted,
   },
   skeletonLineShort: {
     height: 12,
     width: '82%',
-    borderRadius: 999,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: RADIUS.pill,
+    backgroundColor: COLORS.cardMuted,
   },
   skeletonFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginTop: 2,
   },
   skeletonPrice: {
     height: 16,
     width: 72,
-    borderRadius: 999,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: RADIUS.pill,
+    backgroundColor: COLORS.cardMuted,
   },
   skeletonButton: {
-    height: 40,
-    width: 96,
-    borderRadius: RADIUS.pill,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    height: 42,
+    width: 42,
+    borderRadius: 21,
+    backgroundColor: COLORS.cardMuted,
   },
 });

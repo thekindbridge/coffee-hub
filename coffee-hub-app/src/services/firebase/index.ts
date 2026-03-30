@@ -1,1 +1,1 @@
-export { getFirebaseApp, getFirebaseAuth, getFirebaseDb } from './firebaseConfig';
+export { getFirebaseApp, getFirebaseDb } from './firebaseConfig';

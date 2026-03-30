@@ -13,7 +13,7 @@ import { useOffers } from '../../hooks/useOffers';
 import {
   getCurrentAuthUser,
   subscribeToAuthSession,
-} from '../../services/firebase/authService';
+} from '../../services/auth/authService';
 import { toAppServiceError } from '../../services/serviceError';
 import { DEFAULT_SHOP_TIMING } from '../../utils/shopTiming';
 

@@ -1,5 +1,6 @@
+import { Feather } from '@expo/vector-icons';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
-import { COLORS, RADIUS, SPACING } from '../constants/theme';
+import { COLORS, RADIUS, SHADOWS, SPACING } from '../constants/theme';
 import type { CartItem } from '../types';
 import { formatCurrency } from '../utils/formatCurrency';
 
@@ -17,7 +18,7 @@ export function CartItemRow({
   const hasImage = item.image_url.trim().length > 0;
 
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, SHADOWS.soft]}>
       {hasImage ? (
         <Image source={{ uri: item.image_url }} style={styles.image} resizeMode="cover" />
       ) : (
@@ -29,22 +30,28 @@ export function CartItemRow({
       <View style={styles.content}>
         <View style={styles.topRow}>
           <View style={styles.textBlock}>
-            <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
-            <Text style={styles.unitPrice}>{formatCurrency(item.price)}</Text>
+            <Text style={styles.name} numberOfLines={1}>
+              {item.name}
+            </Text>
+            <Text style={styles.unitPrice}>{formatCurrency(item.price)} each</Text>
           </View>
-          <Text style={styles.totalPrice}>{formatCurrency(item.price * item.quantity)}</Text>
+          <Text style={styles.totalPrice}>
+            {formatCurrency(item.price * item.quantity)}
+          </Text>
         </View>
 
         <View style={styles.actionRow}>
           <View style={styles.quantityControl}>
             <Pressable
+              accessibilityRole="button"
               style={({ pressed }) => [styles.quantityButton, pressed ? styles.pressed : null]}
               onPress={() => onQuantityChange(item, -1)}
             >
-              <Text style={styles.quantityButtonText}>-</Text>
+              <Feather name="minus" size={16} color={COLORS.primary} />
             </Pressable>
             <Text style={styles.quantityValue}>{item.quantity}</Text>
             <Pressable
+              accessibilityRole="button"
               style={({ pressed }) => [
                 styles.quantityButton,
                 styles.quantityButtonPrimary,
@@ -52,11 +59,15 @@ export function CartItemRow({
               ]}
               onPress={() => onQuantityChange(item, 1)}
             >
-              <Text style={styles.quantityButtonPrimaryText}>+</Text>
+              <Feather name="plus" size={16} color={COLORS.inkInverse} />
             </Pressable>
           </View>
 
-          <Pressable onPress={() => onRemove(item.id)}>
+          <Pressable
+            accessibilityRole="button"
+            style={({ pressed }) => [pressed ? styles.pressed : null]}
+            onPress={() => onRemove(item.id)}
+          >
             <Text style={styles.removeText}>Remove</Text>
           </Pressable>
         </View>
@@ -72,7 +83,7 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.lg,
     borderWidth: 1,
     borderColor: COLORS.border,
-    backgroundColor: COLORS.card,
+    backgroundColor: COLORS.surface,
     padding: SPACING.md,
     marginBottom: SPACING.md,
   },
@@ -105,19 +116,19 @@ const styles = StyleSheet.create({
   },
   name: {
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '800',
     color: COLORS.text,
     marginBottom: 4,
   },
   unitPrice: {
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: '700',
-    color: COLORS.accent,
+    color: COLORS.textMuted,
   },
   totalPrice: {
     fontSize: 15,
-    fontWeight: '700',
-    color: COLORS.accentStrong,
+    fontWeight: '800',
+    color: COLORS.primary,
   },
   actionRow: {
     flexDirection: 'row',
@@ -132,7 +143,7 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.pill,
     borderWidth: 1,
     borderColor: COLORS.border,
-    backgroundColor: COLORS.surface,
+    backgroundColor: COLORS.cardMuted,
     paddingHorizontal: SPACING.xs,
     paddingVertical: 6,
   },
@@ -142,34 +153,24 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.surfaceMuted,
+    backgroundColor: COLORS.surface,
   },
   quantityButtonPrimary: {
-    backgroundColor: COLORS.accent,
-  },
-  quantityButtonText: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: COLORS.text,
-  },
-  quantityButtonPrimaryText: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: COLORS.surface,
+    backgroundColor: COLORS.accentStrong,
   },
   quantityValue: {
     minWidth: 20,
     textAlign: 'center',
     fontSize: 15,
-    fontWeight: '700',
-    color: COLORS.text,
+    fontWeight: '800',
+    color: COLORS.primary,
   },
   removeText: {
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: '800',
     letterSpacing: 1,
     textTransform: 'uppercase',
-    color: COLORS.textMuted,
+    color: COLORS.accentStrong,
   },
   pressed: {
     opacity: 0.82,

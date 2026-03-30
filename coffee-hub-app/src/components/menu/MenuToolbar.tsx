@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 import { COLORS, RADIUS, SPACING } from '../../constants/theme';
+import { CardContainer } from '../ui/CardContainer';
 
 type MenuToolbarProps = {
   categories: string[];
@@ -26,13 +27,18 @@ export const MenuToolbar = memo(function MenuToolbar({
   selectedCategory,
 }: MenuToolbarProps) {
   return (
-    <View style={styles.outer}>
+    <CardContainer style={styles.outer}>
       <View style={styles.searchWrap}>
-        <Feather name="search" size={18} color={COLORS.textMuted} style={styles.searchIcon} />
+        <Feather
+          name="search"
+          size={18}
+          color={COLORS.textMuted}
+          style={styles.searchIcon}
+        />
         <TextInput
           value={searchQuery}
           onChangeText={onSearchChange}
-          placeholder="Search noodles, rice, drinks..."
+          placeholder="Search coffees, snacks, desserts..."
           placeholderTextColor={COLORS.textMuted}
           style={styles.searchInput}
         />
@@ -49,6 +55,7 @@ export const MenuToolbar = memo(function MenuToolbar({
           return (
             <Pressable
               key={category}
+              accessibilityRole="button"
               style={({ pressed }) => [
                 styles.chip,
                 isSelected ? styles.chipActive : styles.chipInactive,
@@ -57,27 +64,29 @@ export const MenuToolbar = memo(function MenuToolbar({
               onPress={() => onCategoryChange(category)}
             >
               <Feather
-                name="coffee"
+                name={category === 'All' ? 'grid' : 'coffee'}
                 size={13}
-                color={isSelected ? COLORS.highlight : COLORS.secondary}
+                color={isSelected ? COLORS.inkInverse : COLORS.primary}
               />
-              <Text style={[styles.chipText, isSelected ? styles.chipTextActive : styles.chipTextInactive]}>
+              <Text
+                style={[
+                  styles.chipText,
+                  isSelected ? styles.chipTextActive : styles.chipTextInactive,
+                ]}
+              >
                 {category}
               </Text>
             </Pressable>
           );
         })}
       </ScrollView>
-    </View>
+    </CardContainer>
   );
 });
 
 const styles = StyleSheet.create({
   outer: {
-    borderRadius: 28,
-    borderWidth: 1,
-    borderColor: 'rgba(18, 13, 11, 0.08)',
-    backgroundColor: 'rgba(15, 11, 9, 0.88)',
+    borderRadius: RADIUS.xl,
     paddingHorizontal: SPACING.sm,
     paddingVertical: SPACING.sm,
   },
@@ -91,13 +100,14 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   searchInput: {
-    minHeight: 48,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    minHeight: 50,
+    borderRadius: 18,
+    backgroundColor: COLORS.cardMuted,
     paddingLeft: 44,
     paddingRight: SPACING.md,
-    color: COLORS.inkInverse,
+    color: COLORS.text,
     fontSize: 15,
+    fontWeight: '600',
   },
   chipsRow: {
     gap: SPACING.xs,
@@ -111,12 +121,12 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   chipActive: {
-    backgroundColor: COLORS.surfaceDarkAlt,
+    backgroundColor: COLORS.primary,
     borderWidth: 1,
-    borderColor: 'rgba(224, 166, 65, 0.24)',
+    borderColor: COLORS.primary,
   },
   chipInactive: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    backgroundColor: COLORS.cardMuted,
   },
   chipText: {
     fontSize: 13,
@@ -126,7 +136,7 @@ const styles = StyleSheet.create({
     color: COLORS.inkInverse,
   },
   chipTextInactive: {
-    color: COLORS.textMuted,
+    color: COLORS.text,
   },
   pressed: {
     opacity: 0.82,

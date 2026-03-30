@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { COLORS, RADIUS, SPACING } from '../../constants/theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { COLORS, SHADOWS, SPACING } from '../../constants/theme';
 import { formatCurrency } from '../../utils/formatCurrency';
 
 type CartFloatingButtonProps = {
@@ -14,27 +15,32 @@ export function CartFloatingButton({
   total,
   onPress,
 }: CartFloatingButtonProps) {
+  const insets = useSafeAreaInsets();
+
   return (
-    <View pointerEvents="box-none" style={styles.wrapper}>
+    <View
+      pointerEvents="box-none"
+      style={[styles.wrapper, { bottom: insets.bottom + SPACING.md }]}
+    >
       <Pressable
         accessibilityRole="button"
         style={({ pressed }) => [
           styles.button,
+          SHADOWS.floating,
           pressed ? styles.buttonPressed : null,
         ]}
         onPress={onPress}
       >
         <View style={styles.iconWrap}>
-          <Ionicons name="bag-handle" size={18} color={COLORS.surface} />
+          <Ionicons name="bag-handle" size={18} color={COLORS.inkInverse} />
         </View>
 
         <View style={styles.copy}>
           <Text style={styles.title}>
-            View Cart
-            {' '}
+            View Cart{' '}
             <Text style={styles.count}>({cartCount})</Text>
           </Text>
-          <Text style={styles.subtitle}>Proceed to checkout</Text>
+          <Text style={styles.subtitle}>Ready for checkout</Text>
         </View>
 
         <Text style={styles.total}>{formatCurrency(total)}</Text>
@@ -48,20 +54,14 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: SPACING.md,
     right: SPACING.md,
-    bottom: SPACING.md,
   },
   button: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: RADIUS.pill,
-    backgroundColor: COLORS.accentStrong,
+    borderRadius: 20,
+    backgroundColor: COLORS.primary,
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
-    shadowColor: COLORS.shadowStrong,
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.22,
-    shadowRadius: 20,
-    elevation: 8,
   },
   buttonPressed: {
     opacity: 0.88,
@@ -70,7 +70,7 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: COLORS.accent,
+    backgroundColor: COLORS.accentStrong,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -81,20 +81,20 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 15,
     fontWeight: '800',
-    color: COLORS.surface,
+    color: COLORS.inkInverse,
   },
   count: {
-    color: '#F6CFA8',
+    color: COLORS.accentSoft,
   },
   subtitle: {
     marginTop: 2,
     fontSize: 12,
-    color: 'rgba(255, 249, 242, 0.78)',
+    color: 'rgba(251, 246, 241, 0.78)',
   },
   total: {
     marginLeft: SPACING.sm,
     fontSize: 16,
     fontWeight: '800',
-    color: '#FFF5EA',
+    color: COLORS.inkInverse,
   },
 });
