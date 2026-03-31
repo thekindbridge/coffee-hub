@@ -8,7 +8,7 @@
     "orientation": "portrait",
     "icon": "./Applogo.jpg",
     "userInterfaceStyle": "light",
-    "newArchEnabled": false,
+    "newArchEnabled": true,
 
     "splash": {
       "image": "./assets/splash-icon.png",
@@ -22,6 +22,7 @@
 
     "android": {
       "package": "com.pavankumar3232.coffeehubapp",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./Applogo.jpg",
         "backgroundColor": "#ffffff"
@@ -33,6 +34,8 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
+
+    "plugins": ["@react-native-google-signin/google-signin"],
 
     "extra": {
       "eas": {

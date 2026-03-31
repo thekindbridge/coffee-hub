@@ -1,13 +1,19 @@
 import { useCallback, useEffect, useState } from 'react';
+import { NativeModules, TurboModuleRegistry } from 'react-native';
 import { AppServiceError } from './serviceError';
 
 type GoogleSigninModule = typeof import('@react-native-google-signin/google-signin');
 type GoogleSignInResponse = Awaited<
   ReturnType<GoogleSigninModule['GoogleSignin']['signIn']>
 >;
+type ExpoConstants = {
+  appOwnership?: string;
+  executionEnvironment?: string;
+};
 
 const GOOGLE_SCOPES = ['openid', 'profile', 'email'];
 const GOOGLE_WEB_CLIENT_ID = `${process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ?? ''}`.trim();
+const GOOGLE_SIGNIN_MODULE_NAME = 'RNGoogleSignin';
 
 let googleSigninModulePromise: Promise<GoogleSigninModule> | null = null;
 let isGoogleSigninConfigured = false;
@@ -19,7 +25,41 @@ const createGoogleAuthError = (message: string, cause?: unknown) => (
   })
 );
 
+const getExpoConstants = (): ExpoConstants | undefined => (
+  NativeModules.NativeUnimoduleProxy?.modulesConstants?.ExponentConstants as
+    | ExpoConstants
+    | undefined
+);
+
+const isExpoGoRuntime = () => {
+  const expoConstants = getExpoConstants();
+
+  return (
+    expoConstants?.appOwnership === 'expo' ||
+    expoConstants?.executionEnvironment === 'storeClient'
+  );
+};
+
+const hasNativeGoogleSigninModule = () => Boolean(
+  TurboModuleRegistry.get(GOOGLE_SIGNIN_MODULE_NAME) ||
+  NativeModules[GOOGLE_SIGNIN_MODULE_NAME]
+);
+
 const loadGoogleSigninModule = async () => {
+  if (isExpoGoRuntime()) {
+    throw new AppServiceError(
+      'Google Sign-In is unavailable in Expo Go because it requires native Android code. Open a development build created with `npx expo run:android` to use Google login.',
+      { code: 'unsupported' },
+    );
+  }
+
+  if (!hasNativeGoogleSigninModule()) {
+    throw new AppServiceError(
+      'Native Google Sign-In is not available in this Android build. Rebuild the app with `npx expo run:android` after syncing the native project.',
+      { code: 'unsupported' },
+    );
+  }
+
   try {
     if (!googleSigninModulePromise) {
       googleSigninModulePromise = import('@react-native-google-signin/google-signin');
@@ -98,7 +138,11 @@ export function useGoogleAuth() {
         setSetupError('');
         setIsReady(true);
       } catch (error) {
-        console.error('Failed to configure Google Sign-In', error);
+        if (error instanceof AppServiceError && error.code === 'unsupported') {
+          console.warn(error.message);
+        } else {
+          console.error('Failed to configure Google Sign-In', error);
+        }
 
         if (!isMounted) {
           return;
