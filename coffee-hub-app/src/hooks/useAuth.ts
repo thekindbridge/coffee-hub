@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   subscribeToAuthSession,
-  type DummyAuthUser,
+  type AuthUser,
 } from '../services/auth/authService';
 
 export type AuthState = {
@@ -10,7 +10,7 @@ export type AuthState = {
   currentUserId: string;
   currentUserEmail: string;
   normalizedCurrentEmail: string;
-  user: DummyAuthUser | null;
+  user: AuthUser | null;
 };
 
 export const useAuth = (): AuthState => {
@@ -18,7 +18,7 @@ export const useAuth = (): AuthState => {
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [currentUserId, setCurrentUserId] = useState('');
   const [currentUserEmail, setCurrentUserEmail] = useState('');
-  const [user, setUser] = useState<DummyAuthUser | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
 
   useEffect(() => {
     const unsubscribe = subscribeToAuthSession(session => {

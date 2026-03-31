@@ -27,7 +27,9 @@ export default function App() {
           <>
             <StatusBar style="light" />
             <LoginScreen
-              isLoading={!auth.isAuthReady || authActions.isLoggingIn}
+              isLoading={authActions.isLoggingIn}
+              isLoginReady={auth.isAuthReady && authActions.isLoginReady}
+              loginError={authActions.loginError}
               onLogin={() => {
                 void authActions.handleLogin();
               }}

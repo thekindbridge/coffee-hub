@@ -1,13 +1,14 @@
 {
   "expo": {
-    "name": "coffee-hub-app",
+    "owner": "pavankumar3232",
+    "name": "Coffee Hub",
     "slug": "coffee-hub-app",
     "version": "1.0.0",
     "scheme": "coffeehub",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./Applogo.jpg",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
 
     "splash": {
       "image": "./assets/splash-icon.png",
@@ -20,9 +21,9 @@
     },
 
     "android": {
-      "package": "com.coffeehub.app",
+      "package": "com.pavankumar3232.coffeehubapp",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./Applogo.jpg",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
@@ -32,10 +33,6 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
-
-    "plugins": [
-      "expo-web-browser"
-    ],
 
     "extra": {
       "eas": {

@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "expo-auth-session": "^55.0.10"
+  }
+}

@@ -15,14 +15,18 @@ const HERO_IMAGE =
 
 type LoginScreenProps = {
   isLoading?: boolean;
+  isLoginReady?: boolean;
+  loginError?: string;
   onLogin: () => void;
 };
 
 export function LoginScreen({
   isLoading = false,
+  isLoginReady = true,
+  loginError = '',
   onLogin,
 }: LoginScreenProps) {
-  const buttonLabel = isLoading ? 'Entering cafe...' : 'Enter Cafe';
+  const buttonLabel = isLoading ? 'Connecting Google...' : 'Continue with Google';
 
   return (
     <LinearGradient
@@ -77,16 +81,21 @@ export function LoginScreen({
             </View>
 
             <Text style={styles.panelText}>
-              Step inside the cafe with one tap and continue into the full Coffee Hub experience.
+              Continue with Google and we will finish your secure Firebase sign-in in the background.
             </Text>
 
             <PrimaryButton
               title={buttonLabel}
               onPress={onLogin}
               loading={isLoading}
-              icon={<Feather name="arrow-right" size={18} color="#FBF6F1" />}
+              disabled={!isLoginReady}
+              icon={<MaterialCommunityIcons name="google" size={18} color="#FBF6F1" />}
               style={styles.button}
             />
+
+            {loginError ? (
+              <Text style={styles.errorText}>{loginError}</Text>
+            ) : null}
           </View>
         </View>
       </SafeAreaView>
@@ -202,5 +211,11 @@ const styles = StyleSheet.create({
   },
   button: {
     marginTop: SPACING.lg,
+  },
+  errorText: {
+    marginTop: SPACING.md,
+    fontSize: 13,
+    lineHeight: 20,
+    color: '#F2B7AF',
   },
 });
