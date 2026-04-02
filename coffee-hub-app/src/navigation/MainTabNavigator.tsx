@@ -1,11 +1,14 @@
 import { Ionicons } from '@expo/vector-icons';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { useEffect, useRef } from 'react';
+import { Animated, StyleSheet } from 'react-native';
 import { TAB_ROUTES } from '../constants/routes';
-import { COLORS } from '../constants/theme';
 import { HomeScreen } from '../screens/HomeScreen';
 import { MenuScreen } from '../screens/MenuScreen';
 import { OffersScreen } from '../screens/OffersScreen';
 import { OrdersScreen } from '../screens/OrdersScreen';
+import { ProfileScreen } from '../screens/ProfileScreen';
+import { useTheme } from '../theme';
 import type { MainTabParamList } from './types';
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -20,36 +23,89 @@ const getTabBarIcon = (routeName: keyof MainTabParamList, focused: boolean) => {
       return focused ? 'pricetags' : 'pricetags-outline';
     case TAB_ROUTES.ORDERS:
       return focused ? 'receipt' : 'receipt-outline';
+    case TAB_ROUTES.PROFILE:
+      return focused ? 'person' : 'person-outline';
     default:
       return focused ? 'ellipse' : 'ellipse-outline';
   }
 };
 
+function TabIcon({
+  color,
+  focused,
+  routeName,
+}: {
+  color: string;
+  focused: boolean;
+  routeName: keyof MainTabParamList;
+}) {
+  const { theme } = useTheme();
+  const scale = useRef(new Animated.Value(focused ? 1 : 0.92)).current;
+  const translateY = useRef(new Animated.Value(focused ? -2 : 0)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.spring(scale, {
+        bounciness: 10,
+        speed: 20,
+        toValue: focused ? 1 : 0.92,
+        useNativeDriver: true,
+      }),
+      Animated.spring(translateY, {
+        bounciness: 8,
+        speed: 20,
+        toValue: focused ? -2 : 0,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [focused, scale, translateY]);
+
+  return (
+    <Animated.View
+      style={[
+        styles.iconWrap,
+        {
+          backgroundColor: focused ? theme.colors.tag : 'transparent',
+          transform: [{ scale }, { translateY }],
+        },
+      ]}
+    >
+      <Ionicons
+        name={getTabBarIcon(routeName, focused)}
+        size={22}
+        color={color}
+      />
+    </Animated.View>
+  );
+}
+
 export function MainTabNavigator() {
+  const { theme } = useTheme();
+
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
-        tabBarActiveTintColor: COLORS.accentStrong,
-        tabBarInactiveTintColor: COLORS.textMuted,
+        tabBarActiveTintColor: theme.colors.primary,
+        tabBarInactiveTintColor: theme.colors.textMuted,
         tabBarHideOnKeyboard: true,
         tabBarIcon: ({ color, focused, size }) => (
-          <Ionicons
-            name={getTabBarIcon(route.name, focused)}
-            size={size}
+          <TabIcon
             color={color}
+            focused={focused}
+            routeName={route.name}
           />
         ),
         tabBarStyle: {
-          backgroundColor: COLORS.surface,
-          borderTopColor: COLORS.border,
+          backgroundColor: theme.colors.tabBar,
+          borderTopColor: theme.colors.border,
           borderTopWidth: 1,
           height: 78,
           paddingTop: 10,
           paddingBottom: 12,
-          shadowColor: COLORS.shadowStrong,
+          shadowColor: theme.colors.shadowStrong,
           shadowOffset: { width: 0, height: -6 },
-          shadowOpacity: 0.18,
+          shadowOpacity: theme.isDark ? 0.38 : 0.18,
           shadowRadius: 18,
           elevation: 12,
         },
@@ -58,7 +114,7 @@ export function MainTabNavigator() {
           fontWeight: '700',
         },
         sceneStyle: {
-          backgroundColor: COLORS.background,
+          backgroundColor: theme.colors.background,
         },
       })}
     >
@@ -82,6 +138,22 @@ export function MainTabNavigator() {
         component={OrdersScreen}
         options={{ tabBarLabel: 'Orders' }}
       />
+      <Tab.Screen
+        name={TAB_ROUTES.PROFILE}
+        component={ProfileScreen}
+        options={{ tabBarLabel: 'Profile' }}
+      />
     </Tab.Navigator>
   );
 }
+
+const styles = StyleSheet.create({
+  iconWrap: {
+    minWidth: 44,
+    minHeight: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+  },
+});

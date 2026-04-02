@@ -1,8 +1,9 @@
-import { Feather } from '@expo/vector-icons';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
-import { COLORS, RADIUS, SHADOWS, SPACING } from '../constants/theme';
+import { Ionicons } from '@expo/vector-icons';
+import { Image, StyleSheet, Text, View } from 'react-native';
+import { animateLayout, useTheme, useThemedStyles } from '../theme';
 import type { CartItem } from '../types';
 import { formatCurrency } from '../utils/formatCurrency';
+import { ScalePressable } from './ui/ScalePressable';
 
 type CartItemRowProps = {
   item: CartItem;
@@ -15,15 +16,22 @@ export function CartItemRow({
   onQuantityChange,
   onRemove,
 }: CartItemRowProps) {
+  const { theme } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const hasImage = item.image_url.trim().length > 0;
 
+  const updateQuantity = (delta: number) => {
+    animateLayout();
+    onQuantityChange(item, delta);
+  };
+
   return (
-    <View style={[styles.card, SHADOWS.soft]}>
+    <View style={[styles.card, theme.shadows.soft]}>
       {hasImage ? (
         <Image source={{ uri: item.image_url }} style={styles.image} resizeMode="cover" />
       ) : (
         <View style={[styles.image, styles.imageFallback]}>
-          <Text style={styles.imageFallbackText}>No image</Text>
+          <Ionicons name="cafe-outline" size={24} color={theme.colors.textMuted} />
         </View>
       )}
 
@@ -42,65 +50,56 @@ export function CartItemRow({
 
         <View style={styles.actionRow}>
           <View style={styles.quantityControl}>
-            <Pressable
+            <ScalePressable
               accessibilityRole="button"
-              style={({ pressed }) => [styles.quantityButton, pressed ? styles.pressed : null]}
-              onPress={() => onQuantityChange(item, -1)}
+              onPress={() => updateQuantity(-1)}
+              style={styles.quantityButton}
             >
-              <Feather name="minus" size={16} color={COLORS.primary} />
-            </Pressable>
+              <Ionicons name="remove" size={16} color={theme.colors.primary} />
+            </ScalePressable>
             <Text style={styles.quantityValue}>{item.quantity}</Text>
-            <Pressable
+            <ScalePressable
               accessibilityRole="button"
-              style={({ pressed }) => [
-                styles.quantityButton,
-                styles.quantityButtonPrimary,
-                pressed ? styles.pressed : null,
-              ]}
-              onPress={() => onQuantityChange(item, 1)}
+              onPress={() => updateQuantity(1)}
+              style={[styles.quantityButton, styles.quantityButtonPrimary]}
             >
-              <Feather name="plus" size={16} color={COLORS.inkInverse} />
-            </Pressable>
+              <Ionicons name="add" size={16} color={theme.colors.onPrimary} />
+            </ScalePressable>
           </View>
 
-          <Pressable
+          <ScalePressable
             accessibilityRole="button"
-            style={({ pressed }) => [pressed ? styles.pressed : null]}
             onPress={() => onRemove(item.id)}
+            style={styles.removeButton}
           >
             <Text style={styles.removeText}>Remove</Text>
-          </Pressable>
+          </ScalePressable>
         </View>
       </View>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => StyleSheet.create({
   card: {
     flexDirection: 'row',
-    gap: SPACING.md,
-    borderRadius: RADIUS.lg,
+    gap: theme.spacing.md,
+    borderRadius: theme.radius.lg,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.surface,
-    padding: SPACING.md,
-    marginBottom: SPACING.md,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface,
+    padding: theme.spacing.md,
+    marginBottom: theme.spacing.md,
   },
   image: {
     width: 84,
     height: 84,
     borderRadius: 20,
-    backgroundColor: COLORS.surfaceMuted,
+    backgroundColor: theme.colors.surfaceMuted,
   },
   imageFallback: {
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  imageFallbackText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: COLORS.textMuted,
   },
   content: {
     flex: 1,
@@ -109,7 +108,7 @@ const styles = StyleSheet.create({
   topRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: SPACING.md,
+    gap: theme.spacing.md,
   },
   textBlock: {
     flex: 1,
@@ -117,34 +116,34 @@ const styles = StyleSheet.create({
   name: {
     fontSize: 16,
     fontWeight: '800',
-    color: COLORS.text,
+    color: theme.colors.text,
     marginBottom: 4,
   },
   unitPrice: {
-    fontSize: 13,
+    fontSize: theme.typography.body,
     fontWeight: '700',
-    color: COLORS.textMuted,
+    color: theme.colors.textMuted,
   },
   totalPrice: {
-    fontSize: 15,
+    fontSize: theme.typography.body,
     fontWeight: '800',
-    color: COLORS.primary,
+    color: theme.colors.primary,
   },
   actionRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: SPACING.md,
+    gap: theme.spacing.md,
   },
   quantityControl: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING.sm,
-    borderRadius: RADIUS.pill,
+    gap: theme.spacing.sm,
+    borderRadius: theme.radius.pill,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.cardMuted,
-    paddingHorizontal: SPACING.xs,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surfaceMuted,
+    paddingHorizontal: theme.spacing.xs,
     paddingVertical: 6,
   },
   quantityButton: {
@@ -153,26 +152,26 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.surface,
+    backgroundColor: theme.colors.surface,
   },
   quantityButtonPrimary: {
-    backgroundColor: COLORS.accentStrong,
+    backgroundColor: theme.colors.primary,
   },
   quantityValue: {
     minWidth: 20,
     textAlign: 'center',
-    fontSize: 15,
+    fontSize: theme.typography.body,
     fontWeight: '800',
-    color: COLORS.primary,
+    color: theme.colors.primary,
+  },
+  removeButton: {
+    paddingVertical: 4,
   },
   removeText: {
-    fontSize: 11,
+    fontSize: theme.typography.eyebrow,
     fontWeight: '800',
     letterSpacing: 1,
     textTransform: 'uppercase',
-    color: COLORS.accentStrong,
-  },
-  pressed: {
-    opacity: 0.82,
+    color: theme.colors.secondary,
   },
 });

@@ -1,9 +1,10 @@
-import type { ReactNode } from 'react';
-import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
-import { COLORS, RADIUS, SHADOWS, SPACING } from '../../constants/theme';
+import type { ComponentProps } from 'react';
+import { Ionicons } from '@expo/vector-icons';
+import { Image, StyleSheet, Text, View } from 'react-native';
+import { animateLayout, useTheme, useThemedStyles } from '../../theme';
 import type { MenuItem } from '../../types';
 import { formatCurrency } from '../../utils/formatCurrency';
+import { ScalePressable } from './ScalePressable';
 
 export type ProductCardProps = {
   item: MenuItem;
@@ -14,23 +15,20 @@ export type ProductCardProps = {
   shopAvailabilityMessage?: string;
 };
 
-type ActionControlProps = {
-  item: MenuItem;
-  layout: 'horizontal' | 'vertical';
-  quantity: number;
-  isShopOpen: boolean;
-  onAddToCart: (item: MenuItem, delta: number) => void;
+type InfoPillProps = {
+  icon: ComponentProps<typeof Ionicons>['name'];
+  label: string;
+  tone?: 'neutral' | 'veg' | 'nonVeg';
 };
 
 function InfoPill({
   icon,
   label,
   tone = 'neutral',
-}: {
-  icon: ReactNode;
-  label: string;
-  tone?: 'neutral' | 'veg' | 'nonVeg';
-}) {
+}: InfoPillProps) {
+  const { theme } = useTheme();
+  const styles = useThemedStyles(createStyles);
+
   return (
     <View
       style={[
@@ -42,11 +40,29 @@ function InfoPill({
             : null,
       ]}
     >
-      {icon}
+      <Ionicons
+        name={icon}
+        size={12}
+        color={
+          tone === 'veg'
+            ? theme.colors.success
+            : tone === 'nonVeg'
+              ? theme.colors.danger
+              : theme.colors.secondary
+        }
+      />
       <Text style={styles.infoPillText}>{label}</Text>
     </View>
   );
 }
+
+type ActionControlProps = {
+  item: MenuItem;
+  layout: 'horizontal' | 'vertical';
+  quantity: number;
+  isShopOpen: boolean;
+  onAddToCart: (item: MenuItem, delta: number) => void;
+};
 
 function ActionControl({
   item,
@@ -55,54 +71,58 @@ function ActionControl({
   isShopOpen,
   onAddToCart,
 }: ActionControlProps) {
+  const { theme } = useTheme();
+  const styles = useThemedStyles(createStyles);
+
+  const updateQuantity = (delta: number) => {
+    animateLayout();
+    onAddToCart(item, delta);
+  };
+
   if (quantity > 0) {
     return (
       <View style={styles.stepper}>
-        <Pressable
+        <ScalePressable
           accessibilityRole="button"
-          style={({ pressed }) => [
-            styles.stepperButton,
-            styles.stepperButtonSecondary,
-            pressed ? styles.pressed : null,
-          ]}
-          onPress={() => onAddToCart(item, -1)}
+          onPress={() => updateQuantity(-1)}
+          style={[styles.stepperButton, styles.stepperButtonSecondary]}
         >
-          <Feather name="minus" size={15} color={COLORS.primary} />
-        </Pressable>
+          <Ionicons name="remove" size={16} color={theme.colors.primary} />
+        </ScalePressable>
 
         <Text style={styles.stepperValue}>{quantity}</Text>
 
-        <Pressable
+        <ScalePressable
           accessibilityRole="button"
-          style={({ pressed }) => [
+          disabled={!isShopOpen}
+          onPress={() => updateQuantity(1)}
+          style={[
             styles.stepperButton,
             styles.stepperButtonPrimary,
             !isShopOpen ? styles.disabled : null,
-            pressed ? styles.pressed : null,
           ]}
-          onPress={() => onAddToCart(item, 1)}
-          disabled={!isShopOpen}
         >
-          <Feather name="plus" size={15} color={COLORS.inkInverse} />
-        </Pressable>
+          <Ionicons name="add" size={16} color={theme.colors.onPrimary} />
+        </ScalePressable>
       </View>
     );
   }
 
   return (
-    <Pressable
+    <ScalePressable
       accessibilityRole="button"
-      style={({ pressed }) => [
+      disabled={!isShopOpen}
+      onPress={() => updateQuantity(1)}
+      style={[
         layout === 'vertical' ? styles.iconButton : styles.addButton,
         !isShopOpen ? styles.disabled : null,
-        pressed ? styles.pressed : null,
       ]}
-      onPress={() => onAddToCart(item, 1)}
-      disabled={!isShopOpen}
     >
-      <Feather name="plus" size={16} color={COLORS.inkInverse} />
-      {layout === 'horizontal' ? <Text style={styles.addButtonText}>Add</Text> : null}
-    </Pressable>
+      <Ionicons name="add" size={16} color={theme.colors.onPrimary} />
+      {layout === 'horizontal' ? (
+        <Text style={styles.addButtonText}>Add</Text>
+      ) : null}
+    </ScalePressable>
   );
 }
 
@@ -114,20 +134,26 @@ export function ProductCard({
   onAddToCart,
   shopAvailabilityMessage = '',
 }: ProductCardProps) {
-  const description = item.description || 'Crafted fresh for quick coffee breaks.';
+  const { theme } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const hasImage = item.image_url.trim().length > 0;
-  const spiceLevel = Math.max(0, item.spice_level);
   const isHorizontal = layout === 'horizontal';
+  const spiceLevel = Math.max(0, item.spice_level);
 
   return (
     <View
       style={[
         styles.card,
+        theme.shadows.soft,
         isHorizontal ? styles.cardHorizontal : styles.cardVertical,
-        SHADOWS.soft,
       ]}
     >
-      <View style={[styles.mediaWrap, isHorizontal ? styles.mediaWrapHorizontal : styles.mediaWrapVertical]}>
+      <View
+        style={[
+          styles.mediaWrap,
+          isHorizontal ? styles.mediaWrapHorizontal : styles.mediaWrapVertical,
+        ]}
+      >
         {hasImage ? (
           <Image
             source={{ uri: item.image_url }}
@@ -136,16 +162,16 @@ export function ProductCard({
           />
         ) : (
           <View style={[styles.image, styles.imageFallback]}>
-            <MaterialCommunityIcons
-              name="coffee-outline"
+            <Ionicons
+              name="cafe-outline"
               size={28}
-              color={COLORS.textMuted}
+              color={theme.colors.textMuted}
             />
           </View>
         )}
 
         <View style={styles.ratingBadge}>
-          <Feather name="star" size={12} color={COLORS.accent} />
+          <Ionicons name="star" size={12} color={theme.colors.secondary} />
           <Text style={styles.ratingText}>{item.rating.toFixed(1)}</Text>
         </View>
 
@@ -159,33 +185,21 @@ export function ProductCard({
       <View style={[styles.content, isHorizontal ? styles.contentHorizontal : null]}>
         <View style={styles.infoRow}>
           <InfoPill
-            tone={item.is_veg ? 'veg' : 'nonVeg'}
-            icon={(
-              <MaterialCommunityIcons
-                name={item.is_veg ? 'leaf' : 'silverware-fork-knife'}
-                size={12}
-                color={item.is_veg ? COLORS.success : COLORS.danger}
-              />
-            )}
+            icon={item.is_veg ? 'leaf-outline' : 'restaurant-outline'}
             label={item.is_veg ? 'Veg' : 'Non-veg'}
+            tone={item.is_veg ? 'veg' : 'nonVeg'}
           />
           <InfoPill
-            icon={<Feather name="droplet" size={12} color={COLORS.accentStrong} />}
+            icon="water-outline"
             label={`${spiceLevel}/5 spice`}
           />
         </View>
 
-        <Text
-          style={styles.name}
-          numberOfLines={isHorizontal ? 1 : 2}
-        >
+        <Text style={styles.name} numberOfLines={isHorizontal ? 1 : 2}>
           {item.name}
         </Text>
-        <Text
-          style={styles.description}
-          numberOfLines={isHorizontal ? 2 : 3}
-        >
-          {description}
+        <Text style={styles.description} numberOfLines={isHorizontal ? 2 : 3}>
+          {item.description || 'Freshly brewed and plated for a smoother coffee break.'}
         </Text>
 
         <View style={styles.footer}>
@@ -213,27 +227,27 @@ export function ProductCard({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => StyleSheet.create({
   card: {
     overflow: 'hidden',
-    borderRadius: RADIUS.lg,
+    borderRadius: theme.radius.lg,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.surface,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface,
   },
   cardHorizontal: {
+    minHeight: 156,
     flexDirection: 'row',
-    minHeight: 150,
   },
   cardVertical: {
-    minHeight: 276,
+    minHeight: 284,
   },
   mediaWrap: {
     overflow: 'hidden',
-    backgroundColor: COLORS.cardMuted,
+    backgroundColor: theme.colors.surfaceMuted,
   },
   mediaWrapHorizontal: {
-    width: 122,
+    width: 124,
   },
   mediaWrapVertical: {
     width: '100%',
@@ -242,7 +256,7 @@ const styles = StyleSheet.create({
   image: {
     width: '100%',
     height: '100%',
-    backgroundColor: COLORS.cardMuted,
+    backgroundColor: theme.colors.surfaceMuted,
   },
   imageFallback: {
     alignItems: 'center',
@@ -255,35 +269,35 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    borderRadius: RADIUS.pill,
-    backgroundColor: 'rgba(255, 253, 252, 0.94)',
+    borderRadius: theme.radius.pill,
+    backgroundColor: theme.colors.surface,
     paddingHorizontal: 8,
     paddingVertical: 5,
   },
   ratingText: {
-    fontSize: 12,
+    fontSize: theme.typography.caption,
     fontWeight: '800',
-    color: COLORS.primary,
+    color: theme.colors.primary,
   },
   closedOverlay: {
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(31, 21, 19, 0.38)',
+    backgroundColor: theme.colors.overlay,
   },
   closedText: {
-    borderRadius: RADIUS.pill,
-    backgroundColor: COLORS.primary,
+    borderRadius: theme.radius.pill,
+    backgroundColor: theme.colors.primary,
     paddingHorizontal: 12,
     paddingVertical: 6,
-    fontSize: 11,
+    fontSize: theme.typography.eyebrow,
     fontWeight: '800',
-    color: COLORS.inkInverse,
     textTransform: 'uppercase',
+    color: theme.colors.onPrimary,
   },
   content: {
     flex: 1,
-    padding: SPACING.md,
+    padding: theme.spacing.md,
   },
   contentHorizontal: {
     justifyContent: 'space-between',
@@ -297,62 +311,62 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    borderRadius: RADIUS.pill,
-    backgroundColor: COLORS.cardMuted,
+    borderRadius: theme.radius.pill,
+    backgroundColor: theme.colors.tag,
     paddingHorizontal: 8,
     paddingVertical: 5,
   },
   infoPillVeg: {
-    backgroundColor: '#E7F4ED',
+    backgroundColor: theme.colors.successSurface,
   },
   infoPillNonVeg: {
-    backgroundColor: '#F8E9E4',
+    backgroundColor: theme.colors.dangerSurface,
   },
   infoPillText: {
-    fontSize: 11,
+    fontSize: theme.typography.caption,
     fontWeight: '700',
-    color: COLORS.textMuted,
+    color: theme.colors.textMuted,
   },
   name: {
-    marginTop: SPACING.sm,
+    marginTop: theme.spacing.sm,
     fontSize: 16,
     lineHeight: 21,
     fontWeight: '800',
-    color: COLORS.text,
+    color: theme.colors.text,
   },
   description: {
     marginTop: 6,
-    fontSize: 13,
+    fontSize: theme.typography.body,
     lineHeight: 19,
-    color: COLORS.textMuted,
+    color: theme.colors.textMuted,
   },
   footer: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     justifyContent: 'space-between',
-    gap: SPACING.sm,
-    marginTop: SPACING.md,
+    gap: theme.spacing.sm,
+    marginTop: theme.spacing.md,
   },
   priceBlock: {
     flex: 1,
   },
   priceLabel: {
-    fontSize: 11,
+    fontSize: theme.typography.eyebrow,
     fontWeight: '700',
     letterSpacing: 0.8,
     textTransform: 'uppercase',
-    color: COLORS.textMuted,
+    color: theme.colors.textMuted,
   },
   price: {
     marginTop: 2,
-    fontSize: 18,
+    fontSize: theme.typography.subheading,
     fontWeight: '800',
-    color: COLORS.primary,
+    color: theme.colors.primary,
   },
   addButton: {
     minHeight: 40,
-    borderRadius: RADIUS.pill,
-    backgroundColor: COLORS.accentStrong,
+    borderRadius: theme.radius.pill,
+    backgroundColor: theme.colors.primary,
     paddingHorizontal: 16,
     flexDirection: 'row',
     alignItems: 'center',
@@ -360,9 +374,9 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   addButtonText: {
-    fontSize: 13,
+    fontSize: theme.typography.caption,
     fontWeight: '800',
-    color: COLORS.inkInverse,
+    color: theme.colors.onPrimary,
   },
   iconButton: {
     width: 42,
@@ -370,48 +384,45 @@ const styles = StyleSheet.create({
     borderRadius: 21,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.accentStrong,
+    backgroundColor: theme.colors.primary,
   },
   stepper: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: RADIUS.pill,
+    borderRadius: theme.radius.pill,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.card,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surfaceRaised,
     padding: 4,
   },
   stepperButton: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
   stepperButtonSecondary: {
-    backgroundColor: COLORS.surfaceMuted,
+    backgroundColor: theme.colors.surfaceMuted,
   },
   stepperButtonPrimary: {
-    backgroundColor: COLORS.accentStrong,
+    backgroundColor: theme.colors.primary,
   },
   stepperValue: {
-    minWidth: 26,
+    minWidth: 28,
     textAlign: 'center',
-    fontSize: 14,
+    fontSize: theme.typography.body,
     fontWeight: '800',
-    color: COLORS.primary,
+    color: theme.colors.primary,
   },
   availabilityMessage: {
-    marginTop: SPACING.sm,
-    fontSize: 11,
+    marginTop: theme.spacing.sm,
+    fontSize: theme.typography.caption,
     lineHeight: 17,
     fontWeight: '700',
-    color: COLORS.accentStrong,
-  },
-  pressed: {
-    opacity: 0.86,
+    color: theme.colors.secondary,
   },
   disabled: {
-    opacity: 0.56,
+    opacity: 0.52,
   },
 });

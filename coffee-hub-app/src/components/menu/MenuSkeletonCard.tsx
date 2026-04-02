@@ -1,7 +1,9 @@
 import { StyleSheet, View } from 'react-native';
-import { COLORS, RADIUS, SPACING } from '../../constants/theme';
+import { useTheme, useThemedStyles } from '../../theme';
 
 export function MenuSkeletonCard() {
+  const styles = useThemedStyles(createStyles);
+
   return (
     <View style={styles.card}>
       <View style={styles.image} />
@@ -23,28 +25,28 @@ export function MenuSkeletonCard() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => StyleSheet.create({
   card: {
     flex: 1,
     overflow: 'hidden',
-    borderRadius: 22,
+    borderRadius: theme.radius.lg,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.surface,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface,
   },
   image: {
     width: '100%',
     height: 150,
-    backgroundColor: COLORS.cardMuted,
+    backgroundColor: theme.colors.surfaceMuted,
   },
   content: {
-    padding: SPACING.md,
+    padding: theme.spacing.md,
   },
   rating: {
     width: 56,
     height: 24,
-    borderRadius: RADIUS.pill,
-    backgroundColor: COLORS.cardMuted,
+    borderRadius: theme.radius.pill,
+    backgroundColor: theme.colors.surfaceMuted,
     alignSelf: 'flex-end',
   },
   metaRow: {
@@ -56,51 +58,51 @@ const styles = StyleSheet.create({
   metaPill: {
     width: 58,
     height: 22,
-    borderRadius: RADIUS.pill,
-    backgroundColor: COLORS.cardMuted,
+    borderRadius: theme.radius.pill,
+    backgroundColor: theme.colors.surfaceMuted,
   },
   metaPillShort: {
     width: 74,
     height: 22,
-    borderRadius: RADIUS.pill,
-    backgroundColor: COLORS.cardMuted,
+    borderRadius: theme.radius.pill,
+    backgroundColor: theme.colors.surfaceMuted,
   },
   title: {
     height: 16,
-    borderRadius: RADIUS.pill,
-    backgroundColor: COLORS.cardMuted,
+    borderRadius: theme.radius.pill,
+    backgroundColor: theme.colors.surfaceMuted,
   },
   lineFull: {
     height: 12,
     width: '100%',
-    borderRadius: RADIUS.pill,
-    backgroundColor: COLORS.cardMuted,
-    marginTop: SPACING.sm,
+    borderRadius: theme.radius.pill,
+    backgroundColor: theme.colors.surfaceMuted,
+    marginTop: theme.spacing.sm,
   },
   lineShort: {
     height: 12,
     width: '78%',
-    borderRadius: RADIUS.pill,
-    backgroundColor: COLORS.cardMuted,
+    borderRadius: theme.radius.pill,
+    backgroundColor: theme.colors.surfaceMuted,
     marginTop: 6,
   },
   bottomRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: SPACING.sm,
+    gap: theme.spacing.sm,
     marginTop: 12,
   },
   price: {
     width: 74,
     height: 18,
-    borderRadius: RADIUS.pill,
-    backgroundColor: COLORS.cardMuted,
+    borderRadius: theme.radius.pill,
+    backgroundColor: theme.colors.surfaceMuted,
   },
   button: {
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: COLORS.cardMuted,
+    backgroundColor: theme.colors.surfaceMuted,
   },
 });

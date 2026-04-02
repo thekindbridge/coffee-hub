@@ -23,26 +23,39 @@ export interface ShopTiming {
   updatedAt?: string;
 }
 
+export type AddressLabel = 'Home' | 'Work' | 'Other';
+
+export interface ProfileAddress {
+  id: string;
+  label: AddressLabel;
+  address: string;
+  isPrimary: boolean;
+}
+
 export type NotificationSettings = {
   orderUpdates: boolean;
-  offers: boolean;
+  promotions: boolean;
 };
 
 export interface CustomerProfile {
   name: string;
   phone: string;
   email: string;
-  addresses: string[];
+  addresses: ProfileAddress[];
   notificationSettings: NotificationSettings;
+  adminLocation?: string;
+  staffStatus?: string;
+  vehicleType?: string;
 }
 
 export type CheckoutStep = 'cart' | 'details' | 'success';
-export type SelectedAddressIndex = number | 'new';
+export type SelectedAddressId = string | 'new';
 
 export interface SavedAddressOption {
-  index: number;
-  label: string;
+  id: string;
+  label: AddressLabel;
   value: string;
+  isPrimary: boolean;
 }
 
 export interface DeliveryLocation {

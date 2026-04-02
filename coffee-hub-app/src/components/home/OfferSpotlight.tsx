@@ -1,7 +1,7 @@
-import { Feather } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StyleSheet, Text, View } from 'react-native';
-import { COLORS, RADIUS, SPACING } from '../../constants/theme';
+import { useTheme, useThemedStyles } from '../../theme';
 import type { Offer } from '../../types';
 
 type OfferSpotlightProps = {
@@ -9,6 +9,9 @@ type OfferSpotlightProps = {
 };
 
 export function OfferSpotlight({ offer }: OfferSpotlightProps) {
+  const { theme } = useTheme();
+  const styles = useThemedStyles(createStyles);
+
   if (!offer) {
     return null;
   }
@@ -16,17 +19,17 @@ export function OfferSpotlight({ offer }: OfferSpotlightProps) {
   return (
     <View style={styles.section}>
       <LinearGradient
-        colors={['#6A432F', '#4C2D1D']}
+        colors={theme.gradients.accent}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
-        style={styles.card}
+        style={[styles.card, theme.shadows.soft]}
       >
         <View style={styles.iconWrap}>
-          <Feather name="tag" size={18} color={COLORS.accentStrong} />
+          <Ionicons name="pricetag-outline" size={18} color={theme.colors.onPrimary} />
         </View>
 
         <View style={styles.copy}>
-          <Text style={styles.eyebrow}>Today&apos;s pour</Text>
+          <Text style={styles.eyebrow}>Today&apos;s reward</Text>
           <Text style={styles.title} numberOfLines={1}>{offer.title}</Text>
           <Text style={styles.description} numberOfLines={1}>{offer.description}</Text>
         </View>
@@ -39,25 +42,20 @@ export function OfferSpotlight({ offer }: OfferSpotlightProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => StyleSheet.create({
   section: {
-    paddingHorizontal: SPACING.lg,
-    paddingTop: SPACING.md,
+    paddingHorizontal: theme.spacing.lg,
+    paddingTop: theme.spacing.md,
   },
   card: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING.sm,
-    borderRadius: 24,
+    gap: theme.spacing.sm,
+    borderRadius: theme.radius.xl,
     borderWidth: 1,
-    borderColor: 'rgba(240, 200, 156, 0.18)',
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.md,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.16,
-    shadowRadius: 18,
-    elevation: 5,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.md,
   },
   iconWrap: {
     width: 44,
@@ -65,42 +63,42 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FFCC8A',
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
   },
   copy: {
     flex: 1,
   },
   eyebrow: {
-    fontSize: 11,
+    fontSize: theme.typography.eyebrow,
     fontWeight: '700',
     letterSpacing: 1,
     textTransform: 'uppercase',
-    color: COLORS.secondary,
+    color: 'rgba(248, 244, 239, 0.72)',
   },
   title: {
     marginTop: 4,
-    fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.inkInverse,
+    fontSize: theme.typography.body,
+    fontWeight: '800',
+    color: theme.colors.onPrimary,
   },
   description: {
     marginTop: 2,
-    fontSize: 12,
-    color: 'rgba(245, 237, 227, 0.78)',
+    fontSize: theme.typography.caption,
+    color: 'rgba(248, 244, 239, 0.78)',
   },
   codeBadge: {
-    borderRadius: RADIUS.pill,
-    backgroundColor: 'rgba(19, 14, 12, 0.88)',
+    borderRadius: theme.radius.pill,
+    backgroundColor: 'rgba(15, 10, 8, 0.52)',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
-    paddingHorizontal: SPACING.sm,
+    paddingHorizontal: theme.spacing.sm,
     paddingVertical: 10,
   },
   codeText: {
-    fontSize: 11,
+    fontSize: theme.typography.eyebrow,
     fontWeight: '700',
     letterSpacing: 0.7,
     textTransform: 'uppercase',
-    color: COLORS.inkInverse,
+    color: theme.colors.onPrimary,
   },
 });

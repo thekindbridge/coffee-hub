@@ -1,5 +1,11 @@
 {
   "dependencies": {
-    "expo-auth-session": "^55.0.10"
-  }
+    "expo-auth-session": "^55.0.10",
+    "expo": "~55.0.9",
+    "react": "19.2.0",
+    "react-native": "0.83.4"
+  },
+  "name": "Coffee-Hub",
+  "version": "1.0.0",
+  "scripts": {}
 }

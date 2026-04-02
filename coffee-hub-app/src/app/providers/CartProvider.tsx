@@ -7,13 +7,12 @@ import {
   useState,
   type PropsWithChildren,
 } from 'react';
-import type { CustomerProfile, Order } from '../../types';
+import type { AuthState } from '../../hooks/useAuth';
 import { useCheckoutFlow } from '../../hooks/useCheckoutFlow';
 import { useOffers } from '../../hooks/useOffers';
-import {
-  getCurrentAuthUser,
-  subscribeToAuthSession,
-} from '../../services/auth/authService';
+import type { Order } from '../../types';
+import { useProfileData } from '../../features/profile/hooks/useProfileData';
+import { getCurrentAuthUser } from '../../services/auth/authService';
 import { toAppServiceError } from '../../services/serviceError';
 import { DEFAULT_SHOP_TIMING } from '../../utils/shopTiming';
 
@@ -25,21 +24,13 @@ type CartContextValue = ReturnType<typeof useCheckoutFlow> & {
 
 const CartContext = createContext<CartContextValue | null>(null);
 
-const DEFAULT_PROFILE: CustomerProfile = {
-  name: '',
-  phone: '',
-  email: '',
-  addresses: [],
-  notificationSettings: {
-    orderUpdates: true,
-    offers: false,
-  },
-};
+type CartProviderProps = PropsWithChildren<{
+  auth: AuthState;
+}>;
 
-export function CartProvider({ children }: PropsWithChildren) {
+export function CartProvider({ auth, children }: CartProviderProps) {
   const offersState = useOffers();
-  const [currentUserId, setCurrentUserId] = useState('');
-  const [isAuthReady, setIsAuthReady] = useState(false);
+  const { profile } = useProfileData();
   const [authError, setAuthError] = useState('');
   const [placedOrder, setPlacedOrder] = useState<Order | null>(null);
 
@@ -48,14 +39,10 @@ export function CartProvider({ children }: PropsWithChildren) {
       setAuthError('');
       const user = getCurrentAuthUser();
       if (!user) {
-        setCurrentUserId('');
-        setIsAuthReady(true);
         return;
       }
 
       await user.getIdToken(true);
-      setCurrentUserId(user.uid);
-      setIsAuthReady(true);
     } catch (error) {
       const typedError = toAppServiceError(
         error,
@@ -63,27 +50,20 @@ export function CartProvider({ children }: PropsWithChildren) {
         'network',
       );
       setAuthError(typedError.message);
-      setIsAuthReady(true);
     }
   }, []);
 
   useEffect(() => {
-    const unsubscribe = subscribeToAuthSession(snapshot => {
-      setCurrentUserId(snapshot.currentUserId);
-      setIsAuthReady(true);
+    if (auth.currentUserId) {
+      void refreshAuthSession();
+    } else {
       setAuthError('');
-    });
-
-    void refreshAuthSession();
-
-    return () => {
-      unsubscribe();
-    };
-  }, [refreshAuthSession]);
+    }
+  }, [auth.currentUserId, refreshAuthSession]);
 
   const checkout = useCheckoutFlow({
-    currentUserId,
-    profileSaved: DEFAULT_PROFILE,
+    currentUserId: auth.currentUserId,
+    profileSaved: profile,
     shopTiming: DEFAULT_SHOP_TIMING,
     findActiveOfferByCode: offersState.findActiveOfferByCode,
     onOrderPlaced: nextOrder => {
@@ -96,12 +76,12 @@ export function CartProvider({ children }: PropsWithChildren) {
     placedOrder,
     setPlacedOrder,
     authError,
-    isAuthReady,
+    isAuthReady: auth.isAuthReady,
     refreshAuthSession,
   }), [
+    auth.isAuthReady,
     authError,
     checkout,
-    isAuthReady,
     placedOrder,
     refreshAuthSession,
   ]);

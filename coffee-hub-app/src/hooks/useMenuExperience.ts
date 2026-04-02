@@ -32,10 +32,17 @@ export const useMenuExperience = () => {
     [],
   );
 
+  const hasActiveFilters = useMemo(
+    () => deferredSearchQuery.trim().length > 0 || selectedCategory !== 'All',
+    [deferredSearchQuery, selectedCategory],
+  );
+
   return {
     categories,
     error,
     filteredMenu,
+    hasActiveFilters,
+    hasMenuItems: menu.length > 0,
     isMenuLoading: isLoading,
     isShopOpen: isShopOpen(DEFAULT_SHOP_TIMING.openTime, DEFAULT_SHOP_TIMING.closeTime),
     refreshMenu,

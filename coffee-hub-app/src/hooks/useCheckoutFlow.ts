@@ -11,7 +11,7 @@ import type {
 
 const DEFAULT_NOTIFICATION_SETTINGS = {
   orderUpdates: true,
-  offers: false,
+  promotions: false,
 } as const;
 
 const DEFAULT_PROFILE: CustomerProfile = {
@@ -99,8 +99,8 @@ export const useCheckoutFlow = ({
     setCheckoutStep: orderFlow.setCheckoutStep,
     customerDetails: orderFlow.customerDetails,
     setCustomerDetails: orderFlow.setCustomerDetails,
-    selectedAddressIndex: orderFlow.selectedAddressIndex,
-    setSelectedAddressIndex: orderFlow.setSelectedAddressIndex,
+    selectedAddressId: orderFlow.selectedAddressId,
+    setSelectedAddressId: orderFlow.setSelectedAddressId,
     isCheckoutAddressListOpen: orderFlow.isCheckoutAddressListOpen,
     setIsCheckoutAddressListOpen: orderFlow.setIsCheckoutAddressListOpen,
     checkoutError: orderFlow.checkoutError,

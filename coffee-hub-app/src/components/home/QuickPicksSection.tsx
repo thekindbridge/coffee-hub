@@ -1,54 +1,67 @@
 import { memo, useMemo } from 'react';
 import { FlatList, StyleSheet, View } from 'react-native';
-import { COLORS, RADIUS, SPACING } from '../../constants/theme';
+import { useTheme, useThemedStyles } from '../../theme';
 import type { MenuItem } from '../../types';
 import { MenuItemCard } from '../MenuItemCard';
 import { SectionHeader } from '../ui/SectionHeader';
 
 type QuickPicksSectionProps = {
   cartQuantityById: Map<string, number>;
+  isShopOpen?: boolean;
   isMenuLoading: boolean;
+  items?: MenuItem[];
   menu: MenuItem[];
   onAddToCart: (item: MenuItem, delta: number) => void;
   onOpenMenu: () => void;
+  subtitle?: string;
+  title?: string;
 };
 
 const SKELETON_ITEMS = ['1', '2', '3', '4'];
 
-const SkeletonCard = () => (
-  <View style={styles.skeletonCard}>
-    <View style={styles.skeletonImage} />
-    <View style={styles.skeletonContent}>
-      <View style={styles.skeletonPillRow}>
-        <View style={styles.skeletonPill} />
-        <View style={styles.skeletonPillShort} />
-      </View>
-      <View style={styles.skeletonTitle} />
-      <View style={styles.skeletonLineFull} />
-      <View style={styles.skeletonLineShort} />
-      <View style={styles.skeletonFooter}>
-        <View style={styles.skeletonPrice} />
-        <View style={styles.skeletonButton} />
+const SkeletonCard = () => {
+  const styles = useThemedStyles(createStyles);
+
+  return (
+    <View style={styles.skeletonCard}>
+      <View style={styles.skeletonImage} />
+      <View style={styles.skeletonContent}>
+        <View style={styles.skeletonPillRow}>
+          <View style={styles.skeletonPill} />
+          <View style={styles.skeletonPillShort} />
+        </View>
+        <View style={styles.skeletonTitle} />
+        <View style={styles.skeletonLineFull} />
+        <View style={styles.skeletonLineShort} />
+        <View style={styles.skeletonFooter}>
+          <View style={styles.skeletonPrice} />
+          <View style={styles.skeletonButton} />
+        </View>
       </View>
     </View>
-  </View>
-);
+  );
+};
 
 export const QuickPicksSection = memo(function QuickPicksSection({
   cartQuantityById,
+  isShopOpen = true,
   isMenuLoading,
+  items,
   menu,
   onAddToCart,
   onOpenMenu,
+  subtitle = 'Fresh brews and comfort bites ready for your next order.',
+  title = 'Popular items',
 }: QuickPicksSectionProps) {
-  const quickPicks = useMemo(() => menu.slice(0, 6), [menu]);
+  const styles = useThemedStyles(createStyles);
+  const quickPicks = useMemo(() => items ?? menu.slice(0, 6), [items, menu]);
 
   return (
     <View style={styles.section}>
       <SectionHeader
-        eyebrow="Popular right now"
-        title="Quick picks"
-        subtitle="Fresh brews and comfort bites ready for your next order."
+        eyebrow="Cafe favorites"
+        title={title}
+        subtitle={subtitle}
         actionLabel="Menu"
         onActionPress={onOpenMenu}
       />
@@ -72,6 +85,7 @@ export const QuickPicksSection = memo(function QuickPicksSection({
               <MenuItemCard
                 item={item}
                 quantity={cartQuantityById.get(item.id) ?? 0}
+                isShopOpen={isShopOpen}
                 onAddToCart={onAddToCart}
               />
             </View>
@@ -84,16 +98,16 @@ export const QuickPicksSection = memo(function QuickPicksSection({
   );
 });
 
-const styles = StyleSheet.create({
+const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => StyleSheet.create({
   section: {
-    paddingHorizontal: SPACING.lg,
-    paddingTop: SPACING.lg,
+    paddingHorizontal: theme.spacing.lg,
+    paddingTop: theme.spacing.lg,
   },
   listContent: {
-    paddingTop: SPACING.md,
+    paddingTop: theme.spacing.md,
     paddingBottom: 4,
-    paddingRight: SPACING.lg,
-    gap: SPACING.sm,
+    paddingRight: theme.spacing.lg,
+    gap: theme.spacing.sm,
   },
   cardWrap: {
     width: 232,
@@ -101,14 +115,14 @@ const styles = StyleSheet.create({
   skeletonCard: {
     width: 232,
     overflow: 'hidden',
-    borderRadius: 22,
-    backgroundColor: COLORS.surface,
+    borderRadius: theme.radius.lg,
+    backgroundColor: theme.colors.surface,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: theme.colors.border,
   },
   skeletonImage: {
     height: 150,
-    backgroundColor: COLORS.cardMuted,
+    backgroundColor: theme.colors.surfaceMuted,
   },
   skeletonContent: {
     padding: 14,
@@ -121,32 +135,32 @@ const styles = StyleSheet.create({
   skeletonPill: {
     width: 58,
     height: 22,
-    borderRadius: RADIUS.pill,
-    backgroundColor: COLORS.cardMuted,
+    borderRadius: theme.radius.pill,
+    backgroundColor: theme.colors.surfaceMuted,
   },
   skeletonPillShort: {
     width: 74,
     height: 22,
-    borderRadius: RADIUS.pill,
-    backgroundColor: COLORS.cardMuted,
+    borderRadius: theme.radius.pill,
+    backgroundColor: theme.colors.surfaceMuted,
   },
   skeletonTitle: {
     height: 16,
     width: '66%',
-    borderRadius: RADIUS.pill,
-    backgroundColor: COLORS.cardMuted,
+    borderRadius: theme.radius.pill,
+    backgroundColor: theme.colors.surfaceMuted,
   },
   skeletonLineFull: {
     height: 12,
     width: '100%',
-    borderRadius: RADIUS.pill,
-    backgroundColor: COLORS.cardMuted,
+    borderRadius: theme.radius.pill,
+    backgroundColor: theme.colors.surfaceMuted,
   },
   skeletonLineShort: {
     height: 12,
     width: '82%',
-    borderRadius: RADIUS.pill,
-    backgroundColor: COLORS.cardMuted,
+    borderRadius: theme.radius.pill,
+    backgroundColor: theme.colors.surfaceMuted,
   },
   skeletonFooter: {
     flexDirection: 'row',
@@ -157,13 +171,13 @@ const styles = StyleSheet.create({
   skeletonPrice: {
     height: 16,
     width: 72,
-    borderRadius: RADIUS.pill,
-    backgroundColor: COLORS.cardMuted,
+    borderRadius: theme.radius.pill,
+    backgroundColor: theme.colors.surfaceMuted,
   },
   skeletonButton: {
     height: 42,
     width: 42,
     borderRadius: 21,
-    backgroundColor: COLORS.cardMuted,
+    backgroundColor: theme.colors.surfaceMuted,
   },
 });

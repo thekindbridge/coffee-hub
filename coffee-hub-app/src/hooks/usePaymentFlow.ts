@@ -15,7 +15,7 @@ import type {
   Offer,
   Order,
   SavedAddressOption,
-  SelectedAddressIndex,
+  SelectedAddressId,
   ShopTiming,
 } from '../types';
 import { calculateDiscount } from '../utils/calculateDiscount';
@@ -51,8 +51,8 @@ export type PaymentFlowState = {
   setCheckoutStep: Dispatch<SetStateAction<CheckoutStep>>;
   customerDetails: CheckoutCustomerDetails;
   setCustomerDetails: Dispatch<SetStateAction<CheckoutCustomerDetails>>;
-  selectedAddressIndex: SelectedAddressIndex;
-  setSelectedAddressIndex: Dispatch<SetStateAction<SelectedAddressIndex>>;
+  selectedAddressId: SelectedAddressId;
+  setSelectedAddressId: Dispatch<SetStateAction<SelectedAddressId>>;
   isCheckoutAddressListOpen: boolean;
   setIsCheckoutAddressListOpen: Dispatch<SetStateAction<boolean>>;
   checkoutError: string;
@@ -100,7 +100,7 @@ export const usePaymentFlow = ({
     address: '',
     location: null,
   });
-  const [selectedAddressIndex, setSelectedAddressIndex] = useState<SelectedAddressIndex>('new');
+  const [selectedAddressId, setSelectedAddressId] = useState<SelectedAddressId>('new');
   const [isCheckoutAddressListOpen, setIsCheckoutAddressListOpen] = useState(false);
   const [checkoutError, setCheckoutError] = useState('');
   const [isLocatingCustomer, setIsLocatingCustomer] = useState(false);
@@ -114,32 +114,33 @@ export const usePaymentFlow = ({
   const savedAddressOptions = useMemo<SavedAddressOption[]>(
     () =>
       profileSaved.addresses
-        .map((address, index) => ({
-          index,
-          label: `Address ${index + 1}`,
-          value: address.trim(),
+        .map(address => ({
+          id: address.id,
+          label: address.label,
+          value: address.address.trim(),
+          isPrimary: address.isPrimary,
         }))
         .filter(option => option.value),
     [profileSaved.addresses],
   );
 
   const primaryAddressOption =
-    savedAddressOptions.find(option => option.index === 0) || savedAddressOptions[0] || null;
+    savedAddressOptions.find(option => option.isPrimary) || savedAddressOptions[0] || null;
 
   const selectedAddressLabel =
-    selectedAddressIndex === 'new'
+    selectedAddressId === 'new'
       ? 'New Address'
-      : selectedAddressIndex === 0
-        ? 'Primary Address'
-        : `Address ${selectedAddressIndex + 1}`;
+      : savedAddressOptions.find(option => option.id === selectedAddressId)?.label || 'Saved Address';
 
   const selectedSavedAddress =
-    typeof selectedAddressIndex === 'number'
-      ? (profileSaved.addresses[selectedAddressIndex] || '')
+    selectedAddressId !== 'new'
+      ? (
+          profileSaved.addresses.find(address => address.id === selectedAddressId)?.address || ''
+        )
       : '';
 
   const checkoutAddressSummary =
-    selectedAddressIndex === 'new'
+    selectedAddressId === 'new'
       ? customerDetails.address
       : selectedSavedAddress || customerDetails.address || primaryAddressOption?.value || '';
 
@@ -165,39 +166,41 @@ export const usePaymentFlow = ({
 
   useEffect(() => {
     if (!savedAddressOptions.length) {
-      setSelectedAddressIndex('new');
+      setSelectedAddressId('new');
       setIsCheckoutAddressListOpen(false);
       hasCheckoutAddressSelectionRef.current = false;
       return;
     }
 
     if (!hasCheckoutAddressSelectionRef.current) {
-      setSelectedAddressIndex(savedAddressOptions[0].index);
+      setSelectedAddressId(primaryAddressOption?.id || savedAddressOptions[0].id);
       return;
     }
 
-    setSelectedAddressIndex(previousIndex => {
-      if (previousIndex === 'new') {
-        return previousIndex;
+    setSelectedAddressId(previousId => {
+      if (previousId === 'new') {
+        return previousId;
       }
 
-      const stillExists = savedAddressOptions.some(option => option.index === previousIndex);
-      return stillExists ? previousIndex : savedAddressOptions[0].index;
+      const stillExists = savedAddressOptions.some(option => option.id === previousId);
+      return stillExists ? previousId : (primaryAddressOption?.id || savedAddressOptions[0].id);
     });
-  }, [savedAddressOptions]);
+  }, [primaryAddressOption?.id, savedAddressOptions]);
 
   useEffect(() => {
-    if (selectedAddressIndex === 'new') {
+    if (selectedAddressId === 'new') {
       return;
     }
 
-    const selectedAddress = profileSaved.addresses[selectedAddressIndex] || '';
+    const selectedAddress = profileSaved.addresses.find(
+      address => address.id === selectedAddressId,
+    )?.address || '';
     setCustomerDetails(previousDetails =>
       previousDetails.address === selectedAddress
         ? previousDetails
         : { ...previousDetails, address: selectedAddress },
     );
-  }, [profileSaved.addresses, selectedAddressIndex]);
+  }, [profileSaved.addresses, selectedAddressId]);
 
   useEffect(() => {
     if (!profileSaved.name && !profileSaved.phone) {
@@ -418,8 +421,8 @@ export const usePaymentFlow = ({
     setCheckoutStep,
     customerDetails,
     setCustomerDetails,
-    selectedAddressIndex,
-    setSelectedAddressIndex,
+    selectedAddressId,
+    setSelectedAddressId,
     isCheckoutAddressListOpen,
     setIsCheckoutAddressListOpen,
     checkoutError,

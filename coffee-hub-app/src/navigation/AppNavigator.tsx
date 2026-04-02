@@ -1,25 +1,59 @@
-import { NavigationContainer } from '@react-navigation/native';
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { ROOT_ROUTES } from '../constants/routes';
-import { navigationTheme } from '../constants/theme';
-import { CartScreen } from '../screens/CartScreen';
-import { CheckoutDetailsScreen } from '../screens/CheckoutDetailsScreen';
-import { MainTabNavigator } from './MainTabNavigator';
-import type { RootStackParamList } from './types';
-
-const Stack = createNativeStackNavigator<RootStackParamList>();
+import {
+  NavigationContainer,
+  useNavigationContainerRef,
+  type ParamListBase,
+} from '@react-navigation/native';
+import { ROOT_ROUTES, TAB_ROUTES } from '../constants/routes';
+import { ProfileCompletionPrompt } from '../features/profile/components/ProfileCompletionPrompt';
+import { useUserRole } from '../features/roles/hooks/useUserRole';
+import { AdminStackNavigator } from './AdminStackNavigator';
+import { CustomerStackNavigator } from './CustomerStackNavigator';
+import { DeliveryStackNavigator } from './DeliveryStackNavigator';
+import { RoleLoadingScreen } from '../screens/RoleLoadingScreen';
+import { useTheme } from '../theme';
 
 export function AppNavigator() {
+  const navigationRef = useNavigationContainerRef<ParamListBase>();
+  const { theme } = useTheme();
+  const {
+    isAdmin,
+    isCustomer,
+    isDelivery,
+    loading,
+  } = useUserRole();
+
+  if (loading) {
+    return <RoleLoadingScreen />;
+  }
+
   return (
-    <NavigationContainer theme={navigationTheme}>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
-        <Stack.Screen name={ROOT_ROUTES.MAIN_TABS} component={MainTabNavigator} />
-        <Stack.Screen name={ROOT_ROUTES.CART} component={CartScreen} />
-        <Stack.Screen
-          name={ROOT_ROUTES.CHECKOUT_DETAILS}
-          component={CheckoutDetailsScreen}
+    <>
+      <NavigationContainer ref={navigationRef} theme={theme.navigationTheme}>
+        {isAdmin ? (
+          <AdminStackNavigator />
+        ) : isDelivery ? (
+          <DeliveryStackNavigator />
+        ) : (
+          <CustomerStackNavigator />
+        )}
+      </NavigationContainer>
+
+      {isCustomer ? (
+        <ProfileCompletionPrompt
+          onCompleteNow={() => {
+            if (!navigationRef.isReady()) {
+              return;
+            }
+
+            navigationRef.navigate(ROOT_ROUTES.MAIN_TABS, {
+              params: {
+                openEdit: true,
+              },
+              screen: TAB_ROUTES.PROFILE,
+            });
+          }}
         />
-      </Stack.Navigator>
-    </NavigationContainer>
+      ) : null}
+    </>
   );
 }

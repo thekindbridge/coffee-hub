@@ -1,15 +1,15 @@
-import { Feather } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { memo } from 'react';
 import {
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
-import { COLORS, RADIUS, SPACING } from '../../constants/theme';
+import { useTheme, useThemedStyles } from '../../theme';
 import { CardContainer } from '../ui/CardContainer';
+import { ScalePressable } from '../ui/ScalePressable';
 
 type MenuToolbarProps = {
   categories: string[];
@@ -19,6 +19,28 @@ type MenuToolbarProps = {
   selectedCategory: string;
 };
 
+const getCategoryIcon = (category: string) => {
+  const normalizedCategory = category.toLowerCase();
+
+  if (normalizedCategory.includes('coffee')) {
+    return 'cafe-outline';
+  }
+
+  if (normalizedCategory.includes('tea')) {
+    return 'leaf-outline';
+  }
+
+  if (normalizedCategory.includes('dessert')) {
+    return 'ice-cream-outline';
+  }
+
+  if (normalizedCategory.includes('snack')) {
+    return 'restaurant-outline';
+  }
+
+  return category === 'All' ? 'grid-outline' : 'ellipse-outline';
+};
+
 export const MenuToolbar = memo(function MenuToolbar({
   categories,
   onCategoryChange,
@@ -26,20 +48,23 @@ export const MenuToolbar = memo(function MenuToolbar({
   searchQuery,
   selectedCategory,
 }: MenuToolbarProps) {
+  const { theme } = useTheme();
+  const styles = useThemedStyles(createStyles);
+
   return (
     <CardContainer style={styles.outer}>
       <View style={styles.searchWrap}>
-        <Feather
-          name="search"
+        <Ionicons
+          name="search-outline"
           size={18}
-          color={COLORS.textMuted}
+          color={theme.colors.textMuted}
           style={styles.searchIcon}
         />
         <TextInput
           value={searchQuery}
           onChangeText={onSearchChange}
-          placeholder="Search coffees, snacks, desserts..."
-          placeholderTextColor={COLORS.textMuted}
+          placeholder="Search coffees, desserts, snacks..."
+          placeholderTextColor={theme.colors.textMuted}
           style={styles.searchInput}
         />
       </View>
@@ -53,20 +78,20 @@ export const MenuToolbar = memo(function MenuToolbar({
           const isSelected = selectedCategory === category;
 
           return (
-            <Pressable
+            <ScalePressable
               key={category}
               accessibilityRole="button"
-              style={({ pressed }) => [
+              onPress={() => onCategoryChange(category)}
+              scaleTo={0.97}
+              style={[
                 styles.chip,
                 isSelected ? styles.chipActive : styles.chipInactive,
-                pressed ? styles.pressed : null,
               ]}
-              onPress={() => onCategoryChange(category)}
             >
-              <Feather
-                name={category === 'All' ? 'grid' : 'coffee'}
+              <Ionicons
+                name={getCategoryIcon(category)}
                 size={13}
-                color={isSelected ? COLORS.inkInverse : COLORS.primary}
+                color={isSelected ? theme.colors.onPrimary : theme.colors.primary}
               />
               <Text
                 style={[
@@ -76,7 +101,7 @@ export const MenuToolbar = memo(function MenuToolbar({
               >
                 {category}
               </Text>
-            </Pressable>
+            </ScalePressable>
           );
         })}
       </ScrollView>
@@ -84,15 +109,15 @@ export const MenuToolbar = memo(function MenuToolbar({
   );
 });
 
-const styles = StyleSheet.create({
+const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => StyleSheet.create({
   outer: {
-    borderRadius: RADIUS.xl,
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: SPACING.sm,
+    borderRadius: theme.radius.xl,
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: theme.spacing.sm,
   },
   searchWrap: {
     justifyContent: 'center',
-    marginBottom: SPACING.sm,
+    marginBottom: theme.spacing.sm,
   },
   searchIcon: {
     position: 'absolute',
@@ -102,43 +127,40 @@ const styles = StyleSheet.create({
   searchInput: {
     minHeight: 50,
     borderRadius: 18,
-    backgroundColor: COLORS.cardMuted,
+    backgroundColor: theme.colors.input,
     paddingLeft: 44,
-    paddingRight: SPACING.md,
-    color: COLORS.text,
-    fontSize: 15,
+    paddingRight: theme.spacing.md,
+    color: theme.colors.text,
+    fontSize: theme.typography.body,
     fontWeight: '600',
   },
   chipsRow: {
-    gap: SPACING.xs,
+    gap: theme.spacing.xs,
   },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    borderRadius: RADIUS.pill,
-    paddingHorizontal: SPACING.sm,
+    borderRadius: theme.radius.pill,
+    paddingHorizontal: theme.spacing.sm,
     paddingVertical: 10,
   },
   chipActive: {
-    backgroundColor: COLORS.primary,
+    backgroundColor: theme.colors.primary,
     borderWidth: 1,
-    borderColor: COLORS.primary,
+    borderColor: theme.colors.primary,
   },
   chipInactive: {
-    backgroundColor: COLORS.cardMuted,
+    backgroundColor: theme.colors.surfaceMuted,
   },
   chipText: {
-    fontSize: 13,
+    fontSize: theme.typography.caption,
     fontWeight: '700',
   },
   chipTextActive: {
-    color: COLORS.inkInverse,
+    color: theme.colors.onPrimary,
   },
   chipTextInactive: {
-    color: COLORS.text,
-  },
-  pressed: {
-    opacity: 0.82,
+    color: theme.colors.text,
   },
 });

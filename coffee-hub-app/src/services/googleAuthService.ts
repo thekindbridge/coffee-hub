@@ -102,6 +102,24 @@ const configureGoogleSignin = async () => {
   console.log('GOOGLE SIGNIN CONFIGURED');
 };
 
+const clearPreviousGoogleSession = async (
+  googleSigninModule: GoogleSigninModule,
+) => {
+  const { GoogleSignin } = googleSigninModule;
+
+  try {
+    await GoogleSignin.signOut();
+  } catch {
+    // Ignore stale-session cleanup failures and continue to revoke.
+  }
+
+  try {
+    await GoogleSignin.revokeAccess();
+  } catch {
+    // Ignore revoke failures here so account picker still has a chance to open.
+  }
+};
+
 const readGoogleIdToken = async (
   googleSigninModule: GoogleSigninModule,
   response: GoogleSignInResponse,
@@ -176,6 +194,8 @@ export function useGoogleAuth() {
       await GoogleSignin.hasPlayServices({
         showPlayServicesUpdateDialog: true,
       });
+
+      await clearPreviousGoogleSession(googleSigninModule);
 
       const response = await GoogleSignin.signIn();
       console.log('FULL GOOGLE RESPONSE:', response);

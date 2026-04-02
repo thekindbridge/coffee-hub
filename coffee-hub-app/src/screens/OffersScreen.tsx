@@ -1,40 +1,29 @@
 import { FlatList, StyleSheet, Text, View } from 'react-native';
 import { OfferCard } from '../components/offers/OfferCard';
-import { COLORS, SPACING } from '../constants/theme';
+import { ScreenTransition } from '../components/ui/ScreenTransition';
 import { useOffers } from '../hooks/useOffers';
+import { useTheme, useThemedStyles } from '../theme';
 
 export function OffersScreen() {
+  const styles = useThemedStyles(createStyles);
   const { activeOffers, error, isLoading } = useOffers();
 
-  if (error) {
-    return (
-      <View style={styles.screen}>
-        <Text style={styles.title}>Exclusive Offers</Text>
-        <View style={styles.messageCard}>
-          <Text style={styles.errorText}>{error}</Text>
-        </View>
-      </View>
-    );
-  }
+  const content = error
+    ? error
+    : isLoading
+      ? 'Loading offers...'
+      : 'No active offers available right now.';
 
-  if (isLoading) {
+  if (error || isLoading || activeOffers.length === 0) {
     return (
       <View style={styles.screen}>
-        <Text style={styles.title}>Exclusive Offers</Text>
-        <View style={styles.messageCard}>
-          <Text style={styles.messageText}>Loading offers...</Text>
-        </View>
-      </View>
-    );
-  }
-
-  if (activeOffers.length === 0) {
-    return (
-      <View style={styles.screen}>
-        <Text style={styles.title}>Exclusive Offers</Text>
-        <View style={styles.messageCard}>
-          <Text style={styles.messageText}>No active offers available right now.</Text>
-        </View>
+        <ScreenTransition>
+          <Text style={styles.eyebrow}>Rewards</Text>
+          <Text style={styles.title}>Exclusive offers</Text>
+          <View style={styles.messageCard}>
+            <Text style={error ? styles.errorText : styles.messageText}>{content}</Text>
+          </View>
+        </ScreenTransition>
       </View>
     );
   }
@@ -46,48 +35,61 @@ export function OffersScreen() {
       renderItem={({ item }) => <OfferCard offer={item} />}
       showsVerticalScrollIndicator={false}
       contentContainerStyle={styles.listContent}
-      ListHeaderComponent={<Text style={styles.title}>Exclusive Offers</Text>}
+      ListHeaderComponent={(
+        <ScreenTransition>
+          <Text style={styles.eyebrow}>Rewards</Text>
+          <Text style={styles.title}>Exclusive offers</Text>
+        </ScreenTransition>
+      )}
       ItemSeparatorComponent={() => <View style={styles.separator} />}
     />
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: COLORS.background,
-    paddingHorizontal: SPACING.md,
-    paddingTop: SPACING.xl,
+    backgroundColor: theme.colors.background,
+    paddingHorizontal: theme.spacing.lg,
+    paddingTop: theme.spacing.xl,
   },
   listContent: {
-    paddingHorizontal: SPACING.md,
-    paddingTop: SPACING.xl,
+    paddingHorizontal: theme.spacing.lg,
+    paddingTop: theme.spacing.xl,
     paddingBottom: 112,
   },
+  eyebrow: {
+    fontSize: theme.typography.eyebrow,
+    fontWeight: '800',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    color: theme.colors.secondary,
+  },
   title: {
-    marginBottom: SPACING.xl,
-    fontSize: 30,
+    marginTop: 4,
+    marginBottom: theme.spacing.xl,
+    fontSize: theme.typography.heading,
     fontWeight: '900',
-    color: COLORS.text,
+    color: theme.colors.text,
   },
   messageCard: {
-    borderRadius: 24,
+    borderRadius: theme.radius.hero,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    backgroundColor: 'rgba(255,255,255,0.35)',
-    padding: SPACING.md,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface,
+    padding: theme.spacing.lg,
   },
   messageText: {
-    fontSize: 14,
+    fontSize: theme.typography.body,
     lineHeight: 20,
-    color: COLORS.textMuted,
+    color: theme.colors.textMuted,
   },
   errorText: {
-    fontSize: 14,
+    fontSize: theme.typography.body,
     lineHeight: 20,
-    color: COLORS.accent,
+    color: theme.colors.danger,
   },
   separator: {
-    height: SPACING.md,
+    height: theme.spacing.md,
   },
 });

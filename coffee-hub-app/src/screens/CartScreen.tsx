@@ -4,7 +4,6 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useCallback } from 'react';
 import {
   FlatList,
-  Pressable,
   StyleSheet,
   Text,
   TextInput,
@@ -16,10 +15,13 @@ import { useCartState } from '../app/providers/CartProvider';
 import { CartItemRow } from '../components/CartItemRow';
 import { CardContainer } from '../components/ui/CardContainer';
 import { PrimaryButton } from '../components/ui/PrimaryButton';
+import { ScalePressable } from '../components/ui/ScalePressable';
+import { ScreenTransition } from '../components/ui/ScreenTransition';
 import { SectionHeader } from '../components/ui/SectionHeader';
 import { ROOT_ROUTES, TAB_ROUTES } from '../constants/routes';
-import { COLORS, RADIUS, SPACING } from '../constants/theme';
+import { useUserRole } from '../features/roles/hooks/useUserRole';
 import type { RootStackParamList } from '../navigation/types';
+import { useTheme, useThemedStyles } from '../theme';
 import type { CartItem } from '../types';
 import { formatCurrency } from '../utils/formatCurrency';
 
@@ -28,6 +30,9 @@ type CartNavigation = NativeStackNavigationProp<RootStackParamList>;
 export function CartScreen() {
   const navigation = useNavigation<CartNavigation>();
   const insets = useSafeAreaInsets();
+  const { theme } = useTheme();
+  const styles = useThemedStyles(createStyles);
+  const { isCustomer, role } = useUserRole();
   const {
     appliedCouponCode,
     authError,
@@ -80,6 +85,15 @@ export function CartScreen() {
   };
 
   const goToCheckout = () => {
+    if (!isCustomer) {
+      setCheckoutError(
+        role === 'admin'
+          ? 'Admin accounts cannot place customer orders on mobile.'
+          : 'Delivery accounts cannot place customer orders on mobile.',
+      );
+      return;
+    }
+
     setCheckoutError('');
     setCheckoutStep('details');
     navigation.navigate(ROOT_ROUTES.CHECKOUT_DETAILS);
@@ -98,21 +112,18 @@ export function CartScreen() {
           hasCartItems ? { paddingBottom: 176 + insets.bottom } : null,
         ]}
         ListHeaderComponent={(
-          <>
+          <ScreenTransition>
             <View style={styles.header}>
-              <Pressable
+              <ScalePressable
                 accessibilityRole="button"
-                style={({ pressed }) => [
-                  styles.iconButton,
-                  pressed ? styles.pressed : null,
-                ]}
                 onPress={() => navigation.goBack()}
+                style={styles.iconButton}
               >
-                <Ionicons name="chevron-back" size={18} color={COLORS.text} />
-              </Pressable>
+                <Ionicons name="chevron-back" size={18} color={theme.colors.text} />
+              </ScalePressable>
 
               <View style={styles.headerCopy}>
-                <Text style={styles.eyebrow}>Cart drawer</Text>
+                <Text style={styles.eyebrow}>Cart</Text>
                 <Text style={styles.title}>Your cart</Text>
                 <Text style={styles.subtitle}>
                   {hasCartItems
@@ -130,7 +141,7 @@ export function CartScreen() {
                 <Ionicons
                   name="time-outline"
                   size={18}
-                  color={isShopOpen ? COLORS.success : COLORS.accentStrong}
+                  color={isShopOpen ? theme.colors.success : theme.colors.primary}
                 />
                 <View style={styles.noticeCopy}>
                   <Text style={styles.noticeTitle}>
@@ -156,12 +167,12 @@ export function CartScreen() {
                 />
               </CardContainer>
             ) : null}
-          </>
+          </ScreenTransition>
         )}
         ListEmptyComponent={(
           <CardContainer style={styles.emptyCard}>
             <View style={styles.emptyIcon}>
-              <Ionicons name="bag-handle-outline" size={28} color={COLORS.accentStrong} />
+              <Ionicons name="bag-handle-outline" size={28} color={theme.colors.primary} />
             </View>
             <Text style={styles.emptyTitle}>Your cart is empty</Text>
             <Text style={styles.emptySubtitle}>
@@ -188,7 +199,7 @@ export function CartScreen() {
                   value={couponInput}
                   onChangeText={value => setCouponInput(value.toUpperCase())}
                   placeholder="e.g. SAVE20"
-                  placeholderTextColor={COLORS.textMuted}
+                  placeholderTextColor={theme.colors.textMuted}
                   autoCapitalize="characters"
                   style={styles.couponInput}
                 />
@@ -254,6 +265,17 @@ export function CartScreen() {
               </CardContainer>
             ) : null}
 
+            {!isCustomer ? (
+              <CardContainer variant="tinted" style={styles.warningCard}>
+                <Text style={styles.noticeTitle}>Checkout disabled for this role</Text>
+                <Text style={styles.noticeText}>
+                  {role === 'admin'
+                    ? 'Admin accounts can review catalog and staff tools, but customer checkout is intentionally blocked.'
+                    : 'Delivery accounts use the delivery workspace only, so checkout is intentionally blocked.'}
+                </Text>
+              </CardContainer>
+            ) : null}
+
             {!isAuthReady ? (
               <CardContainer variant="tinted">
                 <Text style={styles.noticeText}>
@@ -268,16 +290,16 @@ export function CartScreen() {
       />
 
       {hasCartItems ? (
-        <View style={[styles.bottomBar, { paddingBottom: insets.bottom + SPACING.md }]}>
+        <View style={[styles.bottomBar, { paddingBottom: insets.bottom + theme.spacing.md }]}>
           <View style={styles.bottomBarCopy}>
             <Text style={styles.bottomBarLabel}>Total</Text>
             <Text style={styles.bottomBarValue}>{formatCurrency(payableCartTotal)}</Text>
           </View>
 
           <PrimaryButton
-            title="Checkout"
+            title={isCustomer ? 'Checkout' : 'Checkout unavailable'}
             onPress={goToCheckout}
-            disabled={!hasCartItems}
+            disabled={!hasCartItems || !isCustomer}
             style={styles.checkoutButton}
           />
         </View>
@@ -286,20 +308,20 @@ export function CartScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: theme.colors.background,
   },
   content: {
-    padding: SPACING.lg,
-    paddingBottom: SPACING.xxl,
+    padding: theme.spacing.lg,
+    paddingBottom: theme.spacing.xxl,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING.md,
-    marginBottom: SPACING.lg,
+    gap: theme.spacing.md,
+    marginBottom: theme.spacing.lg,
   },
   headerCopy: {
     flex: 1,
@@ -309,121 +331,121 @@ const styles = StyleSheet.create({
     height: 42,
     borderRadius: 21,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.surface,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
   eyebrow: {
-    fontSize: 11,
+    fontSize: theme.typography.eyebrow,
     fontWeight: '800',
     letterSpacing: 1,
     textTransform: 'uppercase',
-    color: COLORS.accentStrong,
+    color: theme.colors.secondary,
   },
   title: {
     marginTop: 4,
-    fontSize: 30,
+    fontSize: theme.typography.heading,
     fontWeight: '800',
-    color: COLORS.text,
+    color: theme.colors.text,
   },
   subtitle: {
-    marginTop: SPACING.xs,
-    fontSize: 14,
+    marginTop: theme.spacing.xs,
+    fontSize: theme.typography.body,
     lineHeight: 21,
-    color: COLORS.textMuted,
+    color: theme.colors.textMuted,
   },
   warningCard: {
-    marginBottom: SPACING.lg,
+    marginBottom: theme.spacing.lg,
   },
   errorCard: {
-    marginTop: SPACING.lg,
-    backgroundColor: '#FFF4F1',
-    borderColor: '#F1C5B9',
+    marginTop: theme.spacing.lg,
+    backgroundColor: theme.colors.dangerSurface,
+    borderColor: theme.colors.danger,
   },
   noticeRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: SPACING.sm,
+    gap: theme.spacing.sm,
   },
   noticeCopy: {
     flex: 1,
   },
   noticeTitle: {
-    fontSize: 15,
+    fontSize: theme.typography.body,
     fontWeight: '800',
-    color: COLORS.text,
+    color: theme.colors.text,
   },
   noticeText: {
     marginTop: 4,
-    fontSize: 13,
+    fontSize: theme.typography.body,
     lineHeight: 20,
-    color: COLORS.textMuted,
+    color: theme.colors.textMuted,
   },
   noticeMeta: {
     marginTop: 4,
-    fontSize: 12,
-    color: COLORS.textMuted,
+    fontSize: theme.typography.caption,
+    color: theme.colors.textMuted,
   },
   retryButton: {
-    marginTop: SPACING.md,
+    marginTop: theme.spacing.md,
   },
   emptyCard: {
     alignItems: 'center',
-    marginTop: SPACING.xl,
+    marginTop: theme.spacing.xl,
   },
   emptyIcon: {
     width: 68,
     height: 68,
     borderRadius: 34,
-    backgroundColor: COLORS.cardMuted,
+    backgroundColor: theme.colors.tag,
     alignItems: 'center',
     justifyContent: 'center',
   },
   emptyTitle: {
-    marginTop: SPACING.lg,
+    marginTop: theme.spacing.lg,
     fontSize: 24,
     fontWeight: '800',
-    color: COLORS.text,
+    color: theme.colors.text,
   },
   emptySubtitle: {
-    marginTop: SPACING.sm,
-    fontSize: 14,
+    marginTop: theme.spacing.sm,
+    fontSize: theme.typography.body,
     lineHeight: 21,
     textAlign: 'center',
-    color: COLORS.textMuted,
+    color: theme.colors.textMuted,
   },
   emptyButton: {
-    marginTop: SPACING.lg,
+    marginTop: theme.spacing.lg,
     alignSelf: 'stretch',
   },
   footer: {
-    marginTop: SPACING.sm,
-    gap: SPACING.lg,
+    marginTop: theme.spacing.sm,
+    gap: theme.spacing.lg,
   },
   couponRow: {
     flexDirection: 'row',
-    gap: SPACING.sm,
-    marginTop: SPACING.lg,
+    gap: theme.spacing.sm,
+    marginTop: theme.spacing.lg,
   },
   couponInput: {
     flex: 1,
     minHeight: 52,
-    borderRadius: RADIUS.md,
+    borderRadius: theme.radius.md,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.card,
-    paddingHorizontal: SPACING.md,
-    color: COLORS.text,
-    fontSize: 15,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.input,
+    paddingHorizontal: theme.spacing.md,
+    color: theme.colors.text,
+    fontSize: theme.typography.body,
     fontWeight: '600',
   },
   applyButton: {
     minWidth: 112,
   },
   summaryBlock: {
-    marginTop: SPACING.lg,
-    gap: SPACING.sm,
+    marginTop: theme.spacing.lg,
+    gap: theme.spacing.sm,
   },
   summaryRow: {
     flexDirection: 'row',
@@ -431,80 +453,77 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   summaryLabel: {
-    fontSize: 14,
-    color: COLORS.textMuted,
+    fontSize: theme.typography.body,
+    color: theme.colors.textMuted,
   },
   summaryValue: {
-    fontSize: 14,
+    fontSize: theme.typography.body,
     fontWeight: '700',
-    color: COLORS.text,
+    color: theme.colors.text,
   },
   discountText: {
-    fontSize: 14,
+    fontSize: theme.typography.body,
     fontWeight: '700',
-    color: COLORS.success,
+    color: theme.colors.success,
   },
   totalRow: {
-    marginTop: SPACING.sm,
-    paddingTop: SPACING.md,
+    marginTop: theme.spacing.sm,
+    paddingTop: theme.spacing.md,
     borderTopWidth: 1,
-    borderTopColor: COLORS.border,
+    borderTopColor: theme.colors.border,
   },
   totalLabel: {
     fontSize: 17,
     fontWeight: '800',
-    color: COLORS.text,
+    color: theme.colors.text,
   },
   totalValue: {
     fontSize: 17,
     fontWeight: '800',
-    color: COLORS.primary,
+    color: theme.colors.primary,
   },
   errorText: {
-    marginTop: SPACING.sm,
-    fontSize: 13,
+    marginTop: theme.spacing.sm,
+    fontSize: theme.typography.body,
     lineHeight: 20,
-    color: COLORS.danger,
+    color: theme.colors.danger,
   },
   successText: {
-    marginTop: SPACING.sm,
-    fontSize: 13,
+    marginTop: theme.spacing.sm,
+    fontSize: theme.typography.body,
     lineHeight: 20,
-    color: COLORS.success,
+    color: theme.colors.success,
   },
   spacer: {
-    height: SPACING.xl,
+    height: theme.spacing.xl,
   },
   bottomBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING.md,
+    gap: theme.spacing.md,
     borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-    backgroundColor: COLORS.surface,
-    paddingHorizontal: SPACING.lg,
-    paddingTop: SPACING.md,
+    borderTopColor: theme.colors.border,
+    backgroundColor: theme.colors.surface,
+    paddingHorizontal: theme.spacing.lg,
+    paddingTop: theme.spacing.md,
   },
   bottomBarCopy: {
     flex: 1,
   },
   bottomBarLabel: {
-    fontSize: 11,
+    fontSize: theme.typography.eyebrow,
     fontWeight: '800',
     letterSpacing: 1,
     textTransform: 'uppercase',
-    color: COLORS.textMuted,
+    color: theme.colors.textMuted,
   },
   bottomBarValue: {
     marginTop: 4,
     fontSize: 22,
     fontWeight: '800',
-    color: COLORS.primary,
+    color: theme.colors.primary,
   },
   checkoutButton: {
     flex: 1,
-  },
-  pressed: {
-    opacity: 0.84,
   },
 });

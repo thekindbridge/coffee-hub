@@ -2,7 +2,6 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -10,10 +9,12 @@ import {
   View,
 } from 'react-native';
 import { useCartState } from '../app/providers/CartProvider';
+import { ScalePressable } from '../components/ui/ScalePressable';
+import { ScreenTransition } from '../components/ui/ScreenTransition';
 import { TAB_ROUTES } from '../constants/routes';
-import { COLORS, RADIUS, SPACING } from '../constants/theme';
 import { useOrders } from '../hooks/useOrders';
 import type { MainTabParamList } from '../navigation/types';
+import { animateLayout, useTheme, useThemedStyles } from '../theme';
 import type { Order } from '../types';
 import { formatCurrency } from '../utils/formatCurrency';
 
@@ -33,15 +34,47 @@ const formatOrderDate = (value: string) => {
   });
 };
 
-const statusToneMap: Record<string, { background: string; border: string; text: string }> = {
-  Pending: { background: '#F3EEE8', border: '#E0D4C8', text: COLORS.textMuted },
-  Accepted: { background: '#EAF7EF', border: '#C9E9D4', text: COLORS.success },
-  Preparing: { background: '#FFF2DE', border: '#F3D6A6', text: '#9C6A18' },
-  'Out for Delivery': { background: '#E8F4FB', border: '#C8E0F1', text: '#1F6F99' },
-  Delivered: { background: '#EAF7EF', border: '#C9E9D4', text: COLORS.success },
-  Rejected: { background: '#FFF1EF', border: '#F4C7C1', text: '#A23D2A' },
-  Cancelled: { background: '#FFF1EF', border: '#F4C7C1', text: '#A23D2A' },
-};
+function useStatusToneMap() {
+  const { theme } = useTheme();
+
+  return useMemo(() => ({
+    Pending: {
+      background: theme.colors.surfaceMuted,
+      border: theme.colors.borderStrong,
+      text: theme.colors.textMuted,
+    },
+    Accepted: {
+      background: theme.colors.successSurface,
+      border: theme.colors.success,
+      text: theme.colors.success,
+    },
+    Preparing: {
+      background: theme.colors.warningSurface,
+      border: theme.colors.warning,
+      text: theme.colors.warning,
+    },
+    'Out for Delivery': {
+      background: theme.colors.tag,
+      border: theme.colors.secondary,
+      text: theme.colors.primary,
+    },
+    Delivered: {
+      background: theme.colors.successSurface,
+      border: theme.colors.success,
+      text: theme.colors.success,
+    },
+    Rejected: {
+      background: theme.colors.dangerSurface,
+      border: theme.colors.danger,
+      text: theme.colors.danger,
+    },
+    Cancelled: {
+      background: theme.colors.dangerSurface,
+      border: theme.colors.danger,
+      text: theme.colors.danger,
+    },
+  }), [theme]);
+}
 
 function OrderCard({
   isHighlighted,
@@ -50,8 +83,10 @@ function OrderCard({
   isHighlighted: boolean;
   order: Order;
 }) {
+  const styles = useThemedStyles(createStyles);
+  const statusToneMap = useStatusToneMap();
   const [isExpanded, setIsExpanded] = useState(false);
-  const statusTone = statusToneMap[order.status] ?? statusToneMap.Pending;
+  const statusTone = statusToneMap[order.status as keyof typeof statusToneMap] ?? statusToneMap.Pending;
   const previewItems = order.items?.slice(0, 2) ?? [];
 
   return (
@@ -119,17 +154,17 @@ function OrderCard({
         </View>
       ) : null}
 
-      <Pressable
-        style={({ pressed }) => [
-          styles.secondaryButton,
-          pressed ? styles.pressed : null,
-        ]}
-        onPress={() => setIsExpanded(previous => !previous)}
+      <ScalePressable
+        onPress={() => {
+          animateLayout();
+          setIsExpanded(previous => !previous);
+        }}
+        style={styles.secondaryButton}
       >
         <Text style={styles.secondaryButtonText}>
           {isExpanded ? 'Hide details' : 'View details'}
         </Text>
-      </Pressable>
+      </ScalePressable>
 
       {isExpanded ? (
         <View style={styles.detailsCard}>
@@ -158,6 +193,8 @@ function OrderCard({
 
 export function OrdersScreen() {
   const navigation = useNavigation<OrdersNavigation>();
+  const { theme } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const { currentUserId, isAuthReady, placedOrder, setPlacedOrder } = useCartState();
   const { activeOrders, error, isLoading, orders, pastOrders, refreshOrders } = useOrders({
     currentUserId,
@@ -207,184 +244,360 @@ export function OrdersScreen() {
           onRefresh={() => {
             void refreshOrders();
           }}
-          tintColor={COLORS.accent}
+          tintColor={theme.colors.primary}
         />
       )}
       showsVerticalScrollIndicator={false}
     >
-      <Text style={styles.pageTitle}>Orders</Text>
+      <ScreenTransition>
+        <Text style={styles.sectionEyebrow}>History</Text>
+        <Text style={styles.pageTitle}>Orders</Text>
 
-      {error ? (
-        <View style={[styles.noticeCard, styles.errorNotice]}>
-          <Text style={styles.noticeText}>{error}</Text>
-        </View>
-      ) : null}
+        {error ? (
+          <View style={[styles.noticeCard, styles.errorNotice]}>
+            <Text style={styles.noticeText}>{error}</Text>
+          </View>
+        ) : null}
 
-      {orders.length === 0 && !isLoading ? (
-        <View style={styles.emptyCard}>
-          <Text style={styles.emptyTitle}>{emptyTitle}</Text>
-          <Text style={styles.emptyText}>{emptySubtitle}</Text>
-          {isAuthReady ? (
-            <Pressable
-              style={({ pressed }) => [styles.primaryButton, pressed ? styles.pressed : null]}
-              onPress={() => navigation.navigate(TAB_ROUTES.MENU)}
-            >
-              <Text style={styles.primaryButtonText}>Browse Menu</Text>
-            </Pressable>
-          ) : null}
-        </View>
-      ) : null}
+        {orders.length === 0 && !isLoading ? (
+          <View style={styles.emptyCard}>
+            <Text style={styles.emptyTitle}>{emptyTitle}</Text>
+            <Text style={styles.emptyText}>{emptySubtitle}</Text>
+            {isAuthReady ? (
+              <ScalePressable
+                onPress={() => navigation.navigate(TAB_ROUTES.MENU)}
+                style={styles.primaryButton}
+              >
+                <Text style={styles.primaryButtonText}>Browse Menu</Text>
+              </ScalePressable>
+            ) : null}
+          </View>
+        ) : null}
 
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <View>
-            <Text style={styles.sectionEyebrow}>Active orders</Text>
-            <Text style={styles.sectionTitle}>In progress</Text>
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <View>
+              <Text style={styles.sectionEyebrow}>Active orders</Text>
+              <Text style={styles.sectionTitle}>In progress</Text>
+            </View>
+            <View style={styles.countBadge}>
+              <Text style={styles.countBadgeText}>{activeOrders.length}</Text>
+            </View>
           </View>
-          <View style={styles.countBadge}>
-            <Text style={styles.countBadgeText}>{activeOrders.length}</Text>
-          </View>
-        </View>
 
-        {activeOrders.length > 0 ? (
-          <View style={styles.list}>
-            {activeOrders.map((order, index) => (
-              <OrderCard
-                key={order.doc_id || order.id}
-                isHighlighted={index === 0 && placedOrder?.id === order.id}
-                order={order}
-              />
-            ))}
-          </View>
-        ) : (
-          <View style={styles.placeholderCard}>
-            <Text style={styles.placeholderText}>No active orders right now.</Text>
-          </View>
-        )}
-      </View>
-
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <View>
-            <Text style={styles.sectionEyebrow}>Past orders</Text>
-            <Text style={styles.sectionTitle}>History</Text>
-          </View>
-          <View style={styles.countBadge}>
-            <Text style={styles.countBadgeText}>{pastOrders.length}</Text>
-          </View>
+          {activeOrders.length > 0 ? (
+            <View style={styles.list}>
+              {activeOrders.map((order, index) => (
+                <OrderCard
+                  key={order.doc_id || order.id}
+                  isHighlighted={index === 0 && placedOrder?.id === order.id}
+                  order={order}
+                />
+              ))}
+            </View>
+          ) : (
+            <View style={styles.placeholderCard}>
+              <Text style={styles.placeholderText}>No active orders right now.</Text>
+            </View>
+          )}
         </View>
 
-        {pastOrders.length > 0 ? (
-          <View style={styles.list}>
-            {pastOrders.map(order => (
-              <OrderCard
-                key={order.doc_id || order.id}
-                isHighlighted={false}
-                order={order}
-              />
-            ))}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <View>
+              <Text style={styles.sectionEyebrow}>Past orders</Text>
+              <Text style={styles.sectionTitle}>History</Text>
+            </View>
+            <View style={styles.countBadge}>
+              <Text style={styles.countBadgeText}>{pastOrders.length}</Text>
+            </View>
           </View>
-        ) : (
-          <View style={styles.placeholderCard}>
-            <Text style={styles.placeholderText}>
-              Delivered, rejected, and cancelled orders will appear here.
-            </Text>
-          </View>
-        )}
-      </View>
+
+          {pastOrders.length > 0 ? (
+            <View style={styles.list}>
+              {pastOrders.map(order => (
+                <OrderCard
+                  key={order.doc_id || order.id}
+                  isHighlighted={false}
+                  order={order}
+                />
+              ))}
+            </View>
+          ) : (
+            <View style={styles.placeholderCard}>
+              <Text style={styles.placeholderText}>
+                Delivered, rejected, and cancelled orders will appear here.
+              </Text>
+            </View>
+          )}
+        </View>
+      </ScreenTransition>
     </ScrollView>
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: COLORS.background },
-  screenContent: { padding: SPACING.lg, paddingBottom: 120 },
-  pageTitle: { fontSize: 30, fontWeight: '800', color: COLORS.text, marginBottom: SPACING.lg },
+const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: theme.colors.background,
+  },
+  screenContent: {
+    padding: theme.spacing.lg,
+    paddingBottom: 120,
+  },
+  pageTitle: {
+    fontSize: theme.typography.heading,
+    fontWeight: '800',
+    color: theme.colors.text,
+    marginBottom: theme.spacing.lg,
+  },
   noticeCard: {
-    borderRadius: 18,
+    borderRadius: theme.radius.lg,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.surface,
-    padding: SPACING.md,
-    marginBottom: SPACING.lg,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface,
+    padding: theme.spacing.md,
+    marginBottom: theme.spacing.lg,
   },
-  errorNotice: { borderColor: '#F4C7C1', backgroundColor: '#FFF1EF' },
-  noticeText: { fontSize: 13, lineHeight: 20, color: COLORS.textMuted },
+  errorNotice: {
+    borderColor: theme.colors.danger,
+    backgroundColor: theme.colors.dangerSurface,
+  },
+  noticeText: {
+    fontSize: theme.typography.body,
+    lineHeight: 20,
+    color: theme.colors.textMuted,
+  },
   emptyCard: {
-    borderRadius: 24,
+    borderRadius: theme.radius.hero,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.surface,
-    padding: SPACING.xl,
-    marginBottom: SPACING.lg,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface,
+    padding: theme.spacing.xl,
+    marginBottom: theme.spacing.lg,
   },
-  emptyTitle: { fontSize: 24, fontWeight: '800', color: COLORS.text },
-  emptyText: { marginTop: SPACING.sm, fontSize: 14, lineHeight: 22, color: COLORS.textMuted },
+  emptyTitle: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: theme.colors.text,
+  },
+  emptyText: {
+    marginTop: theme.spacing.sm,
+    fontSize: theme.typography.body,
+    lineHeight: 22,
+    color: theme.colors.textMuted,
+  },
   primaryButton: {
     minHeight: 50,
-    marginTop: SPACING.lg,
-    borderRadius: RADIUS.pill,
-    backgroundColor: COLORS.accentStrong,
+    marginTop: theme.spacing.lg,
+    borderRadius: theme.radius.pill,
+    backgroundColor: theme.colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: theme.spacing.lg,
   },
-  primaryButtonText: { fontSize: 14, fontWeight: '700', color: COLORS.surface },
-  section: { marginBottom: SPACING.xl },
-  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.md },
-  sectionEyebrow: { fontSize: 11, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', color: COLORS.secondary },
-  sectionTitle: { marginTop: 4, fontSize: 22, fontWeight: '700', color: COLORS.text },
-  countBadge: { minWidth: 38, borderRadius: 19, backgroundColor: COLORS.surfaceDarkAlt, alignItems: 'center', justifyContent: 'center', paddingHorizontal: SPACING.sm, paddingVertical: 8 },
-  countBadgeText: { fontSize: 12, fontWeight: '700', color: COLORS.inkInverse },
-  list: { gap: SPACING.md },
+  primaryButtonText: {
+    fontSize: theme.typography.body,
+    fontWeight: '700',
+    color: theme.colors.onPrimary,
+  },
+  section: {
+    marginBottom: theme.spacing.xl,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: theme.spacing.md,
+  },
+  sectionEyebrow: {
+    fontSize: theme.typography.eyebrow,
+    fontWeight: '700',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    color: theme.colors.secondary,
+  },
+  sectionTitle: {
+    marginTop: 4,
+    fontSize: theme.typography.subheading,
+    fontWeight: '700',
+    color: theme.colors.text,
+  },
+  countBadge: {
+    minWidth: 38,
+    borderRadius: 19,
+    backgroundColor: theme.colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: 8,
+  },
+  countBadgeText: {
+    fontSize: theme.typography.caption,
+    fontWeight: '700',
+    color: theme.colors.onPrimary,
+  },
+  list: {
+    gap: theme.spacing.md,
+  },
   placeholderCard: {
-    borderRadius: 20,
+    borderRadius: theme.radius.lg,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.surface,
-    padding: SPACING.md,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface,
+    padding: theme.spacing.md,
   },
-  placeholderText: { fontSize: 13, lineHeight: 20, color: COLORS.textMuted },
+  placeholderText: {
+    fontSize: theme.typography.body,
+    lineHeight: 20,
+    color: theme.colors.textMuted,
+  },
   orderCard: {
-    borderRadius: 24,
+    borderRadius: theme.radius.hero,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.surface,
-    padding: SPACING.md,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface,
+    padding: theme.spacing.md,
   },
-  highlightedCard: { borderColor: COLORS.secondary, backgroundColor: '#FFF8F0' },
-  orderHeader: { flexDirection: 'row', justifyContent: 'space-between', gap: SPACING.md },
-  orderMeta: { flex: 1 },
-  cardEyebrow: { fontSize: 10, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', color: COLORS.textMuted },
-  orderId: { marginTop: 4, fontSize: 18, fontWeight: '800', color: COLORS.text },
-  orderDate: { marginTop: 4, fontSize: 12, color: COLORS.textMuted },
-  statusChip: { borderRadius: 999, borderWidth: 1, alignSelf: 'flex-start', paddingHorizontal: SPACING.sm, paddingVertical: 8 },
-  statusChipText: { fontSize: 11, fontWeight: '700' },
-  orderHint: { marginTop: SPACING.md, fontSize: 13, lineHeight: 20, color: COLORS.textMuted },
-  itemPreview: { marginTop: SPACING.md, gap: 4 },
-  itemLine: { fontSize: 13, color: COLORS.textMuted },
-  moreItemsText: { fontSize: 12, color: COLORS.textMuted },
-  totalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, borderTopColor: COLORS.border, marginTop: SPACING.md, paddingTop: SPACING.md },
-  totalLabel: { fontSize: 14, color: COLORS.textMuted },
-  totalValue: { fontSize: 16, fontWeight: '800', color: COLORS.accentStrong },
-  reasonCard: { borderRadius: 18, borderWidth: 1, borderColor: '#F4C7C1', backgroundColor: '#FFF1EF', padding: SPACING.md, marginTop: SPACING.md },
-  reasonTitle: { fontSize: 10, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', color: '#A23D2A' },
-  reasonText: { marginTop: 6, fontSize: 13, lineHeight: 20, color: '#A23D2A' },
+  highlightedCard: {
+    borderColor: theme.colors.primary,
+    backgroundColor: theme.colors.surfaceRaised,
+  },
+  orderHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: theme.spacing.md,
+  },
+  orderMeta: {
+    flex: 1,
+  },
+  cardEyebrow: {
+    fontSize: theme.typography.eyebrow,
+    fontWeight: '700',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    color: theme.colors.textMuted,
+  },
+  orderId: {
+    marginTop: 4,
+    fontSize: theme.typography.subheading,
+    fontWeight: '800',
+    color: theme.colors.text,
+  },
+  orderDate: {
+    marginTop: 4,
+    fontSize: theme.typography.caption,
+    color: theme.colors.textMuted,
+  },
+  statusChip: {
+    borderRadius: 999,
+    borderWidth: 1,
+    alignSelf: 'flex-start',
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: 8,
+  },
+  statusChipText: {
+    fontSize: theme.typography.eyebrow,
+    fontWeight: '700',
+  },
+  orderHint: {
+    marginTop: theme.spacing.md,
+    fontSize: theme.typography.body,
+    lineHeight: 20,
+    color: theme.colors.textMuted,
+  },
+  itemPreview: {
+    marginTop: theme.spacing.md,
+    gap: 4,
+  },
+  itemLine: {
+    fontSize: theme.typography.body,
+    color: theme.colors.textMuted,
+  },
+  moreItemsText: {
+    fontSize: theme.typography.caption,
+    color: theme.colors.textMuted,
+  },
+  totalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.border,
+    marginTop: theme.spacing.md,
+    paddingTop: theme.spacing.md,
+  },
+  totalLabel: {
+    fontSize: theme.typography.body,
+    color: theme.colors.textMuted,
+  },
+  totalValue: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: theme.colors.primary,
+  },
+  reasonCard: {
+    borderRadius: theme.radius.md,
+    borderWidth: 1,
+    borderColor: theme.colors.danger,
+    backgroundColor: theme.colors.dangerSurface,
+    padding: theme.spacing.md,
+    marginTop: theme.spacing.md,
+  },
+  reasonTitle: {
+    fontSize: theme.typography.eyebrow,
+    fontWeight: '700',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    color: theme.colors.danger,
+  },
+  reasonText: {
+    marginTop: 6,
+    fontSize: theme.typography.body,
+    lineHeight: 20,
+    color: theme.colors.danger,
+  },
   secondaryButton: {
     minHeight: 46,
-    borderRadius: RADIUS.pill,
+    borderRadius: theme.radius.pill,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: theme.colors.border,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.card,
-    marginTop: SPACING.md,
+    backgroundColor: theme.colors.surfaceRaised,
+    marginTop: theme.spacing.md,
   },
-  secondaryButtonText: { fontSize: 14, fontWeight: '700', color: COLORS.text },
-  detailsCard: { borderRadius: 20, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.card, padding: SPACING.md, marginTop: SPACING.md },
-  detailsList: { gap: SPACING.sm, marginTop: SPACING.md },
-  detailRow: { flexDirection: 'row', justifyContent: 'space-between', gap: SPACING.md, alignItems: 'center' },
-  detailLabel: { flex: 1, fontSize: 13, color: COLORS.textMuted },
-  detailValue: { fontSize: 13, fontWeight: '700', color: COLORS.text },
-  pressed: { opacity: 0.84 },
+  secondaryButtonText: {
+    fontSize: theme.typography.body,
+    fontWeight: '700',
+    color: theme.colors.text,
+  },
+  detailsCard: {
+    borderRadius: theme.radius.lg,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surfaceRaised,
+    padding: theme.spacing.md,
+    marginTop: theme.spacing.md,
+  },
+  detailsList: {
+    gap: theme.spacing.sm,
+    marginTop: theme.spacing.md,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: theme.spacing.md,
+    alignItems: 'center',
+  },
+  detailLabel: {
+    flex: 1,
+    fontSize: theme.typography.body,
+    color: theme.colors.textMuted,
+  },
+  detailValue: {
+    fontSize: theme.typography.body,
+    fontWeight: '700',
+    color: theme.colors.text,
+  },
 });

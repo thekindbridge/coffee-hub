@@ -1,11 +1,11 @@
 import type { ReactNode } from 'react';
 import {
-  StyleProp,
   StyleSheet,
   View,
+  type StyleProp,
   type ViewStyle,
 } from 'react-native';
-import { COLORS, RADIUS, SHADOWS, SPACING } from '../../constants/theme';
+import { useTheme, useThemedStyles } from '../../theme';
 
 type CardContainerProps = {
   children: ReactNode;
@@ -18,16 +18,19 @@ export function CardContainer({
   variant = 'light',
   style,
 }: CardContainerProps) {
+  const { theme } = useTheme();
+  const styles = useThemedStyles(createStyles);
+
   return (
     <View
       style={[
         styles.base,
+        theme.shadows.soft,
         variant === 'dark'
           ? styles.dark
           : variant === 'tinted'
             ? styles.tinted
             : styles.light,
-        SHADOWS.soft,
         style,
       ]}
     >
@@ -36,22 +39,22 @@ export function CardContainer({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => StyleSheet.create({
   base: {
-    borderRadius: RADIUS.lg,
+    borderRadius: theme.radius.lg,
     borderWidth: 1,
-    padding: SPACING.lg,
+    padding: theme.spacing.lg,
   },
   light: {
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.surface,
+    backgroundColor: theme.colors.surface,
+    borderColor: theme.colors.border,
   },
   dark: {
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    backgroundColor: COLORS.surfaceDark,
+    backgroundColor: theme.isDark ? theme.colors.surfaceRaised : theme.colors.primary,
+    borderColor: theme.isDark ? theme.colors.borderStrong : 'rgba(255, 255, 255, 0.08)',
   },
   tinted: {
-    borderColor: COLORS.borderStrong,
-    backgroundColor: COLORS.cardMuted,
+    backgroundColor: theme.colors.surfaceMuted,
+    borderColor: theme.colors.borderStrong,
   },
 });

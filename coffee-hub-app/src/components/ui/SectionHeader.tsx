@@ -1,6 +1,7 @@
-import { Feather } from '@expo/vector-icons';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { COLORS, SPACING } from '../../constants/theme';
+import { Ionicons } from '@expo/vector-icons';
+import { StyleSheet, Text, View } from 'react-native';
+import { useTheme, useThemedStyles } from '../../theme';
+import { ScalePressable } from './ScalePressable';
 
 type SectionHeaderProps = {
   eyebrow?: string;
@@ -19,6 +20,9 @@ export function SectionHeader({
   onActionPress,
   inverted = false,
 }: SectionHeaderProps) {
+  const { theme } = useTheme();
+  const styles = useThemedStyles(createStyles);
+
   return (
     <View style={styles.row}>
       <View style={styles.copy}>
@@ -27,9 +31,11 @@ export function SectionHeader({
             {eyebrow}
           </Text>
         ) : null}
+
         <Text style={[styles.title, inverted ? styles.titleInverted : null]}>
           {title}
         </Text>
+
         {subtitle ? (
           <Text style={[styles.subtitle, inverted ? styles.subtitleInverted : null]}>
             {subtitle}
@@ -38,57 +44,58 @@ export function SectionHeader({
       </View>
 
       {actionLabel && onActionPress ? (
-        <Pressable
+        <ScalePressable
           accessibilityRole="button"
-          style={({ pressed }) => [styles.action, pressed ? styles.pressed : null]}
           onPress={onActionPress}
+          scaleTo={0.96}
+          style={styles.action}
         >
           <Text style={styles.actionText}>{actionLabel}</Text>
-          <Feather name="chevron-right" size={16} color={COLORS.accentStrong} />
-        </Pressable>
+          <Ionicons name="chevron-forward" size={16} color={theme.colors.primary} />
+        </ScalePressable>
       ) : null}
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => StyleSheet.create({
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-end',
-    gap: SPACING.sm,
+    gap: theme.spacing.sm,
   },
   copy: {
     flex: 1,
   },
   eyebrow: {
-    fontSize: 11,
+    fontSize: theme.typography.eyebrow,
     fontWeight: '800',
-    letterSpacing: 1.1,
+    letterSpacing: 1,
     textTransform: 'uppercase',
-    color: COLORS.accentStrong,
+    color: theme.colors.secondary,
   },
   eyebrowInverted: {
-    color: COLORS.accentSoft,
+    color: theme.colors.secondary,
   },
   title: {
     marginTop: 4,
-    fontSize: 24,
-    lineHeight: 28,
+    fontSize: theme.typography.subheading,
+    lineHeight: 24,
     fontWeight: '800',
-    color: COLORS.text,
+    color: theme.colors.text,
   },
   titleInverted: {
-    color: COLORS.inkInverse,
+    color: theme.colors.textInverse,
   },
   subtitle: {
     marginTop: 6,
-    fontSize: 14,
+    fontSize: theme.typography.body,
     lineHeight: 21,
-    color: COLORS.textMuted,
+    color: theme.colors.textMuted,
   },
   subtitleInverted: {
-    color: 'rgba(251, 246, 241, 0.72)',
+    color: 'rgba(248, 244, 239, 0.76)',
   },
   action: {
     flexDirection: 'row',
@@ -97,11 +104,8 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   actionText: {
-    fontSize: 13,
+    fontSize: theme.typography.caption,
     fontWeight: '800',
-    color: COLORS.accentStrong,
-  },
-  pressed: {
-    opacity: 0.82,
+    color: theme.colors.primary,
   },
 });

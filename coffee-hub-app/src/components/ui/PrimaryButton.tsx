@@ -1,14 +1,14 @@
 import type { ReactNode } from 'react';
 import {
   ActivityIndicator,
-  Pressable,
-  StyleProp,
   StyleSheet,
   Text,
   View,
+  type StyleProp,
   type ViewStyle,
 } from 'react-native';
-import { COLORS, RADIUS, SHADOWS, SPACING } from '../../constants/theme';
+import { useTheme, useThemedStyles } from '../../theme';
+import { ScalePressable } from './ScalePressable';
 
 type PrimaryButtonProps = {
   title: string;
@@ -29,29 +29,31 @@ export function PrimaryButton({
   loading = false,
   style,
 }: PrimaryButtonProps) {
+  const { theme } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const isPrimary = variant === 'primary';
   const isSecondary = variant === 'secondary';
 
   return (
-    <Pressable
+    <ScalePressable
       accessibilityRole="button"
-      style={({ pressed }) => [
+      disabled={disabled || loading}
+      onPress={onPress}
+      scaleTo={0.95}
+      style={[
         styles.button,
-        isPrimary ? styles.buttonPrimary : null,
-        isSecondary ? styles.buttonSecondary : styles.buttonGhost,
-        isPrimary ? SHADOWS.card : null,
-        pressed ? styles.pressed : null,
+        isPrimary ? styles.primaryButton : null,
+        isSecondary ? styles.secondaryButton : styles.ghostButton,
+        isPrimary ? theme.shadows.card : null,
         (disabled || loading) ? styles.disabled : null,
         style,
       ]}
-      onPress={onPress}
-      disabled={disabled || loading}
     >
       <View style={styles.content}>
         {loading ? (
           <ActivityIndicator
+            color={isPrimary ? theme.colors.onPrimary : theme.colors.primary}
             size="small"
-            color={isPrimary ? COLORS.inkInverse : COLORS.primary}
           />
         ) : icon ? (
           <View style={styles.icon}>{icon}</View>
@@ -60,34 +62,34 @@ export function PrimaryButton({
         <Text
           style={[
             styles.title,
-            isPrimary ? styles.titlePrimary : null,
-            isSecondary ? styles.titleSecondary : styles.titleGhost,
+            isPrimary ? styles.primaryTitle : null,
+            isSecondary ? styles.secondaryTitle : styles.ghostTitle,
           ]}
         >
           {title}
         </Text>
       </View>
-    </Pressable>
+    </ScalePressable>
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => StyleSheet.create({
   button: {
     minHeight: 54,
-    borderRadius: 16,
-    paddingHorizontal: SPACING.lg,
+    borderRadius: theme.radius.md,
     justifyContent: 'center',
+    paddingHorizontal: theme.spacing.lg,
   },
-  buttonPrimary: {
-    backgroundColor: COLORS.primary,
+  primaryButton: {
+    backgroundColor: theme.colors.primary,
   },
-  buttonSecondary: {
+  secondaryButton: {
+    backgroundColor: theme.colors.surface,
     borderWidth: 1,
-    borderColor: COLORS.borderStrong,
-    backgroundColor: COLORS.surface,
+    borderColor: theme.colors.borderStrong,
   },
-  buttonGhost: {
-    backgroundColor: 'rgba(75, 46, 43, 0.08)',
+  ghostButton: {
+    backgroundColor: theme.colors.tag,
   },
   content: {
     flexDirection: 'row',
@@ -100,22 +102,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   title: {
-    fontSize: 15,
+    fontSize: theme.typography.body,
     fontWeight: '800',
   },
-  titlePrimary: {
-    color: COLORS.inkInverse,
+  primaryTitle: {
+    color: theme.colors.onPrimary,
   },
-  titleSecondary: {
-    color: COLORS.primary,
+  secondaryTitle: {
+    color: theme.colors.primary,
   },
-  titleGhost: {
-    color: COLORS.text,
-  },
-  pressed: {
-    opacity: 0.88,
+  ghostTitle: {
+    color: theme.colors.text,
   },
   disabled: {
-    opacity: 0.62,
+    opacity: 0.56,
   },
 });
