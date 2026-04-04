@@ -2,18 +2,26 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme, useThemedStyles } from '../theme';
 
-export function RoleLoadingScreen() {
+type RoleLoadingScreenProps = {
+  showSpinner?: boolean;
+  subtitle?: string;
+  title?: string;
+};
+
+export function RoleLoadingScreen({
+  showSpinner = true,
+  subtitle = 'Checking your Coffee Hub access so we can open the right experience.',
+  title = 'Preparing your workspace',
+}: RoleLoadingScreenProps) {
   const styles = useThemedStyles(createStyles);
   const { theme } = useTheme();
 
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
       <View style={styles.card}>
-        <ActivityIndicator size="large" color={theme.colors.primary} />
-        <Text style={styles.title}>Preparing your workspace</Text>
-        <Text style={styles.subtitle}>
-          Checking your Coffee Hub access so we can open the right experience.
-        </Text>
+        {showSpinner ? <ActivityIndicator size="large" color={theme.colors.primary} /> : null}
+        <Text style={styles.title}>{title}</Text>
+        <Text style={styles.subtitle}>{subtitle}</Text>
       </View>
     </SafeAreaView>
   );

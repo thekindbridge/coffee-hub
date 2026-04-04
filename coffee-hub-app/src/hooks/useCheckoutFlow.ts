@@ -26,7 +26,10 @@ const findInactiveOffer = async (): Promise<Offer | null> => null;
 
 type UseCheckoutFlowParams = {
   currentUserId: string;
+  currentTimeInMinutes: number;
+  isShopTimingLoading: boolean;
   profileSaved?: CustomerProfile;
+  refreshShopTiming: () => Promise<ShopTiming>;
   shopTiming: ShopTiming;
   findActiveOfferByCode?: (couponCode: string) => Promise<Offer | null>;
   onOrderPlaced?: (order: Order) => void;
@@ -34,7 +37,10 @@ type UseCheckoutFlowParams = {
 
 export const useCheckoutFlow = ({
   currentUserId,
+  currentTimeInMinutes,
+  isShopTimingLoading,
   profileSaved = DEFAULT_PROFILE,
+  refreshShopTiming,
   shopTiming,
   findActiveOfferByCode = findInactiveOffer,
   onOrderPlaced,
@@ -44,6 +50,8 @@ export const useCheckoutFlow = ({
   const orderFlow = usePaymentFlow({
     currentUserId,
     profileSaved,
+    isShopTimingLoading,
+    refreshShopTiming,
     shopTiming,
     cart: cart.cart,
     cartTotal: cart.cartTotal,
@@ -55,6 +63,7 @@ export const useCheckoutFlow = ({
     setCouponSuccess: cart.setCouponSuccess,
     setCouponError: cart.setCouponError,
     clearCart: () => cart.setCart([]),
+    currentTimeInMinutes,
     findActiveOfferByCode,
     onOrderPlaced,
   });
@@ -112,7 +121,10 @@ export const useCheckoutFlow = ({
     setDraftOrderId: orderFlow.setDraftOrderId,
     savedAddressOptions: orderFlow.savedAddressOptions,
     isShopOpen: orderFlow.isShopOpen,
+    shopTiming: orderFlow.shopTiming,
+    currentTime: orderFlow.currentTime,
     shopTimingRangeLabel: orderFlow.shopTimingRangeLabel,
+    shopCountdownMessage: orderFlow.shopCountdownMessage,
     shopStatusMessage: orderFlow.shopStatusMessage,
     selectedAddressLabel: orderFlow.selectedAddressLabel,
     checkoutAddressSummary: orderFlow.checkoutAddressSummary,

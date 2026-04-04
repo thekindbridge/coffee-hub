@@ -3,8 +3,8 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { ApiError } from '../_lib/errors.js';
 import {
   getAdminDb,
+  resolveRequestUser,
   verifyAdminRequest,
-  verifyRequestUser,
 } from '../_lib/firebaseAdmin.js';
 import {
   mapOrderRecordToResponse,
@@ -83,13 +83,13 @@ export default async function handler(request: VercelRequest, response: VercelRe
       throw new ApiError(400, 'Unsupported orders scope.');
     }
 
-    const decodedToken = await verifyRequestUser(request);
     const requestedUserId = (getQueryValue(request.query.userId) || '').trim();
-    if (requestedUserId && requestedUserId !== decodedToken.uid) {
+    const resolvedUser = await resolveRequestUser(request, requestedUserId || undefined);
+    if (requestedUserId && requestedUserId !== resolvedUser.uid) {
       throw new ApiError(403, 'Authenticated user does not match the requested order owner.');
     }
 
-    const effectiveUserId = requestedUserId || decodedToken.uid;
+    const effectiveUserId = requestedUserId || resolvedUser.uid;
 
     if (orderId) {
       const orderSnapshot = await adminDb.collection('orders').doc(orderId).get();

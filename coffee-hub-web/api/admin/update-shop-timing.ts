@@ -1,27 +1,53 @@
 import { FieldValue } from 'firebase-admin/firestore';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { ApiError } from '../_lib/errors.js';
-import { getAdminDb, verifyAdminRequest } from '../_lib/firebaseAdmin.js';
+import { getAdminDb, hasAdminAccess, verifyAdminRequest } from '../_lib/firebaseAdmin.js';
 import { loadShopTiming } from '../_lib/shopTiming.js';
-import { validateShopTiming } from '../../shared/shopTiming.js';
+import {
+  sanitizeShopTiming,
+  validateShopTiming,
+} from '../../shared/shopTiming.js';
+
+const normalizeEmail = (value: unknown) =>
+  typeof value === 'string' ? value.trim().toLowerCase() : '';
 
 const parseRequestBody = (body: unknown) => {
   const payload = body && typeof body === 'object'
     ? (body as Record<string, unknown>)
     : {};
 
-  const openTime = Number(payload.openTime);
-  const closeTime = Number(payload.closeTime);
+  const openTime = typeof payload.openTime === 'string' ? payload.openTime.trim() : '';
+  const closeTime = typeof payload.closeTime === 'string' ? payload.closeTime.trim() : '';
   const validationMessage = validateShopTiming(openTime, closeTime);
 
   if (validationMessage) {
     throw new ApiError(400, validationMessage);
   }
 
-  return {
+  return sanitizeShopTiming({
     openTime,
     closeTime,
-  };
+  });
+};
+
+const verifyAdminTimingRequest = async (request: VercelRequest) => {
+  if (request.headers.authorization) {
+    await verifyAdminRequest(request);
+    return;
+  }
+
+  const payload = request.body && typeof request.body === 'object'
+    ? (request.body as Record<string, unknown>)
+    : {};
+
+  const userEmail = normalizeEmail(payload.userEmail);
+  if (!userEmail) {
+    throw new ApiError(401, 'Admin access requires a valid user email.');
+  }
+
+  if (!(await hasAdminAccess(userEmail))) {
+    throw new ApiError(403, 'Admin access required.');
+  }
 };
 
 const sendError = (response: VercelResponse, error: unknown) => {
@@ -42,9 +68,14 @@ export default async function handler(request: VercelRequest, response: VercelRe
   }
 
   try {
-    await verifyAdminRequest(request);
+    await verifyAdminTimingRequest(request);
 
-    const { openTime, closeTime } = parseRequestBody(request.body);
+    const parsedTiming = parseRequestBody(request.body);
+    if (!parsedTiming) {
+      throw new ApiError(400, 'Shop timing must use HH:MM format.');
+    }
+
+    const { openTime, closeTime } = parsedTiming;
     const adminDb = getAdminDb();
 
     await adminDb.collection('settings').doc('shop').set(

@@ -1,10 +1,8 @@
 import type { Firestore } from 'firebase-admin/firestore';
 import { ApiError } from './errors.js';
 import {
-  DEFAULT_SHOP_TIMING,
   buildShopClosedMessage,
-  getCurrentShopHour,
-  isShopOpenAtHour,
+  isShopOpen,
   sanitizeShopTiming,
   type ShopTiming,
 } from '../../shared/shopTiming.js';
@@ -27,22 +25,32 @@ const mapTimestampToIsoString = (value: unknown) => {
 export const loadShopTiming = async (db: Firestore): Promise<ShopTiming> => {
   const snapshot = await db.collection(SHOP_SETTINGS_COLLECTION).doc(SHOP_SETTINGS_DOC_ID).get();
   if (!snapshot.exists) {
-    return { ...DEFAULT_SHOP_TIMING };
+    console.error('Shop timing document is missing at settings/shop.');
+    throw new Error('Shop timing document is missing.');
   }
 
   const data = snapshot.data() as Record<string, unknown>;
-  return sanitizeShopTiming({
+  const shopTiming = sanitizeShopTiming({
     openTime: data.openTime,
     closeTime: data.closeTime,
     updatedAt: mapTimestampToIsoString(data.updatedAt),
   });
+
+  if (!shopTiming) {
+    console.error('Shop timing document is invalid.', {
+      closeTime: data.closeTime,
+      openTime: data.openTime,
+    });
+    throw new Error('Shop timing document is invalid.');
+  }
+
+  return shopTiming;
 };
 
 export const assertShopIsOpen = async (db: Firestore, currentDate: Date = new Date()) => {
   const shopTiming = await loadShopTiming(db);
-  const currentHour = getCurrentShopHour(currentDate);
 
-  if (!isShopOpenAtHour(currentHour, shopTiming.openTime, shopTiming.closeTime)) {
+  if (!isShopOpen(shopTiming.openTime, shopTiming.closeTime, currentDate)) {
     throw new ApiError(
       400,
       buildShopClosedMessage(shopTiming.openTime, shopTiming.closeTime),

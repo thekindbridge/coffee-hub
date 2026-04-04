@@ -8,10 +8,11 @@ import { getApi, postApi } from './apiClient';
 export const createOrderRequest = (
   params: {
     orderDraft: CheckoutOrderDraft;
+    role?: 'admin' | 'agent' | 'customer';
+    userEmail?: string;
     userId: string;
   },
-  idToken: string,
-) => postApi<CreateOrderResponse>('/api/orders/create', params, idToken);
+) => postApi<CreateOrderResponse>('/api/orders/create', params);
 
 export const getOrdersRequest = (
   params: {
@@ -20,7 +21,6 @@ export const getOrdersRequest = (
     orderId?: string;
     status?: string;
   },
-  idToken: string,
 ) => {
   const query = new URLSearchParams({
     scope: 'mine',
@@ -39,5 +39,5 @@ export const getOrdersRequest = (
     query.set('status', params.status);
   }
 
-  return getApi<OrdersResponse>(`/api/orders?${query.toString()}`, idToken);
+  return getApi<OrdersResponse>(`/api/orders?${query.toString()}`);
 };

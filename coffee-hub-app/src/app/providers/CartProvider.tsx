@@ -2,24 +2,22 @@ import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useMemo,
   useState,
   type PropsWithChildren,
 } from 'react';
 import type { AuthState } from '../../hooks/useAuth';
 import { useCheckoutFlow } from '../../hooks/useCheckoutFlow';
+import { useShopTiming } from '../../hooks/useShopTiming';
 import { useOffers } from '../../hooks/useOffers';
 import type { Order } from '../../types';
 import { useProfileData } from '../../features/profile/hooks/useProfileData';
-import { getCurrentAuthUser } from '../../services/auth/authService';
-import { toAppServiceError } from '../../services/serviceError';
-import { DEFAULT_SHOP_TIMING } from '../../utils/shopTiming';
 
 type CartContextValue = ReturnType<typeof useCheckoutFlow> & {
   authError: string;
   isAuthReady: boolean;
-  refreshAuthSession: () => Promise<void>;
+  isShopTimingLoading: boolean;
+  refreshAuthState: () => Promise<void>;
 };
 
 const CartContext = createContext<CartContextValue | null>(null);
@@ -31,40 +29,27 @@ type CartProviderProps = PropsWithChildren<{
 export function CartProvider({ auth, children }: CartProviderProps) {
   const offersState = useOffers();
   const { profile } = useProfileData();
+  const shopTiming = useShopTiming();
   const [authError, setAuthError] = useState('');
   const [placedOrder, setPlacedOrder] = useState<Order | null>(null);
 
-  const refreshAuthSession = useCallback(async () => {
-    try {
-      setAuthError('');
-      const user = getCurrentAuthUser();
-      if (!user) {
-        return;
-      }
-
-      await user.getIdToken(true);
-    } catch (error) {
-      const typedError = toAppServiceError(
-        error,
-        'Unable to refresh your secure session right now.',
-        'network',
-      );
-      setAuthError(typedError.message);
+  const refreshAuthState = useCallback(async () => {
+    if (!auth.user?.email) {
+      setAuthError('User not found.');
+      return;
     }
-  }, []);
 
-  useEffect(() => {
-    if (auth.currentUserId) {
-      void refreshAuthSession();
-    } else {
-      setAuthError('');
-    }
-  }, [auth.currentUserId, refreshAuthSession]);
+    console.log('User:', auth.user);
+    setAuthError('');
+  }, [auth.user]);
 
   const checkout = useCheckoutFlow({
     currentUserId: auth.currentUserId,
+    currentTimeInMinutes: shopTiming.currentTime,
+    isShopTimingLoading: shopTiming.isLoading,
     profileSaved: profile,
-    shopTiming: DEFAULT_SHOP_TIMING,
+    refreshShopTiming: shopTiming.refreshShopTiming,
+    shopTiming: shopTiming.shopTiming,
     findActiveOfferByCode: offersState.findActiveOfferByCode,
     onOrderPlaced: nextOrder => {
       setPlacedOrder(nextOrder);
@@ -76,14 +61,16 @@ export function CartProvider({ auth, children }: CartProviderProps) {
     placedOrder,
     setPlacedOrder,
     authError,
+    isShopTimingLoading: shopTiming.isLoading,
     isAuthReady: auth.isAuthReady,
-    refreshAuthSession,
+    refreshAuthState,
   }), [
     auth.isAuthReady,
     authError,
     checkout,
     placedOrder,
-    refreshAuthSession,
+    shopTiming.isLoading,
+    refreshAuthState,
   ]);
 
   return (

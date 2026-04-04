@@ -7,13 +7,11 @@ import {
 } from 'react';
 import type { AuthState } from '../../../hooks/useAuth';
 import { normalizeEmail } from '../lib/normalizeEmail';
-import {
-  OWNER_EMAIL,
-  seedOwnerAdmin,
-  subscribeToAdminAccessStatus,
-  subscribeToDeliveryAccessStatus,
-} from '../services/roleService';
 import type { AppUserRole, UserRoleState } from '../types';
+
+const OWNER_EMAIL = normalizeEmail(
+  process.env.EXPO_PUBLIC_OWNER_EMAIL || 'coffeehubinkollu@gmail.com',
+);
 
 const DEFAULT_ROLE_STATE: UserRoleState = {
   isAdmin: false,
@@ -31,23 +29,24 @@ type RoleProviderProps = PropsWithChildren<{
 }>;
 
 const buildRoleState = ({
-  adminAccess,
-  deliveryAccess,
+  authRole,
   isOwner,
   loading,
 }: {
-  adminAccess: boolean;
-  deliveryAccess: boolean;
+  authRole: 'admin' | 'agent' | 'customer';
   isOwner: boolean;
   loading: boolean;
 }): UserRoleState => {
-  const isAdmin = isOwner || adminAccess;
-  const role: AppUserRole = isAdmin ? 'admin' : deliveryAccess ? 'delivery' : 'customer';
+  const role: AppUserRole = authRole === 'admin'
+    ? 'admin'
+    : authRole === 'agent'
+      ? 'delivery'
+      : 'customer';
 
   return {
-    isAdmin,
+    isAdmin: role === 'admin',
     isCustomer: role === 'customer',
-    isDelivery: deliveryAccess,
+    isDelivery: role === 'delivery',
     isOwner,
     loading,
     role,
@@ -63,8 +62,7 @@ export function RoleProvider({ auth, children }: RoleProviderProps) {
       return;
     }
 
-    const normalizedEmail = normalizeEmail(auth.currentUserEmail);
-    if (!auth.user || !normalizedEmail) {
+    if (!auth.user) {
       setRoleState({
         ...DEFAULT_ROLE_STATE,
         loading: false,
@@ -72,72 +70,13 @@ export function RoleProvider({ auth, children }: RoleProviderProps) {
       return;
     }
 
-    const isOwner = normalizedEmail === OWNER_EMAIL;
-    let hasAdminAccess = false;
-    let hasDeliveryAccess = false;
-    let hasResolvedAdmin = false;
-    let hasResolvedDelivery = false;
-
-    const syncRoleState = () => {
-      setRoleState(
-        buildRoleState({
-          adminAccess: hasAdminAccess,
-          deliveryAccess: hasDeliveryAccess,
-          isOwner,
-          loading: !(hasResolvedAdmin && hasResolvedDelivery),
-        }),
-      );
-    };
-
     setRoleState(
       buildRoleState({
-        adminAccess: false,
-        deliveryAccess: false,
-        isOwner,
-        loading: true,
+        authRole: auth.user.role,
+        isOwner: normalizeEmail(auth.currentUserEmail) === OWNER_EMAIL,
+        loading: false,
       }),
     );
-
-    if (isOwner) {
-      void seedOwnerAdmin(normalizedEmail).catch(error => {
-        console.warn('Unable to seed owner admin access on mobile', error);
-      });
-    }
-
-    const unsubscribeAdmin = subscribeToAdminAccessStatus(
-      normalizedEmail,
-      hasAccess => {
-        hasResolvedAdmin = true;
-        hasAdminAccess = hasAccess;
-        syncRoleState();
-      },
-      error => {
-        console.error('Failed to subscribe to admin access', error);
-        hasResolvedAdmin = true;
-        hasAdminAccess = false;
-        syncRoleState();
-      },
-    );
-
-    const unsubscribeDelivery = subscribeToDeliveryAccessStatus(
-      normalizedEmail,
-      hasAccess => {
-        hasResolvedDelivery = true;
-        hasDeliveryAccess = hasAccess;
-        syncRoleState();
-      },
-      error => {
-        console.error('Failed to subscribe to delivery access', error);
-        hasResolvedDelivery = true;
-        hasDeliveryAccess = false;
-        syncRoleState();
-      },
-    );
-
-    return () => {
-      unsubscribeAdmin();
-      unsubscribeDelivery();
-    };
   }, [auth.currentUserEmail, auth.isAuthReady, auth.user]);
 
   const value = useMemo(() => roleState, [roleState]);

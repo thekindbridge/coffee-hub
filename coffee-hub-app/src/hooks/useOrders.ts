@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { getCurrentUserIdToken } from '../services/auth/authService';
+import { useAuth } from '../auth/context/AuthContext';
 import { getOrdersRequest } from '../services/ordersService';
 import { toAppServiceError } from '../services/serviceError';
 import type { Order } from '../types';
@@ -25,6 +25,7 @@ export const useOrders = ({
   currentUserId,
   optimisticOrder = null,
 }: UseOrdersOptions) => {
+  const { user } = useAuth();
   const [orders, setOrders] = useState<Order[]>(() => mergeOrders([], optimisticOrder));
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -34,7 +35,8 @@ export const useOrders = ({
   }, [optimisticOrder]);
 
   const refreshOrders = useCallback(async () => {
-    if (!currentUserId) {
+    const userEmail = user?.email?.trim().toLowerCase() || currentUserId.trim().toLowerCase();
+    if (!userEmail) {
       setOrders(mergeOrders([], optimisticOrder));
       setError('');
       setIsLoading(false);
@@ -44,8 +46,7 @@ export const useOrders = ({
     setIsLoading(true);
 
     try {
-      const idToken = await getCurrentUserIdToken(true);
-      const response = await getOrdersRequest({ userId: currentUserId }, idToken);
+      const response = await getOrdersRequest({ userId: userEmail });
       setOrders(mergeOrders(response.orders, optimisticOrder));
       setError('');
     } catch (requestError) {
@@ -59,7 +60,7 @@ export const useOrders = ({
     } finally {
       setIsLoading(false);
     }
-  }, [currentUserId, optimisticOrder]);
+  }, [currentUserId, optimisticOrder, user]);
 
   useEffect(() => {
     void refreshOrders();

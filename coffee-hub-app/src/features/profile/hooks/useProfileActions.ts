@@ -27,7 +27,7 @@ export const useProfileActions = () => {
 
   const saveProfile = useCallback(async (profileDraft: CustomerProfile) => {
     if (!currentUserId) {
-      setSaveError('Please sign in again to save your profile.');
+      setSaveError('User not found.');
       return false;
     }
 

@@ -22,7 +22,7 @@ import { useOffers } from '../hooks/useOffers';
 import { useTheme, useThemedStyles } from '../theme';
 import type { RootStackParamList } from '../navigation/types';
 import { ScalePressable } from '../components/ui/ScalePressable';
-import { DEFAULT_SHOP_TIMING, isShopOpen as getShopOpenState } from '../utils/shopTiming';
+import { buildMenuClosedMessage } from '../shared/shopTiming';
 
 type HomeNavigation = NativeStackNavigationProp<RootStackParamList>;
 
@@ -54,11 +54,20 @@ export function HomeScreen() {
   const styles = useThemedStyles(createStyles);
   const { menu, isLoading, refreshMenu } = useMenu();
   const { activeOffers } = useOffers();
-  const { cartCount, cartQuantityById, handleAddToCart, payableCartTotal } = useCartState();
-  const isShopOpen = getShopOpenState(
-    DEFAULT_SHOP_TIMING.openTime,
-    DEFAULT_SHOP_TIMING.closeTime,
-  );
+  const {
+    cartCount,
+    cartQuantityById,
+    handleAddToCart,
+    isShopOpen,
+    isShopTimingLoading,
+    payableCartTotal,
+    shopTiming,
+  } = useCartState();
+  const shopAvailabilityMessage = isShopTimingLoading
+    ? 'Checking shop timing...'
+    : buildMenuClosedMessage(shopTiming.openTime);
+
+  console.log('[HomeScreen] render');
 
   const categories = useMemo(
     () => Array.from(new Set(menu.map(item => item.category))).slice(0, 6),
@@ -74,7 +83,7 @@ export function HomeScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView
         style={styles.container}
         contentContainerStyle={[
@@ -141,6 +150,7 @@ export function HomeScreen() {
             menu={menu}
             onAddToCart={handleAddToCart}
             onOpenMenu={openMenu}
+            shopAvailabilityMessage={shopAvailabilityMessage}
             title="Popular items"
             subtitle="Our most-loved brews and comfort bites, kept simple and ready to add."
           />
@@ -153,6 +163,7 @@ export function HomeScreen() {
             menu={menu}
             onAddToCart={handleAddToCart}
             onOpenMenu={openMenu}
+            shopAvailabilityMessage={shopAvailabilityMessage}
             title="Featured picks"
             subtitle="Premium cups and house favorites worth another look."
           />

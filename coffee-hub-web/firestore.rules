@@ -2,160 +2,553 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    function signedIn() {
+    // Authentication helpers
+    function isAuthenticated() {
       return request.auth != null;
     }
 
-    function userEmail() {
+    function requestEmail() {
       return request.auth.token.email;
     }
 
+    // Update this value before deploy if the production owner changes.
+    function ownerEmail() {
+      return 'coffeehubinkollu@gmail.com';
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
     function isAdmin() {
-      return signedIn() &&
-        exists(/databases/$(database)/documents/admin_access/$(userEmail()));
-    }
-
-    function isDeliveryAgent() {
-      return signedIn() &&
-        exists(/databases/$(database)/documents/agents/$(userEmail()));
-    }
-
-    function isAssignedAgentEmail(orderData) {
-      return signedIn() &&
-        (orderData.assignedAgentId == userEmail() ||
-          orderData.assignedAgentEmail == userEmail() ||
-          orderData.agentEmail == userEmail() ||
-          orderData.deliveryAgentEmail == userEmail());
-    }
-
-    function isOrderOwner() {
-      return signedIn() && resource.data.userId == request.auth.uid;
-    }
-
-    function isAssignedAgent() {
-      return isAssignedAgentEmail(resource.data);
-    }
-
-    function isOrderOwnerById(orderId) {
-      return signedIn() &&
-        get(/databases/$(database)/documents/orders/$(orderId)).data.userId == request.auth.uid;
-    }
-
-    function isAssignedAgentByOrder(orderId) {
-      return signedIn() &&
-        (get(/databases/$(database)/documents/orders/$(orderId)).data.assignedAgentId == userEmail() ||
-          get(/databases/$(database)/documents/orders/$(orderId)).data.assignedAgentEmail == userEmail() ||
-          get(/databases/$(database)/documents/orders/$(orderId)).data.agentEmail == userEmail() ||
-          get(/databases/$(database)/documents/orders/$(orderId)).data.deliveryAgentEmail == userEmail());
-    }
-
-    function isValidCoordinate(value, minimum, maximum) {
-      return value is number && value >= minimum && value <= maximum;
-    }
-
-    function isValidDeliveryLocation(location) {
-      return location == null || (
-        location is map &&
-        location.keys().hasOnly(['lat', 'lng', 'accuracy', 'updatedAt']) &&
-        isValidCoordinate(location.lat, -90, 90) &&
-        isValidCoordinate(location.lng, -180, 180) &&
-        (location.accuracy == null || location.accuracy is number) &&
-        (location.updatedAt == null || location.updatedAt is timestamp)
-      );
-    }
-
-    function hasOnlyAssignedAgentTrackingChanges() {
-      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-        'deliveryLocation',
-        'updatedAt',
-        'status',
-        'orderStatus',
-        'deliveredAt',
-        'deliveryDeliveredAt'
-      ]);
-    }
-
-    function isAssignedAgentTrackingOwnOrder() {
-      return isAssignedAgentEmail(resource.data) &&
-        resource.data.status == 'OUT_FOR_DELIVERY' &&
-        request.resource.data.updatedAt is timestamp &&
-        isValidDeliveryLocation(request.resource.data.deliveryLocation) &&
-        hasOnlyAssignedAgentTrackingChanges() &&
+      return isAuthenticated() &&
+        requestEmail() is string &&
         (
-          (
-            request.resource.data.status == resource.data.status &&
-            request.resource.data.orderStatus == resource.data.orderStatus
-          ) ||
-          (
-            request.resource.data.status == 'DELIVERED' &&
-            request.resource.data.orderStatus == 'DELIVERED' &&
-            request.resource.data.deliveredAt is timestamp &&
-            request.resource.data.deliveryDeliveredAt is timestamp
-          )
+          requestEmail() == ownerEmail() ||
+          exists(/databases/$(database)/documents/admin_access/$(requestEmail()))
         );
     }
 
-    function isOwnAgentDocument(agentId) {
-      return signedIn() &&
-        (agentId == userEmail() ||
-          resource.data.email == userEmail() ||
-          request.resource.data.email == userEmail());
+    // Reusable field validators
+    function isNonEmptyString(value, maxLength) {
+      return value is string && value.size() > 0 && value.size() <= maxLength;
     }
 
+    function isOptionalString(value, maxLength) {
+      return value == null || (value is string && value.size() <= maxLength);
+    }
+
+    function isOptionalBoolean(value) {
+      return value == null || value is bool;
+    }
+
+    function isNonNegativeNumber(value) {
+      return value is number && value >= 0;
+    }
+
+    function isOptionalNonNegativeNumber(value) {
+      return value == null || (value is number && value >= 0);
+    }
+
+    function isOptionalTimestamp(value) {
+      return value == null || value is timestamp;
+    }
+
+    function isValidLocation(value) {
+      return value == null || (
+        value is map &&
+        value.keys().hasOnly(['lat', 'lng', 'accuracy', 'updatedAt', 'updated_at']) &&
+        value.lat is number &&
+        value.lat >= -90 &&
+        value.lat <= 90 &&
+        value.lng is number &&
+        value.lng >= -180 &&
+        value.lng <= 180 &&
+        isOptionalNonNegativeNumber(value.accuracy) &&
+        isOptionalTimestamp(value.updatedAt) &&
+        isOptionalTimestamp(value.updated_at)
+      );
+    }
+
+    function isValidOrderStatus(value) {
+      return value is string && value in [
+        'PENDING',
+        'ACCEPTED',
+        'PREPARING',
+        'OUT_FOR_DELIVERY',
+        'DELIVERED',
+        'REJECTED',
+        'CANCELLED'
+      ];
+    }
+
+    function isValidPaymentStatus(value) {
+      return value == null || (
+        value is string &&
+        value in ['PENDING', 'PAID', 'FAILED', 'REFUNDED', 'pending', 'paid', 'failed', 'refunded']
+      );
+    }
+
+    function hasAllowedMenuItemKeys(data) {
+      return data.keys().hasOnly([
+        'name',
+        'category',
+        'price',
+        'description',
+        'image',
+        'image_url',
+        'rating',
+        'spiceLevel',
+        'spice_level',
+        'veg',
+        'is_veg',
+        'isAvailable',
+        'is_available',
+        'createdAt',
+        'updatedAt'
+      ]);
+    }
+
+    function isValidMenuItem(data) {
+      return hasAllowedMenuItemKeys(data) &&
+        isNonEmptyString(data.name, 120) &&
+        isNonEmptyString(data.category, 80) &&
+        isNonNegativeNumber(data.price) &&
+        isOptionalString(data.description, 2000) &&
+        isOptionalString(data.image, 2048) &&
+        isOptionalString(data.image_url, 2048) &&
+        (data.rating == null || (data.rating is number && data.rating >= 0 && data.rating <= 5)) &&
+        isOptionalString(data.spiceLevel, 40) &&
+        isOptionalString(data.spice_level, 40) &&
+        isOptionalBoolean(data.veg) &&
+        isOptionalBoolean(data.is_veg) &&
+        isOptionalBoolean(data.isAvailable) &&
+        isOptionalBoolean(data.is_available) &&
+        isOptionalTimestamp(data.createdAt) &&
+        isOptionalTimestamp(data.updatedAt);
+    }
+
+    function hasAllowedOrderKeys(data) {
+      return data.keys().hasOnly([
+        'orderId',
+        'userId',
+        'name',
+        'phone',
+        'address',
+        'customerLocation',
+        'customer_location',
+        'deliveryLocation',
+        'delivery_location',
+        'items',
+        'subtotal',
+        'discount',
+        'deliveryFee',
+        'delivery_fee',
+        'couponCode',
+        'coupon_code',
+        'totalAmount',
+        'total_amount',
+        'finalAmount',
+        'final_total',
+        'paymentMode',
+        'payment_method',
+        'paymentStatus',
+        'payment_status',
+        'status',
+        'orderStatus',
+        'status_code',
+        'rejectionReason',
+        'rejection_reason',
+        'cancellationReason',
+        'cancellation_reason',
+        'createdAt',
+        'created_at',
+        'updatedAt',
+        'updated_at',
+        'acceptedAt',
+        'accepted_at',
+        'preparingAt',
+        'preparing_at',
+        'assignedAt',
+        'assigned_at',
+        'deliveryAssignedAt',
+        'delivery_assigned_at',
+        'pickedAt',
+        'deliveryPickedAt',
+        'delivery_picked_at',
+        'readyAt',
+        'readyForPickupAt',
+        'ready_for_pickup_at',
+        'outForDeliveryAt',
+        'out_for_delivery_at',
+        'deliveryOutForDeliveryAt',
+        'delivery_out_for_delivery_at',
+        'deliveredAt',
+        'delivered_at',
+        'deliveryDeliveredAt',
+        'delivery_delivered_at',
+        'rejectedAt',
+        'rejected_at',
+        'cancelledAt',
+        'cancelled_at',
+        'assignedAgentId',
+        'assignedAgentName',
+        'assignedAgentPhone',
+        'assignedAgentEmail',
+        'assignedAgentVehicle',
+        'deliveryAgentId',
+        'deliveryAgentName',
+        'deliveryAgentPhone',
+        'deliveryAgentEmail',
+        'deliveryAgentVehicle',
+        'agentId',
+        'agentName',
+        'agentPhone',
+        'agentEmail',
+        'agentVehicle',
+        'delivery_agent_id',
+        'delivery_agent_name',
+        'delivery_agent_phone',
+        'delivery_agent_email',
+        'delivery_agent_vehicle'
+      ]);
+    }
+
+    function isValidOrderCreate(data) {
+      return hasAllowedOrderKeys(data) &&
+        isNonEmptyString(data.orderId, 40) &&
+        data.userId is string &&
+        isOwner(data.userId) &&
+        isNonEmptyString(data.name, 120) &&
+        isNonEmptyString(data.phone, 30) &&
+        isNonEmptyString(data.address, 500) &&
+        data.items is list &&
+        data.items.size() > 0 &&
+        isNonNegativeNumber(data.subtotal) &&
+        isOptionalNonNegativeNumber(data.discount) &&
+        isOptionalNonNegativeNumber(data.deliveryFee) &&
+        isOptionalString(data.couponCode, 50) &&
+        isNonNegativeNumber(data.totalAmount) &&
+        isOptionalNonNegativeNumber(data.finalAmount) &&
+        (data.finalAmount == null || data.finalAmount == data.totalAmount) &&
+        isOptionalString(data.paymentMode, 20) &&
+        isValidPaymentStatus(data.paymentStatus) &&
+        isValidOrderStatus(data.status) &&
+        isValidOrderStatus(data.orderStatus) &&
+        data.status == 'PENDING' &&
+        data.orderStatus == 'PENDING' &&
+        (data.paymentStatus == null || data.paymentStatus in ['PENDING', 'pending']) &&
+        (data.rejectionReason == null || data.rejectionReason == '') &&
+        (data.cancellationReason == null || data.cancellationReason == '') &&
+        isValidLocation(data.customerLocation) &&
+        isValidLocation(data.customer_location) &&
+        isValidLocation(data.deliveryLocation) &&
+        isValidLocation(data.delivery_location) &&
+        isOptionalTimestamp(data.createdAt) &&
+        isOptionalTimestamp(data.created_at) &&
+        isOptionalTimestamp(data.updatedAt) &&
+        isOptionalTimestamp(data.updated_at) &&
+        data.status_code == null &&
+        data.assignedAgentId == null &&
+        data.assignedAgentName == null &&
+        data.assignedAgentPhone == null &&
+        data.assignedAgentEmail == null &&
+        data.assignedAgentVehicle == null &&
+        data.deliveryAgentId == null &&
+        data.deliveryAgentName == null &&
+        data.deliveryAgentPhone == null &&
+        data.deliveryAgentEmail == null &&
+        data.deliveryAgentVehicle == null &&
+        data.agentId == null &&
+        data.agentName == null &&
+        data.agentPhone == null &&
+        data.agentEmail == null &&
+        data.agentVehicle == null &&
+        data.delivery_agent_id == null &&
+        data.delivery_agent_name == null &&
+        data.delivery_agent_phone == null &&
+        data.delivery_agent_email == null &&
+        data.delivery_agent_vehicle == null;
+    }
+
+    function hasOnlyAdminManagedOrderChanges() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        'status',
+        'orderStatus',
+        'status_code',
+        'paymentStatus',
+        'payment_status',
+        'rejectionReason',
+        'rejection_reason',
+        'cancellationReason',
+        'cancellation_reason',
+        'updatedAt',
+        'updated_at',
+        'acceptedAt',
+        'accepted_at',
+        'preparingAt',
+        'preparing_at',
+        'assignedAt',
+        'assigned_at',
+        'deliveryAssignedAt',
+        'delivery_assigned_at',
+        'pickedAt',
+        'deliveryPickedAt',
+        'delivery_picked_at',
+        'readyAt',
+        'readyForPickupAt',
+        'ready_for_pickup_at',
+        'outForDeliveryAt',
+        'out_for_delivery_at',
+        'deliveryOutForDeliveryAt',
+        'delivery_out_for_delivery_at',
+        'deliveredAt',
+        'delivered_at',
+        'deliveryDeliveredAt',
+        'delivery_delivered_at',
+        'rejectedAt',
+        'rejected_at',
+        'cancelledAt',
+        'cancelled_at',
+        'deliveryLocation',
+        'delivery_location',
+        'assignedAgentId',
+        'assignedAgentName',
+        'assignedAgentPhone',
+        'assignedAgentEmail',
+        'assignedAgentVehicle',
+        'deliveryAgentId',
+        'deliveryAgentName',
+        'deliveryAgentPhone',
+        'deliveryAgentEmail',
+        'deliveryAgentVehicle',
+        'agentId',
+        'agentName',
+        'agentPhone',
+        'agentEmail',
+        'agentVehicle'
+      ]);
+    }
+
+    function isValidAdminOrderUpdate() {
+      return hasAllowedOrderKeys(request.resource.data) &&
+        hasOnlyAdminManagedOrderChanges() &&
+        request.resource.data.orderId == resource.data.orderId &&
+        request.resource.data.userId == resource.data.userId &&
+        request.resource.data.name == resource.data.name &&
+        request.resource.data.phone == resource.data.phone &&
+        request.resource.data.address == resource.data.address &&
+        request.resource.data.items == resource.data.items &&
+        request.resource.data.subtotal == resource.data.subtotal &&
+        request.resource.data.discount == resource.data.discount &&
+        request.resource.data.deliveryFee == resource.data.deliveryFee &&
+        request.resource.data.couponCode == resource.data.couponCode &&
+        request.resource.data.totalAmount == resource.data.totalAmount &&
+        request.resource.data.finalAmount == resource.data.finalAmount &&
+        request.resource.data.paymentMode == resource.data.paymentMode &&
+        request.resource.data.customerLocation == resource.data.customerLocation &&
+        request.resource.data.customer_location == resource.data.customer_location &&
+        request.resource.data.createdAt == resource.data.createdAt &&
+        request.resource.data.created_at == resource.data.created_at &&
+        isValidOrderStatus(request.resource.data.status) &&
+        isValidOrderStatus(request.resource.data.orderStatus) &&
+        request.resource.data.status == request.resource.data.orderStatus &&
+        isValidPaymentStatus(request.resource.data.paymentStatus) &&
+        isValidPaymentStatus(request.resource.data.payment_status) &&
+        isOptionalString(request.resource.data.rejectionReason, 500) &&
+        isOptionalString(request.resource.data.rejection_reason, 500) &&
+        isOptionalString(request.resource.data.cancellationReason, 500) &&
+        isOptionalString(request.resource.data.cancellation_reason, 500) &&
+        isOptionalString(request.resource.data.status_code, 40) &&
+        isOptionalString(request.resource.data.assignedAgentId, 120) &&
+        isOptionalString(request.resource.data.assignedAgentName, 120) &&
+        isOptionalString(request.resource.data.assignedAgentPhone, 30) &&
+        isOptionalString(request.resource.data.assignedAgentEmail, 320) &&
+        isOptionalString(request.resource.data.assignedAgentVehicle, 120) &&
+        isOptionalString(request.resource.data.deliveryAgentId, 120) &&
+        isOptionalString(request.resource.data.deliveryAgentName, 120) &&
+        isOptionalString(request.resource.data.deliveryAgentPhone, 30) &&
+        isOptionalString(request.resource.data.deliveryAgentEmail, 320) &&
+        isOptionalString(request.resource.data.deliveryAgentVehicle, 120) &&
+        isOptionalString(request.resource.data.agentId, 120) &&
+        isOptionalString(request.resource.data.agentName, 120) &&
+        isOptionalString(request.resource.data.agentPhone, 30) &&
+        isOptionalString(request.resource.data.agentEmail, 320) &&
+        isOptionalString(request.resource.data.agentVehicle, 120) &&
+        isValidLocation(request.resource.data.deliveryLocation) &&
+        isValidLocation(request.resource.data.delivery_location) &&
+        isOptionalTimestamp(request.resource.data.updatedAt) &&
+        isOptionalTimestamp(request.resource.data.updated_at) &&
+        isOptionalTimestamp(request.resource.data.acceptedAt) &&
+        isOptionalTimestamp(request.resource.data.accepted_at) &&
+        isOptionalTimestamp(request.resource.data.preparingAt) &&
+        isOptionalTimestamp(request.resource.data.preparing_at) &&
+        isOptionalTimestamp(request.resource.data.assignedAt) &&
+        isOptionalTimestamp(request.resource.data.assigned_at) &&
+        isOptionalTimestamp(request.resource.data.deliveryAssignedAt) &&
+        isOptionalTimestamp(request.resource.data.delivery_assigned_at) &&
+        isOptionalTimestamp(request.resource.data.pickedAt) &&
+        isOptionalTimestamp(request.resource.data.deliveryPickedAt) &&
+        isOptionalTimestamp(request.resource.data.delivery_picked_at) &&
+        isOptionalTimestamp(request.resource.data.readyAt) &&
+        isOptionalTimestamp(request.resource.data.readyForPickupAt) &&
+        isOptionalTimestamp(request.resource.data.ready_for_pickup_at) &&
+        isOptionalTimestamp(request.resource.data.outForDeliveryAt) &&
+        isOptionalTimestamp(request.resource.data.out_for_delivery_at) &&
+        isOptionalTimestamp(request.resource.data.deliveryOutForDeliveryAt) &&
+        isOptionalTimestamp(request.resource.data.delivery_out_for_delivery_at) &&
+        isOptionalTimestamp(request.resource.data.deliveredAt) &&
+        isOptionalTimestamp(request.resource.data.delivered_at) &&
+        isOptionalTimestamp(request.resource.data.deliveryDeliveredAt) &&
+        isOptionalTimestamp(request.resource.data.delivery_delivered_at) &&
+        isOptionalTimestamp(request.resource.data.rejectedAt) &&
+        isOptionalTimestamp(request.resource.data.rejected_at) &&
+        isOptionalTimestamp(request.resource.data.cancelledAt) &&
+        isOptionalTimestamp(request.resource.data.cancelled_at);
+    }
+
+    function hasAllowedUserKeys(data) {
+      return data.keys().hasOnly([
+        'name',
+        'phone',
+        'email',
+        'notificationSettings',
+        'addresses',
+        'addressEntries',
+        'role',
+        'adminLocation',
+        'vehicleType',
+        'status',
+        'fcmToken',
+        'fcmTokenUpdatedAt',
+        'createdAt',
+        'updatedAt'
+      ]);
+    }
+
+    function isMatchingUserEmail(value) {
+      return value == null || (
+        value is string &&
+        (
+          (requestEmail() is string && value == requestEmail()) ||
+          (!(requestEmail() is string) && value.size() == 0)
+        )
+      );
+    }
+
+    function isValidNotificationSettings(value) {
+      return value == null || (
+        value is map &&
+        value.keys().hasOnly(['orderUpdates', 'offers', 'promotions']) &&
+        isOptionalBoolean(value.orderUpdates) &&
+        isOptionalBoolean(value.offers) &&
+        isOptionalBoolean(value.promotions)
+      );
+    }
+
+    function isValidAddresses(value) {
+      return value == null || (
+        value is map &&
+        value.keys().hasOnly(['address1', 'address2', 'address3']) &&
+        isOptionalString(value.address1, 240) &&
+        isOptionalString(value.address2, 240) &&
+        isOptionalString(value.address3, 240)
+      );
+    }
+
+    function isValidAddressEntries(value) {
+      return value == null || (value is list && value.size() <= 10);
+    }
+
+    function isValidUserRecord(data) {
+      return hasAllowedUserKeys(data) &&
+        isOptionalString(data.name, 120) &&
+        isOptionalString(data.phone, 30) &&
+        isMatchingUserEmail(data.email) &&
+        isValidNotificationSettings(data.notificationSettings) &&
+        isValidAddresses(data.addresses) &&
+        isValidAddressEntries(data.addressEntries) &&
+        isOptionalString(data.role, 40) &&
+        isOptionalString(data.adminLocation, 120) &&
+        isOptionalString(data.vehicleType, 80) &&
+        isOptionalString(data.status, 40) &&
+        isOptionalString(data.fcmToken, 4096) &&
+        isOptionalTimestamp(data.fcmTokenUpdatedAt) &&
+        isOptionalTimestamp(data.createdAt) &&
+        isOptionalTimestamp(data.updatedAt);
+    }
+
+    function isValidAdminAccessRecord(data, email) {
+      return data.keys().hasOnly(['email', 'role', 'createdAt', 'updatedAt']) &&
+        data.email is string &&
+        data.email == email &&
+        data.role is string &&
+        data.role == 'admin' &&
+        isOptionalTimestamp(data.createdAt) &&
+        isOptionalTimestamp(data.updatedAt);
+    }
+
+    function isValidAgentAccessRecord(data, email) {
+      return data.keys().hasOnly([
+        'email',
+        'role',
+        'accessOnly',
+        'isActive',
+        'status',
+        'currentOrderId',
+        'createdAt',
+        'updatedAt'
+      ]) &&
+        data.email is string &&
+        data.email == email &&
+        isOptionalString(data.role, 40) &&
+        isOptionalBoolean(data.accessOnly) &&
+        isOptionalBoolean(data.isActive) &&
+        isOptionalString(data.status, 40) &&
+        isOptionalString(data.currentOrderId, 120) &&
+        isOptionalTimestamp(data.createdAt) &&
+        isOptionalTimestamp(data.updatedAt);
+    }
+
+    // menu_items: public catalog, admin-managed writes
+    match /menu_items/{itemId} {
+      allow read: if true;
+      allow create, update: if isAdmin() && isValidMenuItem(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    // orders: customers create and read their own, admins can review and update status
     match /orders/{orderId} {
-      allow read: if isAdmin() || isOrderOwner() || isAssignedAgent();
-      allow create: if signedIn() && request.resource.data.userId == request.auth.uid;
-      allow update: if isAdmin() || isAssignedAgentTrackingOwnOrder();
-      allow delete: if isAdmin();
+      allow read: if isAdmin() || isOwner(resource.data.userId);
+      allow create: if isValidOrderCreate(request.resource.data);
+      allow update: if isAdmin() && isValidAdminOrderUpdate();
+      allow delete: if false;
     }
 
-    match /order_items/{itemId} {
-      allow read: if isAdmin() ||
-        (resource.data.orderDocId != null &&
-          (isOrderOwnerById(resource.data.orderDocId) ||
-            isAssignedAgentByOrder(resource.data.orderDocId))) ||
-        (resource.data.orderDocId == null && signedIn());
-      allow create: if signedIn();
-      allow update, delete: if isAdmin();
+    // users: each signed-in user can only manage their own profile document
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+      allow create, update: if isOwner(userId) && isValidUserRecord(request.resource.data);
+      allow delete: if isOwner(userId);
     }
 
-    match /agents/{agentId} {
-      allow read: if isAdmin() || signedIn();
-      allow create, update: if isAdmin() || isOwnAgentDocument(agentId);
-      allow delete: if isAdmin();
-    }
-
-    match /delivery_sessions/{sessionId} {
-      allow read: if isAdmin() ||
-        isDeliveryAgent() ||
-        (resource.data.orderDocId != null &&
-          (isOrderOwnerById(resource.data.orderDocId) ||
-            isAssignedAgentByOrder(resource.data.orderDocId)));
-      allow write: if isAdmin() || isDeliveryAgent();
-    }
-
-    match /agent_locations/{sessionId} {
-      allow read: if isAdmin() ||
-        isDeliveryAgent() ||
-        (resource.data.orderDocId != null &&
-          (isOrderOwnerById(resource.data.orderDocId) ||
-            isAssignedAgentByOrder(resource.data.orderDocId)));
-      allow write: if isAdmin() || isDeliveryAgent();
-    }
-
-    match /settings/{settingId} {
-      allow read: if signedIn();
-      allow write: if false;
-    }
-
-    match /users/{uid} {
-      allow read, write: if signedIn() && request.auth.uid == uid;
-    }
-
+    // admin_access: readable by signed-in users, writable only by admins
     match /admin_access/{email} {
-      allow read: if isAdmin() || (signedIn() && request.auth.token.email == email);
-      allow create, update: if signedIn() && request.auth.token.email == email;
+      allow read: if true;
+      allow create, update: if isAdmin() && isValidAdminAccessRecord(request.resource.data, email);
       allow delete: if isAdmin();
+    }
+
+    // agents: readable for role checks, writable only by admins
+    match /agents/{email} {
+      allow read: if true;
+      allow create, update: if isAdmin() && isValidAgentAccessRecord(request.resource.data, email);
+      allow delete: if isAdmin();
+    }
+
+    // Deny everything else by default.
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

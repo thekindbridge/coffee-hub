@@ -23,8 +23,8 @@ export type ShopTimingManagerState = {
 };
 
 const buildDraft = (shopTiming: ShopTiming): ShopTimingDraft => ({
-  openTime: String(shopTiming.openTime),
-  closeTime: String(shopTiming.closeTime),
+  openTime: shopTiming.openTime,
+  closeTime: shopTiming.closeTime,
 });
 
 export const useShopTimingManager = ({
@@ -72,8 +72,8 @@ export const useShopTimingManager = ({
       return;
     }
 
-    const openTime = Number(shopTimingDraft.openTime);
-    const closeTime = Number(shopTimingDraft.closeTime);
+    const openTime = shopTimingDraft.openTime.trim();
+    const closeTime = shopTimingDraft.closeTime.trim();
     const validationMessage = validateShopTiming(openTime, closeTime);
 
     if (validationMessage) {

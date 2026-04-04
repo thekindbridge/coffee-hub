@@ -6,8 +6,8 @@ import {
 } from '../../../../shared/shopTiming';
 
 type ShopStatusBannerProps = {
-  openTime: number;
-  closeTime: number;
+  openTime: string;
+  closeTime: string;
 };
 
 export const ShopStatusBanner = ({ openTime, closeTime }: ShopStatusBannerProps) => (
@@ -25,7 +25,7 @@ export const ShopStatusBanner = ({ openTime, closeTime }: ShopStatusBannerProps)
           Ordering Update
         </p>
         <p className="mt-1 text-sm font-semibold leading-6 text-accent">
-          {buildShopClosedBannerMessage(openTime)}
+          {buildShopClosedBannerMessage(openTime, closeTime)}
         </p>
         <p className="mt-2 text-xs leading-5 text-[#f5ddbb]/90">
           Ordering hours: {formatShopTimingRange(openTime, closeTime)}

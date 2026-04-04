@@ -28,9 +28,9 @@ import { getProfileInitials } from '../features/profile/lib/profileMappers';
 import { RoleBadge } from '../features/roles/components/RoleBadge';
 import { useUserRole } from '../features/roles/hooks/useUserRole';
 import { useOrders } from '../hooks/useOrders';
-import { logoutCurrentUser } from '../services/auth/authService';
 import { animateLayout, useTheme, useThemedStyles } from '../theme';
 import type { CustomerProfile } from '../types';
+import { useAuthContext } from '../auth/context/AuthContext';
 
 type ProfileNavigation = NavigationProp<ParamListBase>;
 type ProfileRoute = RouteProp<Record<string, { openEdit?: boolean } | undefined>, string>;
@@ -46,6 +46,7 @@ export function ProfileScreen() {
   const route = useRoute<ProfileRoute>();
   const { theme, toggleTheme } = useTheme();
   const styles = useThemedStyles(createStyles);
+  const { logout } = useAuthContext();
   const {
     isAdmin,
     isCustomer,
@@ -78,8 +79,7 @@ export function ProfileScreen() {
   });
   const [draftProfile, setDraftProfile] = useState<CustomerProfile>(profile);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
-  const [isLoggingOut, setIsLoggingOut] = useState(false);
-  const [logoutError, setLogoutError] = useState('');
+  const canManageAccount = Boolean(currentUserId);
 
   useEffect(() => {
     if (!isEditorOpen) {
@@ -88,14 +88,14 @@ export function ProfileScreen() {
   }, [isEditorOpen, profile]);
 
   useEffect(() => {
-    if (!route.params?.openEdit) {
+    if (!canManageAccount || !route.params?.openEdit) {
       return;
     }
 
     setDraftProfile(profile);
     setIsEditorOpen(true);
     navigation.setParams({ openEdit: undefined });
-  }, [navigation, profile, route.params?.openEdit]);
+  }, [canManageAccount, navigation, profile, route.params?.openEdit]);
 
   const missingSummary = useMemo(
     () => missingFields.map(field => FIELD_LABELS[field] || field).join(', '),
@@ -144,6 +144,10 @@ export function ProfileScreen() {
   }, [profile.email, profile.phone, rolePresentation.label]);
 
   const handleOpenEditor = () => {
+    if (!canManageAccount) {
+      return;
+    }
+
     animateLayout();
     setDraftProfile(profile);
     setIsEditorOpen(true);
@@ -156,41 +160,11 @@ export function ProfileScreen() {
     }
   };
 
-  const handleLogout = () => {
-    Alert.alert(
-      'Logout',
-      'You will be returned to the login screen.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Logout',
-          style: 'destructive',
-          onPress: () => {
-            void (async () => {
-              try {
-                setIsLoggingOut(true);
-                setLogoutError('');
-                await logoutCurrentUser();
-              } catch (nextError) {
-                const message = nextError instanceof Error
-                  ? nextError.message
-                  : 'Unable to log out right now.';
-                setLogoutError(message);
-              } finally {
-                setIsLoggingOut(false);
-              }
-            })();
-          },
-        },
-      ],
-    );
-  };
-
   const profileInitials = getProfileInitials(profileDisplayName);
   const showStaffFields = isAdmin || isDelivery;
 
   return (
-    <SafeAreaView style={styles.screen} edges={['top']}>
+    <SafeAreaView style={styles.screen} edges={['bottom']}>
       <ScrollView
         style={styles.screen}
         contentContainerStyle={styles.content}
@@ -202,7 +176,7 @@ export function ProfileScreen() {
             initials={profileInitials}
             metaLine={headerMeta}
             name={profileDisplayName}
-            onEditPress={handleOpenEditor}
+            onEditPress={canManageAccount ? handleOpenEditor : undefined}
           />
 
           {isLoading ? (
@@ -394,18 +368,25 @@ export function ProfileScreen() {
           </ProfileSectionCard>
 
           <ProfileSectionCard
-            title="Logout"
-            subtitle="Sign out from this device and return to the login screen."
+            title="Account"
+            subtitle="This temporary email login keeps the app role-aware until a permanent auth provider is added."
           >
+            <Text style={styles.roleHelperText}>
+              Current account email: {profile.email || 'customer@coffeehub.com'}
+            </Text>
+            <Text style={styles.roleMetaText}>
+              Your role is resolved from Firestore access collections after you enter an email. You can log out here to switch accounts.
+            </Text>
             <PrimaryButton
-              title={isLoggingOut ? 'Logging out...' : 'Logout'}
-              onPress={handleLogout}
-              loading={isLoggingOut}
+              title="Log out"
+              onPress={() => {
+                void logout().catch(logoutError => {
+                  console.error('[ProfileScreen] logout:error', logoutError);
+                });
+              }}
+              style={styles.sessionAction}
               variant="secondary"
             />
-            {logoutError ? (
-              <Text style={styles.errorText}>{logoutError}</Text>
-            ) : null}
           </ProfileSectionCard>
         </ScreenTransition>
       </ScrollView>
@@ -566,6 +547,9 @@ const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => StyleSheet
     fontSize: theme.typography.caption,
     lineHeight: 18,
     color: theme.colors.textMuted,
+  },
+  sessionAction: {
+    marginTop: theme.spacing.md,
   },
   staffFields: {
     marginTop: theme.spacing.sm,

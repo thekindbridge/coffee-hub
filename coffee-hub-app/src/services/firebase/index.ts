@@ -1,2 +1,1 @@
-export { app, auth, getFirebaseApp, getFirebaseDb } from './firebaseConfig';
-export { signInWithGoogleToken } from './authService';
+export { app, getFirebaseApp, getFirebaseDb } from './firebaseConfig';

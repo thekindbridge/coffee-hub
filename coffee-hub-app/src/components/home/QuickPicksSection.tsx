@@ -13,6 +13,7 @@ type QuickPicksSectionProps = {
   menu: MenuItem[];
   onAddToCart: (item: MenuItem, delta: number) => void;
   onOpenMenu: () => void;
+  shopAvailabilityMessage?: string;
   subtitle?: string;
   title?: string;
 };
@@ -50,6 +51,7 @@ export const QuickPicksSection = memo(function QuickPicksSection({
   menu,
   onAddToCart,
   onOpenMenu,
+  shopAvailabilityMessage = '',
   subtitle = 'Fresh brews and comfort bites ready for your next order.',
   title = 'Popular items',
 }: QuickPicksSectionProps) {
@@ -87,6 +89,7 @@ export const QuickPicksSection = memo(function QuickPicksSection({
                 quantity={cartQuantityById.get(item.id) ?? 0}
                 isShopOpen={isShopOpen}
                 onAddToCart={onAddToCart}
+                shopAvailabilityMessage={shopAvailabilityMessage}
               />
             </View>
           )}

@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 import { ApiError } from './_lib/errors.js';
 import { getAdminDb, verifyAdminRequest } from './_lib/firebaseAdmin.js';
+import { loadShopTiming } from './_lib/shopTiming.js';
 import { mapMenuRecordToResponse } from './_lib/responseMappers.js';
 
 const getQueryValue = (value: string | string[] | undefined) =>
@@ -25,6 +26,16 @@ export default async function handler(request: VercelRequest, response: VercelRe
   }
 
   try {
+    const wantsShopTiming =
+      getQueryValue(request.query.shopTiming)?.trim().toLowerCase() === 'true';
+
+    if (wantsShopTiming) {
+      const shopTiming = await loadShopTiming(getAdminDb());
+      response.setHeader('Cache-Control', 's-maxage=30, stale-while-revalidate=60');
+      response.status(200).json(shopTiming);
+      return;
+    }
+
     const includeUnavailable =
       getQueryValue(request.query.includeUnavailable)?.trim().toLowerCase() === 'true';
 

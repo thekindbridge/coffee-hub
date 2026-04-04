@@ -1,3 +1,7 @@
+import type { ShopTiming } from './shared/shopTiming';
+
+export type { ShopTiming } from './shared/shopTiming';
+
 export interface MenuItem {
   id: string;
   name: string;
@@ -16,12 +20,6 @@ export interface CartItem extends MenuItem {
 }
 
 export type DiscountType = 'percentage' | 'flat';
-
-export interface ShopTiming {
-  openTime: number;
-  closeTime: number;
-  updatedAt?: string;
-}
 
 export type AddressLabel = 'Home' | 'Work' | 'Other';
 
@@ -163,6 +161,17 @@ export interface CheckoutOrderDraft {
 
 export interface CreateOrderResponse {
   order: Order;
+}
+
+export interface GetShopTimingResponse {
+  openTime: string;
+  closeTime: string;
+  updatedAt?: string;
+}
+
+export interface UpdateShopTimingResponse {
+  message: string;
+  shopTiming: ShopTiming;
 }
 
 export interface OrdersResponse {

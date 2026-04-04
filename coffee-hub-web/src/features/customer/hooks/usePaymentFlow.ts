@@ -28,7 +28,7 @@ import type {
 import {
   buildCheckoutClosedMessage,
   buildShopAvailabilityMessage,
-  formatShopHour,
+  formatShopTime,
   formatShopTimingRange,
   isShopOpen,
 } from '../../../../shared/shopTiming';
@@ -161,7 +161,7 @@ export const usePaymentFlow = ({
   );
 
   const shopStatusMessage = isShopOpenNow
-    ? `Now accepting orders until ${formatShopHour(shopTiming.closeTime)}.`
+    ? `Now accepting orders until ${formatShopTime(shopTiming.closeTime)}.`
     : buildCheckoutClosedMessage(shopTiming.openTime);
 
   const checkoutPrimaryActionLabel = isPlacingOrder

@@ -25,6 +25,7 @@ export function MenuScreen() {
     hasMenuItems,
     isMenuLoading,
     isShopOpen,
+    isShopTimingLoading,
     searchQuery,
     selectedCategory,
     setSearchQuery,
@@ -34,7 +35,7 @@ export function MenuScreen() {
   const { cartCount, cartQuantityById, handleAddToCart, payableCartTotal } = useCartState();
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView
         style={styles.container}
         contentContainerStyle={[
@@ -76,7 +77,11 @@ export function MenuScreen() {
               {selectedCategory === 'All' ? 'All products' : selectedCategory}
             </Text>
             <Text style={styles.sectionSubtitle}>
-              {isShopOpen ? 'Ready to add to cart' : shopAvailabilityMessage}
+              {isShopTimingLoading
+                ? 'Checking shop timing...'
+                : isShopOpen
+                  ? 'Ready to add to cart'
+                  : shopAvailabilityMessage}
             </Text>
           </View>
 

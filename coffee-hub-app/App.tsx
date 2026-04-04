@@ -1,59 +1,98 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
+import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { AppProviders } from './src/app/providers/AppProviders';
-import { useAuth } from './src/hooks/useAuth';
-import { useAuthActions } from './src/hooks/useAuthActions';
+import { AuthProvider } from './src/auth/context/AuthContext';
 import { AppNavigator } from './src/navigation/AppNavigator';
-import { LoginScreen } from './src/screens/LoginScreen';
+import { resetAuthSession } from './src/services/auth/authService';
 import { ThemeProvider, useTheme } from './src/theme';
 
+type GlobalErrorUtils = {
+  getGlobalHandler?: () => ((error: Error, isFatal?: boolean) => void) | undefined;
+  setGlobalHandler?: (handler: (error: Error, isFatal?: boolean) => void) => void;
+};
+
 export default function App() {
-  const auth = useAuth();
-  const authActions = useAuthActions();
+  const [isStartupResetComplete, setIsStartupResetComplete] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    const errorUtils = (globalThis as { ErrorUtils?: GlobalErrorUtils }).ErrorUtils;
+    const previousGlobalHandler = errorUtils?.getGlobalHandler?.();
+
+    errorUtils?.setGlobalHandler?.((error, isFatal) => {
+      console.error('[App] Global error', { error, isFatal });
+      previousGlobalHandler?.(error, isFatal);
+    });
+
+    // Debug hard reset: clear persisted storage before mounting the app so
+    // AsyncStorage and Fast Refresh cannot silently rehydrate auth state.
+    const runStartupReset = async () => {
+      console.log('[App] bundle entry: coffee-hub-app/App.tsx');
+      console.log('\uD83D\uDD25 FORCE CLEAR STORAGE');
+
+      try {
+        await AsyncStorage.clear();
+        console.log('[App] AsyncStorage.clear:success');
+      } catch (storageError) {
+        console.error('[App] AsyncStorage.clear:error', storageError);
+      }
+
+      try {
+        resetAuthSession('App startup hard reset');
+      } catch (resetError) {
+        console.error('[App] resetAuthSession:error', resetError);
+      }
+
+      if (isMounted) {
+        console.log('[App] startup reset complete');
+        setIsStartupResetComplete(true);
+      }
+    };
+
+    void runStartupReset();
+
+    return () => {
+      isMounted = false;
+
+      if (previousGlobalHandler && errorUtils?.setGlobalHandler) {
+        errorUtils.setGlobalHandler(previousGlobalHandler);
+      }
+    };
+  }, []);
+
+  if (!isStartupResetComplete) {
+    return (
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <SafeAreaProvider>
+          <View style={{ flex: 1, backgroundColor: '#ffffff' }} />
+        </SafeAreaProvider>
+      </GestureHandlerRootView>
+    );
+  }
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <ThemeProvider>
-          <RootContent auth={auth} authActions={authActions} />
+          <AuthProvider>
+            <RootContent />
+          </AuthProvider>
         </ThemeProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
 }
 
-function RootContent({
-  auth,
-  authActions,
-}: {
-  auth: ReturnType<typeof useAuth>;
-  authActions: ReturnType<typeof useAuthActions>;
-}) {
+function RootContent() {
   const { theme } = useTheme();
-  const isAuthenticated = auth.isAuthReady && Boolean(auth.user);
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
-      {isAuthenticated ? (
-        <AppProviders auth={auth}>
-          <StatusBar style={theme.isDark ? 'light' : 'dark'} />
-          <AppNavigator />
-        </AppProviders>
-      ) : (
-        <>
-          <StatusBar style="light" />
-          <LoginScreen
-            isLoading={authActions.isLoggingIn}
-            isLoginReady={auth.isAuthReady && authActions.isLoginReady}
-            loginError={authActions.loginError}
-            onLogin={() => {
-              void authActions.handleLogin();
-            }}
-          />
-        </>
-      )}
+      <StatusBar style={theme.isDark ? 'light' : 'dark'} />
+      <AppNavigator />
     </View>
   );
 }

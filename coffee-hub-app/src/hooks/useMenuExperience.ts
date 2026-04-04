@@ -1,13 +1,13 @@
 import { useDeferredValue, useMemo, useState } from 'react';
+import { useCartState } from '../app/providers/CartProvider';
 import { useMenu } from './useMenu';
 import {
-  DEFAULT_SHOP_TIMING,
-  buildShopAvailabilityMessage,
-  isShopOpen,
-} from '../utils/shopTiming';
+  buildMenuClosedMessage,
+} from '../shared/shopTiming';
 
 export const useMenuExperience = () => {
   const { menu, isLoading, error, refreshMenu } = useMenu();
+  const { isShopOpen, isShopTimingLoading, shopTiming } = useCartState();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const deferredSearchQuery = useDeferredValue(searchQuery);
@@ -28,8 +28,10 @@ export const useMenuExperience = () => {
   );
 
   const shopAvailabilityMessage = useMemo(
-    () => buildShopAvailabilityMessage(DEFAULT_SHOP_TIMING.openTime),
-    [],
+    () => isShopTimingLoading
+      ? 'Checking shop timing...'
+      : buildMenuClosedMessage(shopTiming.openTime),
+    [isShopTimingLoading, shopTiming.openTime],
   );
 
   const hasActiveFilters = useMemo(
@@ -44,7 +46,8 @@ export const useMenuExperience = () => {
     hasActiveFilters,
     hasMenuItems: menu.length > 0,
     isMenuLoading: isLoading,
-    isShopOpen: isShopOpen(DEFAULT_SHOP_TIMING.openTime, DEFAULT_SHOP_TIMING.closeTime),
+    isShopOpen,
+    isShopTimingLoading,
     refreshMenu,
     searchQuery,
     selectedCategory,

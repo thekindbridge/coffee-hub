@@ -9,7 +9,7 @@ type ProfileHeaderProps = {
   initials: string;
   metaLine: string;
   name: string;
-  onEditPress: () => void;
+  onEditPress?: () => void;
 };
 
 export function ProfileHeader({
@@ -28,13 +28,15 @@ export function ProfileHeader({
       locations={[0, 1]}
       style={[styles.container, theme.shadows.card]}
     >
-      <ScalePressable
-        accessibilityRole="button"
-        onPress={onEditPress}
-        style={styles.editButton}
-      >
-        <Ionicons name="create-outline" size={18} color={theme.colors.onPrimary} />
-      </ScalePressable>
+      {onEditPress ? (
+        <ScalePressable
+          accessibilityRole="button"
+          onPress={onEditPress}
+          style={styles.editButton}
+        >
+          <Ionicons name="create-outline" size={18} color={theme.colors.onPrimary} />
+        </ScalePressable>
+      ) : null}
 
       <View style={styles.identityRow}>
         <View style={styles.avatarWrap}>

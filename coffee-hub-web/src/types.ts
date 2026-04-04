@@ -171,6 +171,8 @@ export interface UpdateOrderStatusResponse {
   order: Order;
 }
 
+export interface GetShopTimingResponse extends ShopTiming {}
+
 export interface UpdateShopTimingResponse {
   message: string;
   shopTiming: ShopTiming;

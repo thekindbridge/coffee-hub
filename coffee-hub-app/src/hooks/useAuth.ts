@@ -1,10 +1,8 @@
-import { useEffect, useState } from 'react';
-import {
-  subscribeToAuthSession,
-  type AuthUser,
-} from '../services/auth/authService';
+import { useAuthContext } from '../auth/context/AuthContext';
+import type { AuthUser } from '../services/auth/authService';
 
 export type AuthState = {
+  authError: string;
   isLoggedIn: boolean;
   isAuthReady: boolean;
   currentUserId: string;
@@ -14,30 +12,15 @@ export type AuthState = {
 };
 
 export const useAuth = (): AuthState => {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [isAuthReady, setIsAuthReady] = useState(false);
-  const [currentUserId, setCurrentUserId] = useState('');
-  const [currentUserEmail, setCurrentUserEmail] = useState('');
-  const [user, setUser] = useState<AuthUser | null>(null);
-
-  useEffect(() => {
-    const unsubscribe = subscribeToAuthSession(session => {
-      setIsLoggedIn(session.isLoggedIn);
-      setCurrentUserId(session.currentUserId);
-      setCurrentUserEmail(session.currentUserEmail);
-      setUser(session.user);
-      setIsAuthReady(true);
-    });
-
-    return unsubscribe;
-  }, []);
+  const auth = useAuthContext();
 
   return {
-    isLoggedIn,
-    isAuthReady,
-    currentUserId,
-    currentUserEmail,
-    normalizedCurrentEmail: currentUserEmail.trim().toLowerCase(),
-    user,
+    authError: auth.error,
+    isLoggedIn: auth.isAuthenticated,
+    isAuthReady: auth.isReady,
+    currentUserId: auth.currentUserId,
+    currentUserEmail: auth.currentUserEmail,
+    normalizedCurrentEmail: auth.currentUserEmail.trim().toLowerCase(),
+    user: auth.user,
   };
 };

@@ -1,46 +1,41 @@
 {
   "expo": {
-    "owner": "pavankumar3232",
     "name": "Coffee Hub",
     "slug": "coffee-hub-app",
     "version": "1.0.0",
     "scheme": "coffeehub",
     "orientation": "portrait",
-    "icon": "./Applogo.jpg",
+    "icon": "./assets/app-icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
-
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
-
     "ios": {
       "supportsTablet": true
     },
-
     "android": {
       "package": "com.pavankumar3232.coffeehubapp",
-      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
-        "foregroundImage": "./Applogo.jpg",
+        "foregroundImage": "./assets/app-icon.png",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false
     },
-
     "web": {
       "favicon": "./assets/favicon.png"
     },
-
-    "plugins": ["@react-native-google-signin/google-signin"],
-
+    "plugins": [
+      "expo-font"
+    ],
     "extra": {
       "eas": {
-        "projectId": "coffee-hub-c8fdb"
+        "projectId": "20dfc8e4-4e5b-4544-adf4-8d9c1c7b099b"
       }
-    }
+    },
+    "owner": "thekindbridge"
   }
 }

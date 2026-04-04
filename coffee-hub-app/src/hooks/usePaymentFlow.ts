@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
-import { getCurrentUserIdToken } from '../services/auth/authService';
+import { Alert, Platform, ToastAndroid } from 'react-native';
+import { useAuth } from '../auth/context/AuthContext';
 import { getNextOrderId } from '../services/firebase/orderCounterService';
 import { createOrderRequest } from '../services/ordersService';
 import { locationAdapter } from '../services/platform/locationAdapter';
@@ -21,16 +22,19 @@ import type {
 import { calculateDiscount } from '../utils/calculateDiscount';
 import {
   buildCheckoutClosedMessage,
-  buildShopAvailabilityMessage,
-  formatShopHour,
+  buildOpensInMessage,
+  formatShopTime,
   formatShopTimingRange,
+  getCurrentTimeInMinutes,
   isShopOpen,
-} from '../utils/shopTiming';
+} from '../shared/shopTiming';
 import { STANDARD_DELIVERY_FEE } from '../constants/app';
 
 type UsePaymentFlowParams = {
   currentUserId: string;
+  isShopTimingLoading: boolean;
   profileSaved: CustomerProfile;
+  refreshShopTiming: () => Promise<ShopTiming>;
   shopTiming: ShopTiming;
   cart: CartItem[];
   cartTotal: number;
@@ -42,6 +46,7 @@ type UsePaymentFlowParams = {
   setCouponSuccess: Dispatch<SetStateAction<string>>;
   setCouponError: Dispatch<SetStateAction<string>>;
   clearCart: () => void;
+  currentTimeInMinutes: number;
   findActiveOfferByCode: (code: string) => Promise<Offer | null>;
   onOrderPlaced?: (order: Order) => void;
 };
@@ -64,7 +69,10 @@ export type PaymentFlowState = {
   setDraftOrderId: Dispatch<SetStateAction<string>>;
   savedAddressOptions: SavedAddressOption[];
   isShopOpen: boolean;
+  shopTiming: ShopTiming;
+  currentTime: number;
   shopTimingRangeLabel: string;
+  shopCountdownMessage: string;
   shopStatusMessage: string;
   selectedAddressLabel: string;
   checkoutAddressSummary: string;
@@ -78,7 +86,9 @@ export type PaymentFlowState = {
 
 export const usePaymentFlow = ({
   currentUserId,
+  isShopTimingLoading,
   profileSaved,
+  refreshShopTiming,
   shopTiming,
   cart,
   cartTotal,
@@ -90,9 +100,11 @@ export const usePaymentFlow = ({
   setCouponSuccess,
   setCouponError,
   clearCart,
+  currentTimeInMinutes,
   findActiveOfferByCode,
   onOrderPlaced,
 }: UsePaymentFlowParams): PaymentFlowState => {
+  const { user } = useAuth();
   const [checkoutStep, setCheckoutStep] = useState<CheckoutStep>('cart');
   const [customerDetails, setCustomerDetails] = useState<CheckoutCustomerDetails>({
     name: '',
@@ -107,7 +119,6 @@ export const usePaymentFlow = ({
   const [customerLocationError, setCustomerLocationError] = useState('');
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [draftOrderId, setDraftOrderId] = useState('');
-  const [currentTime, setCurrentTime] = useState(() => Date.now());
   const [placedOrder, setPlacedOrder] = useState<Order | null>(null);
   const hasCheckoutAddressSelectionRef = useRef(false);
 
@@ -145,24 +156,34 @@ export const usePaymentFlow = ({
       : selectedSavedAddress || customerDetails.address || primaryAddressOption?.value || '';
 
   const shopTimingRangeLabel = useMemo(
-    () => formatShopTimingRange(shopTiming.openTime, shopTiming.closeTime),
-    [shopTiming.closeTime, shopTiming.openTime],
+    () => isShopTimingLoading
+      ? 'Checking shop timing...'
+      : formatShopTimingRange(shopTiming.openTime, shopTiming.closeTime),
+    [isShopTimingLoading, shopTiming.closeTime, shopTiming.openTime],
   );
 
   const isShopOpenNow = useMemo(
-    () => isShopOpen(shopTiming.openTime, shopTiming.closeTime, new Date(currentTime)),
-    [currentTime, shopTiming.closeTime, shopTiming.openTime],
+    () => !isShopTimingLoading && isShopOpen(shopTiming.openTime, shopTiming.closeTime, currentTimeInMinutes),
+    [currentTimeInMinutes, isShopTimingLoading, shopTiming.closeTime, shopTiming.openTime],
   );
 
-  const shopStatusMessage = isShopOpenNow
-    ? `Now accepting orders until ${formatShopHour(shopTiming.closeTime)}.`
-    : buildCheckoutClosedMessage(shopTiming.openTime);
+  const shopCountdownMessage = isShopOpenNow
+    ? ''
+    : buildOpensInMessage(shopTiming.openTime, currentTimeInMinutes);
+
+  const shopStatusMessage = isShopTimingLoading
+    ? 'Checking live shop timing...'
+    : isShopOpenNow
+    ? `Now accepting orders until ${formatShopTime(shopTiming.closeTime)}.`
+    : `${buildCheckoutClosedMessage(shopTiming.openTime)} ${shopCountdownMessage}`.trim();
 
   const checkoutPrimaryActionLabel = isPlacingOrder
     ? 'Placing order...'
+    : isShopTimingLoading
+      ? 'Checking hours...'
     : isShopOpenNow
       ? 'Place order'
-      : buildShopAvailabilityMessage(shopTiming.openTime);
+      : `Opens at ${formatShopTime(shopTiming.openTime)}`;
 
   useEffect(() => {
     if (!savedAddressOptions.length) {
@@ -224,14 +245,6 @@ export const usePaymentFlow = ({
     setCheckoutError('');
     setPlacedOrder(null);
   }, [cart.length, checkoutStep]);
-
-  useEffect(() => {
-    const intervalId = setInterval(() => {
-      setCurrentTime(Date.now());
-    }, 60000);
-
-    return () => clearInterval(intervalId);
-  }, []);
 
   const captureLocation = async () => {
     setIsLocatingCustomer(true);
@@ -303,8 +316,8 @@ export const usePaymentFlow = ({
       return null;
     }
 
-    if (!currentUserId) {
-      setCheckoutError('Please wait for your secure session to finish loading.');
+    if (!user || !user.email) {
+      setCheckoutError('User not found.');
       return null;
     }
 
@@ -366,15 +379,20 @@ export const usePaymentFlow = ({
     setCheckoutError('');
 
     try {
-      const idToken = await getCurrentUserIdToken(true);
-      if (!idToken) {
-        setCheckoutError('Please sign in again before placing your order.');
+      if (!user || !user.email) {
+        setCheckoutError('User not found.');
         return;
       }
 
+      console.log('User:', user);
+
       const orderResponse = await createOrderRequest(
-        { orderDraft: draft, userId: currentUserId },
-        idToken,
+        {
+          orderDraft: draft,
+          role: user.role,
+          userEmail: user.email,
+          userId: user.email,
+        },
       );
 
       resetAfterSuccess(orderResponse.order);
@@ -392,8 +410,21 @@ export const usePaymentFlow = ({
   };
 
   const handlePlaceOrder = async () => {
-    if (!isShopOpenNow) {
-      setCheckoutError(buildCheckoutClosedMessage(shopTiming.openTime));
+    let latestShopTiming = shopTiming;
+
+    try {
+      latestShopTiming = await refreshShopTiming();
+    } catch (error) {
+      console.error('Failed to refresh shop timing before checkout', error);
+    }
+
+    if (!isShopOpen(latestShopTiming.openTime, latestShopTiming.closeTime, getCurrentTimeInMinutes())) {
+      if (Platform.OS === 'android') {
+        ToastAndroid.show('Shop is closed', ToastAndroid.SHORT);
+      } else {
+        Alert.alert('Shop Closed', 'Shop is closed');
+      }
+      setCheckoutError(buildCheckoutClosedMessage(latestShopTiming.openTime));
       return;
     }
 
@@ -434,7 +465,10 @@ export const usePaymentFlow = ({
     setDraftOrderId,
     savedAddressOptions,
     isShopOpen: isShopOpenNow,
+    shopTiming,
+    currentTime: currentTimeInMinutes,
     shopTimingRangeLabel,
+    shopCountdownMessage,
     shopStatusMessage,
     selectedAddressLabel,
     checkoutAddressSummary,

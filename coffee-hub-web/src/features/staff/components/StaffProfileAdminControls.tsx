@@ -81,7 +81,7 @@ export const StaffProfileAdminControls = ({
             Current timing: {currentShopTimingLabel}
           </div>
           <p className="mt-2 text-xs leading-5 text-ink-muted">
-            Use 24-hour values from 0 to 23. Orders are accepted from the opening hour until the closing hour starts.
+            Use HH:MM values in 24-hour format. Orders are accepted from the opening time until the closing time starts.
           </p>
         </div>
         <div className="mt-4 grid grid-cols-2 gap-3">
@@ -90,16 +90,14 @@ export const StaffProfileAdminControls = ({
               Open Time
             </label>
             <input
-              type="number"
-              min={0}
-              max={23}
+              type="time"
+              step={60}
               className="coffee-input"
               value={shopTimingDraft.openTime}
               onChange={event => onShopTimingDraftChange({
                 ...shopTimingDraft,
                 openTime: event.target.value,
               })}
-              placeholder="6"
             />
           </div>
           <div>
@@ -107,16 +105,14 @@ export const StaffProfileAdminControls = ({
               Close Time
             </label>
             <input
-              type="number"
-              min={0}
-              max={23}
+              type="time"
+              step={60}
               className="coffee-input"
               value={shopTimingDraft.closeTime}
               onChange={event => onShopTimingDraftChange({
                 ...shopTimingDraft,
                 closeTime: event.target.value,
               })}
-              placeholder="22"
             />
           </div>
         </div>

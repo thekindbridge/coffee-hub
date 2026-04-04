@@ -54,6 +54,7 @@ export function CheckoutDetailsScreen() {
     isLocatingCustomer,
     isPlacingOrder,
     isShopOpen,
+    isShopTimingLoading,
     payableCartTotal,
     placedOrder,
     savedAddressOptions,
@@ -65,7 +66,9 @@ export function CheckoutDetailsScreen() {
     setIsCheckoutAddressListOpen,
     setPlacedOrder,
     setSelectedAddressId,
+    shopCountdownMessage,
     shopStatusMessage,
+    shopTimingRangeLabel,
   } = useCartState();
   const { isProfileComplete } = useProfileData();
 
@@ -256,16 +259,20 @@ export function CheckoutDetailsScreen() {
             </CardContainer>
           ) : (
             <>
-              {!isShopOpen ? (
+              {!isShopTimingLoading && !isShopOpen ? (
                 <CardContainer variant="tinted" style={styles.warningCard}>
                   <Text style={styles.noticeTitle}>Ordering update</Text>
                   <Text style={styles.noticeText}>{shopStatusMessage}</Text>
+                  <Text style={styles.noticeMeta}>
+                    Hours: {shopTimingRangeLabel}
+                    {shopCountdownMessage ? ` | ${shopCountdownMessage}` : ''}
+                  </Text>
                 </CardContainer>
               ) : null}
 
               {authError ? (
                 <CardContainer style={styles.errorCard}>
-                  <Text style={styles.noticeTitle}>Session issue</Text>
+                  <Text style={styles.noticeTitle}>Account issue</Text>
                   <Text style={styles.noticeText}>{authError}</Text>
                 </CardContainer>
               ) : null}
@@ -533,7 +540,7 @@ export function CheckoutDetailsScreen() {
               {!isAuthReady ? (
                 <CardContainer variant="tinted">
                   <Text style={styles.noticeText}>
-                    Secure session is still getting ready. You can keep reviewing details while it finishes.
+                    Account details are still loading. You can keep reviewing checkout details while that finishes.
                   </Text>
                 </CardContainer>
               ) : null}
@@ -555,7 +562,7 @@ export function CheckoutDetailsScreen() {
             onPress={() => {
               void handlePlaceOrder();
             }}
-            disabled={isPlacingOrder || !hasCartItems || !isShopOpen}
+            disabled={isPlacingOrder || isShopTimingLoading || !hasCartItems || !isShopOpen}
             loading={isPlacingOrder}
             style={styles.placeAction}
           />
@@ -809,6 +816,11 @@ const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => StyleSheet
   noticeText: {
     fontSize: theme.typography.body,
     lineHeight: 20,
+    color: theme.colors.textMuted,
+  },
+  noticeMeta: {
+    marginTop: 6,
+    fontSize: theme.typography.caption,
     color: theme.colors.textMuted,
   },
   errorText: {

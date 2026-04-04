@@ -1,0 +1,36 @@
+# Repo-level files and folders that should never be uploaded for the app build.
+.git/
+.github/
+node_modules/
+coffee-hub-web/
+.gradle-local/
+coffeehub-window.xml
+
+# App-local generated or machine-specific files.
+.expo/
+.expo-shared/
+.gradle-local/
+.idea/
+dist/
+.tmp-eas-*/
+*.log
+android/.gradle/
+android/build/
+android/app/build/
+android/
+ios/
+
+# The same exclusions, anchored to the nested app path for monorepo archive builds.
+coffee-hub-app/node_modules/
+coffee-hub-app/.expo/
+coffee-hub-app/.expo-shared/
+coffee-hub-app/.gradle-local/
+coffee-hub-app/.idea/
+coffee-hub-app/dist/
+coffee-hub-app/.tmp-eas-*/
+coffee-hub-app/*.log
+coffee-hub-app/android/.gradle/
+coffee-hub-app/android/build/
+coffee-hub-app/android/app/build/
+coffee-hub-app/android/
+coffee-hub-app/ios/

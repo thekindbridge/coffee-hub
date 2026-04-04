@@ -53,12 +53,14 @@ export function CartScreen() {
     isApplyingCoupon,
     isAuthReady,
     isShopOpen,
+    isShopTimingLoading,
     payableCartTotal,
-    refreshAuthSession,
+    refreshAuthState,
     setCheckoutError,
     setCheckoutStep,
     setCouponInput,
     shopStatusMessage,
+    shopCountdownMessage,
     shopTimingRangeLabel,
   } = useCartState();
 
@@ -134,33 +136,42 @@ export function CartScreen() {
             </View>
 
             <CardContainer
-              variant={isShopOpen ? 'light' : 'tinted'}
-              style={!isShopOpen ? styles.warningCard : undefined}
+              variant={isShopTimingLoading || isShopOpen ? 'light' : 'tinted'}
+              style={!isShopTimingLoading && !isShopOpen ? styles.warningCard : undefined}
             >
               <View style={styles.noticeRow}>
                 <Ionicons
                   name="time-outline"
                   size={18}
-                  color={isShopOpen ? theme.colors.success : theme.colors.primary}
+                  color={isShopTimingLoading || isShopOpen ? theme.colors.success : theme.colors.primary}
                 />
                 <View style={styles.noticeCopy}>
                   <Text style={styles.noticeTitle}>
-                    {isShopOpen ? 'Cafe is open now' : 'Ordering is paused'}
+                    {isShopTimingLoading
+                      ? 'Checking shop hours'
+                      : isShopOpen
+                        ? 'Cafe is open now'
+                        : 'Ordering is paused'}
                   </Text>
                   <Text style={styles.noticeText}>{shopStatusMessage}</Text>
-                  <Text style={styles.noticeMeta}>Hours: {shopTimingRangeLabel}</Text>
+                  {!isShopTimingLoading ? (
+                    <Text style={styles.noticeMeta}>
+                      Hours: {shopTimingRangeLabel}
+                      {!isShopOpen && shopCountdownMessage ? ` | ${shopCountdownMessage}` : ''}
+                    </Text>
+                  ) : null}
                 </View>
               </View>
             </CardContainer>
 
             {authError ? (
               <CardContainer style={styles.errorCard}>
-                <Text style={styles.noticeTitle}>Session issue</Text>
+                <Text style={styles.noticeTitle}>Account issue</Text>
                 <Text style={styles.noticeText}>{authError}</Text>
                 <PrimaryButton
-                  title="Retry session"
+                  title="Retry account check"
                   onPress={() => {
-                    void refreshAuthSession();
+                    void refreshAuthState();
                   }}
                   variant="secondary"
                   style={styles.retryButton}
@@ -279,7 +290,7 @@ export function CartScreen() {
             {!isAuthReady ? (
               <CardContainer variant="tinted">
                 <Text style={styles.noticeText}>
-                  Secure session is still getting ready. You can keep reviewing your cart while it finishes.
+                  Account details are still loading. You can keep reviewing your cart while that finishes.
                 </Text>
               </CardContainer>
             ) : null}

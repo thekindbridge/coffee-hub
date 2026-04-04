@@ -222,14 +222,14 @@ export function OrdersScreen() {
   }, [orders, placedOrder, setPlacedOrder]);
 
   const emptyTitle = useMemo(
-    () => (isAuthReady ? 'No orders yet' : 'Preparing your secure session'),
+    () => (isAuthReady ? 'No orders yet' : 'Loading your account'),
     [isAuthReady],
   );
   const emptySubtitle = useMemo(
     () => (
       isAuthReady
         ? 'Place your first order and track it here.'
-        : 'Once the session is ready, your order history will appear here.'
+        : 'Once your account details finish loading, your order history will appear here.'
     ),
     [isAuthReady],
   );

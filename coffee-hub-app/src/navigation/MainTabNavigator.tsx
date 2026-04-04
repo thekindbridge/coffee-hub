@@ -3,6 +3,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { useEffect, useRef } from 'react';
 import { Animated, StyleSheet } from 'react-native';
 import { TAB_ROUTES } from '../constants/routes';
+import { CustomerAppShell } from './CustomerAppShell';
 import { HomeScreen } from '../screens/HomeScreen';
 import { MenuScreen } from '../screens/MenuScreen';
 import { OffersScreen } from '../screens/OffersScreen';
@@ -12,6 +13,22 @@ import { useTheme } from '../theme';
 import type { MainTabParamList } from './types';
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
+
+const withCustomerShell = <TProps extends object>(
+  ScreenComponent: React.ComponentType<TProps>,
+) => function CustomerShellScreen(props: TProps) {
+  return (
+    <CustomerAppShell>
+      <ScreenComponent {...props} />
+    </CustomerAppShell>
+  );
+};
+
+const HomeShellScreen = withCustomerShell(HomeScreen);
+const MenuShellScreen = withCustomerShell(MenuScreen);
+const OffersShellScreen = withCustomerShell(OffersScreen);
+const OrdersShellScreen = withCustomerShell(OrdersScreen);
+const ProfileShellScreen = withCustomerShell(ProfileScreen);
 
 const getTabBarIcon = (routeName: keyof MainTabParamList, focused: boolean) => {
   switch (routeName) {
@@ -82,6 +99,8 @@ function TabIcon({
 export function MainTabNavigator() {
   const { theme } = useTheme();
 
+  console.log('[MainTabNavigator] render');
+
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -120,27 +139,27 @@ export function MainTabNavigator() {
     >
       <Tab.Screen
         name={TAB_ROUTES.HOME}
-        component={HomeScreen}
+        component={HomeShellScreen}
         options={{ tabBarLabel: 'Home' }}
       />
       <Tab.Screen
         name={TAB_ROUTES.MENU}
-        component={MenuScreen}
+        component={MenuShellScreen}
         options={{ tabBarLabel: 'Menu' }}
       />
       <Tab.Screen
         name={TAB_ROUTES.OFFERS}
-        component={OffersScreen}
+        component={OffersShellScreen}
         options={{ tabBarLabel: 'Offers' }}
       />
       <Tab.Screen
         name={TAB_ROUTES.ORDERS}
-        component={OrdersScreen}
+        component={OrdersShellScreen}
         options={{ tabBarLabel: 'Orders' }}
       />
       <Tab.Screen
         name={TAB_ROUTES.PROFILE}
-        component={ProfileScreen}
+        component={ProfileShellScreen}
         options={{ tabBarLabel: 'Profile' }}
       />
     </Tab.Navigator>

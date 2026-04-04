@@ -1,5 +1,7 @@
 import { AppServiceError, toAppServiceError } from '../serviceError';
 
+const LEGACY_FIREBASE_AUTH_ERROR = 'Missing Firebase authentication token.';
+
 const getApiBaseUrl = () => {
   const value = `${process.env.EXPO_PUBLIC_API_BASE_URL ?? ''}`.trim();
 
@@ -16,6 +18,28 @@ const getApiBaseUrl = () => {
 export const buildApiUrl = (path: string) => {
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
   return `${getApiBaseUrl()}${normalizedPath}`;
+};
+
+const getApiErrorMessage = (
+  path: string,
+  status: number,
+  payload: unknown,
+) => {
+  const rawMessage =
+    typeof (payload as { error?: unknown })?.error === 'string' &&
+    (payload as { error: string }).error.trim()
+      ? (payload as { error: string }).error.trim()
+      : 'Request failed.';
+
+  if (
+    status === 401 &&
+    rawMessage === LEGACY_FIREBASE_AUTH_ERROR &&
+    path.startsWith('/api/orders')
+  ) {
+    return 'This server is running an older order API that still requires Firebase bearer tokens. Deploy the latest coffee-hub-web backend or point EXPO_PUBLIC_API_BASE_URL to the updated server before testing checkout.';
+  }
+
+  return rawMessage;
 };
 
 const buildHeaders = (idToken?: string) => {
@@ -40,11 +64,10 @@ export const getApi = async <TResponse>(path: string, idToken?: string) => {
     const payload = await response.json().catch(() => ({}));
 
     if (!response.ok) {
-      const errorMessage =
-        typeof payload?.error === 'string' && payload.error.trim()
-          ? payload.error
-          : 'Request failed.';
-      throw new AppServiceError(errorMessage, { code: 'network' });
+      throw new AppServiceError(
+        getApiErrorMessage(path, response.status, payload),
+        { code: 'network' },
+      );
     }
 
     return payload as TResponse;
@@ -75,11 +98,10 @@ export const postApi = async <TResponse>(
     const payload = await response.json().catch(() => ({}));
 
     if (!response.ok) {
-      const errorMessage =
-        typeof payload?.error === 'string' && payload.error.trim()
-          ? payload.error
-          : 'Request failed.';
-      throw new AppServiceError(errorMessage, { code: 'network' });
+      throw new AppServiceError(
+        getApiErrorMessage(path, response.status, payload),
+        { code: 'network' },
+      );
     }
 
     return payload as TResponse;

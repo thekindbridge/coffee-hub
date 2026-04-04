@@ -84,8 +84,13 @@ function ActionControl({
       <View style={styles.stepper}>
         <ScalePressable
           accessibilityRole="button"
+          disabled={!isShopOpen}
           onPress={() => updateQuantity(-1)}
-          style={[styles.stepperButton, styles.stepperButtonSecondary]}
+          style={[
+            styles.stepperButton,
+            styles.stepperButtonSecondary,
+            !isShopOpen ? styles.disabled : null,
+          ]}
         >
           <Ionicons name="remove" size={16} color={theme.colors.primary} />
         </ScalePressable>

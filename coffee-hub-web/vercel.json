@@ -1,8 +1,18 @@
 {
+  "rewrites": [
+    {
+      "source": "/api/shop/timing",
+      "destination": "/api/menu?shopTiming=true"
+    },
+    {
+      "source": "/api/create-order",
+      "destination": "/api/orders/create"
+    }
+  ],
   "crons": [
     {
       "path": "/api/cron/flush-notifications",
-      "schedule": "* * * * *"
+      "schedule": "0 9 * * *"
     }
   ]
 }

@@ -30,7 +30,7 @@ export const useRealtimeAppData = () => {
 
   const orders = useOrdersData(roles.isAdmin, auth.currentUserId);
 
-  const shopTiming = useShopTiming(auth.isLoggedIn);
+  const shopTiming = useShopTiming();
 
   const profiles = useProfileData(
     auth.currentUserId,

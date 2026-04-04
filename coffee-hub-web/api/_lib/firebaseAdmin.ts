@@ -16,6 +16,7 @@ let cachedAdminDb: Firestore | null = null;
 let cachedAdminMessaging: Messaging | null = null;
 
 const normalizeEmail = (value: string) => value.trim().toLowerCase();
+const normalizeUserId = (value: string) => value.trim().toLowerCase();
 
 const getRequiredEnv = (key: string, fallbacks: string[] = []) => {
   for (const candidate of [process.env[key], ...fallbacks]) {
@@ -69,7 +70,7 @@ const getAdminApp = () => {
   return cachedAdminApp;
 };
 
-const getAdminAuth = () => {
+export const getAdminAuth = () => {
   if (!cachedAdminAuth) {
     cachedAdminAuth = getAuth(getAdminApp());
   }
@@ -207,6 +208,37 @@ export const verifyRequestUser = async (
     console.error('Firebase Admin token verification failed', error);
     throw new ApiError(401, 'Invalid Firebase authentication token.');
   }
+};
+
+type ResolvedRequestUser = Pick<DecodedIdToken, 'email' | 'uid'> & {
+  authMode: 'firebase' | 'dummy';
+};
+
+export const resolveRequestUser = async (
+  request: VercelRequest,
+  expectedUserId?: string,
+): Promise<ResolvedRequestUser> => {
+  const normalizedExpectedUserId = normalizeUserId(expectedUserId || '');
+
+  if (request.headers.authorization) {
+    const decodedToken = await verifyRequestUser(request, normalizedExpectedUserId || undefined);
+
+    return {
+      authMode: 'firebase',
+      email: decodedToken.email,
+      uid: decodedToken.uid,
+    };
+  }
+
+  if (!normalizedExpectedUserId) {
+    throw new ApiError(401, 'Missing Firebase authentication token.');
+  }
+
+  return {
+    authMode: 'dummy',
+    email: normalizedExpectedUserId.includes('@') ? normalizedExpectedUserId : undefined,
+    uid: normalizedExpectedUserId,
+  };
 };
 
 export const verifyAdminRequest = async (request: VercelRequest) => {

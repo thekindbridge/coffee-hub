@@ -1,0 +1,20 @@
+# In this monorepo, the repo-root `.easignore` controls the final EAS upload.
+# Keep local app exclusions here too so app-root packaging stays clean.
+
+node_modules
+.git
+.expo
+.expo-shared
+.gradle-local
+.idea
+.vscode
+dist
+.tmp-eas-*
+*.log
+
+android/
+ios/
+
+tmp
+temp
+.cache
