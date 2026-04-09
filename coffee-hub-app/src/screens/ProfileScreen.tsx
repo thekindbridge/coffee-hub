@@ -1,10 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { NavigationProp, ParamListBase, RouteProp } from '@react-navigation/native';
-import { useEffect, useMemo, useState } from 'react';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
-  Alert,
+  Image,
   Modal,
   ScrollView,
   StyleSheet,
@@ -13,24 +14,24 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { PrimaryButton } from '../components/ui/PrimaryButton';
-import { ScalePressable } from '../components/ui/ScalePressable';
-import { ScreenTransition } from '../components/ui/ScreenTransition';
-import { TAB_ROUTES } from '../constants/routes';
+import { useAuthContext } from '../auth/context/AuthContext';
+import { useCartState } from '../app/providers/CartProvider';
 import { AddressManager } from '../features/profile/components/AddressManager';
-import { ProfileActionRow } from '../features/profile/components/ProfileActionRow';
-import { ProfileHeader } from '../features/profile/components/ProfileHeader';
 import { ProfileInfoForm } from '../features/profile/components/ProfileInfoForm';
-import { ProfileSectionCard } from '../features/profile/components/ProfileSectionCard';
 import { useProfileActions } from '../features/profile/hooks/useProfileActions';
 import { useProfileData } from '../features/profile/hooks/useProfileData';
 import { getProfileInitials } from '../features/profile/lib/profileMappers';
-import { RoleBadge } from '../features/roles/components/RoleBadge';
-import { useUserRole } from '../features/roles/hooks/useUserRole';
+import { useOffers } from '../hooks/useOffers';
 import { useOrders } from '../hooks/useOrders';
-import { animateLayout, useTheme, useThemedStyles } from '../theme';
+import { TAB_ROUTES } from '../constants/routes';
+import { formatShopTime } from '../shared/shopTiming';
+import { useTheme, useThemedStyles } from '../theme';
 import type { CustomerProfile } from '../types';
-import { useAuthContext } from '../auth/context/AuthContext';
+import { getCustomerPalette } from '../components/customer/designSystem';
+import { StatusBadge } from '../components/customer/StatusBadge';
+import { PrimaryButton } from '../components/ui/PrimaryButton';
+import { ScalePressable } from '../components/ui/ScalePressable';
+import { ScreenTransition } from '../components/ui/ScreenTransition';
 
 type ProfileNavigation = NavigationProp<ParamListBase>;
 type ProfileRoute = RouteProp<Record<string, { openEdit?: boolean } | undefined>, string>;
@@ -41,19 +42,63 @@ const FIELD_LABELS: Record<string, string> = {
   phone: 'your phone number',
 };
 
+function ProfileOptionRow({
+  icon,
+  onPress,
+  subtitle,
+  title,
+  trailing,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  onPress?: () => void;
+  subtitle?: string;
+  title: string;
+  trailing?: ReactNode;
+}) {
+  const { theme } = useTheme();
+  const palette = getCustomerPalette(theme);
+  const styles = useThemedStyles(createStyles);
+
+  return (
+    <ScalePressable
+      accessibilityRole={onPress ? 'button' : undefined}
+      disabled={!onPress}
+      onPress={onPress}
+      style={styles.optionRow}
+    >
+      <View style={styles.optionLead}>
+        <View style={styles.optionIconWrap}>
+          <Ionicons name={icon} size={18} color={palette.caramel} />
+        </View>
+        <View style={styles.optionCopy}>
+          <Text style={styles.optionTitle}>{title}</Text>
+          {subtitle ? (
+            <Text style={styles.optionSubtitle}>{subtitle}</Text>
+          ) : null}
+        </View>
+      </View>
+
+      {trailing ?? (onPress ? (
+        <Ionicons name="chevron-forward" size={18} color={palette.textMuted} />
+      ) : null)}
+    </ScalePressable>
+  );
+}
+
 export function ProfileScreen() {
   const navigation = useNavigation<ProfileNavigation>();
   const route = useRoute<ProfileRoute>();
   const { theme, toggleTheme } = useTheme();
+  const palette = getCustomerPalette(theme);
   const styles = useThemedStyles(createStyles);
   const { logout } = useAuthContext();
   const {
-    isAdmin,
-    isCustomer,
-    isDelivery,
-    isOwner,
-    role,
-  } = useUserRole();
+    currentTime,
+    isShopOpen,
+    isShopTimingLoading,
+    shopTiming,
+  } = useCartState();
+  const { activeOffers } = useOffers();
   const {
     authPhotoUrl,
     currentUserId,
@@ -79,7 +124,6 @@ export function ProfileScreen() {
   });
   const [draftProfile, setDraftProfile] = useState<CustomerProfile>(profile);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
-  const canManageAccount = Boolean(currentUserId);
 
   useEffect(() => {
     if (!isEditorOpen) {
@@ -88,70 +132,31 @@ export function ProfileScreen() {
   }, [isEditorOpen, profile]);
 
   useEffect(() => {
-    if (!canManageAccount || !route.params?.openEdit) {
+    if (!currentUserId || !route.params?.openEdit) {
       return;
     }
 
     setDraftProfile(profile);
     setIsEditorOpen(true);
     navigation.setParams({ openEdit: undefined });
-  }, [canManageAccount, navigation, profile, route.params?.openEdit]);
+  }, [currentUserId, navigation, profile, route.params?.openEdit]);
 
   const missingSummary = useMemo(
     () => missingFields.map(field => FIELD_LABELS[field] || field).join(', '),
     [missingFields],
   );
-
-  const rolePresentation = useMemo(() => {
-    if (isOwner) {
-      return {
-        badgeTone: 'owner' as const,
-        helperText: 'Owner override from EXPO_PUBLIC_OWNER_EMAIL. Admin routing always takes priority.',
-        label: 'Owner',
-      };
-    }
-
-    if (isAdmin) {
-      return {
-        badgeTone: 'admin' as const,
-        helperText: 'Admin access comes from admin_access/{email}.',
-        label: 'Admin',
-      };
-    }
-
-    if (isDelivery) {
-      return {
-        badgeTone: 'delivery' as const,
-        helperText: 'Delivery access comes from agents/{email}.',
-        label: 'Delivery Agent',
-      };
-    }
-
-    return {
-      badgeTone: 'customer' as const,
-      helperText: 'Customer is the fallback when no admin or delivery access doc exists.',
-      label: 'Customer',
-    };
-  }, [isAdmin, isDelivery, isOwner]);
-
-  const headerMeta = useMemo(() => {
-    const values = [rolePresentation.label, profile.phone.trim(), profile.email.trim()].filter(Boolean);
-    if (values.length > 0) {
-      return values.join(' | ');
-    }
-
-    return 'Complete your profile for faster checkout.';
-  }, [profile.email, profile.phone, rolePresentation.label]);
-
-  const handleOpenEditor = () => {
-    if (!canManageAccount) {
-      return;
-    }
-
-    animateLayout();
-    setDraftProfile(profile);
-    setIsEditorOpen(true);
-  };
+  const profileInitials = getProfileInitials(profileDisplayName);
+  const membershipLabel = orders.length >= 6 ? 'Gold' : 'Member';
+  const statusTitle = isShopTimingLoading
+    ? 'Checking store timing'
+    : isShopOpen
+      ? `Currently Open until ${formatShopTime(shopTiming.closeTime)}`
+      : `Currently Closed until ${formatShopTime(shopTiming.openTime)}`;
+  const statusSubtitle = isShopTimingLoading
+    ? 'We are syncing operating hours now.'
+    : isShopOpen
+      ? `Accepting orders now • closes at ${formatShopTime(shopTiming.closeTime)}`
+      : `Fresh orders reopen at ${formatShopTime(shopTiming.openTime)}`;
 
   const handleSaveProfile = async () => {
     const didSave = await saveProfile(draftProfile);
@@ -159,9 +164,6 @@ export function ProfileScreen() {
       setIsEditorOpen(false);
     }
   };
-
-  const profileInitials = getProfileInitials(profileDisplayName);
-  const showStaffFields = isAdmin || isDelivery;
 
   return (
     <SafeAreaView style={styles.screen} edges={['bottom']}>
@@ -171,223 +173,195 @@ export function ProfileScreen() {
         showsVerticalScrollIndicator={false}
       >
         <ScreenTransition>
-          <ProfileHeader
-            avatarUrl={authPhotoUrl}
-            initials={profileInitials}
-            metaLine={headerMeta}
-            name={profileDisplayName}
-            onEditPress={canManageAccount ? handleOpenEditor : undefined}
-          />
+          <View style={styles.statusBanner}>
+            <View>
+              <Text style={styles.statusEyebrow}>Store status</Text>
+              <Text style={styles.statusTitle}>{statusTitle}</Text>
+              <Text style={styles.statusSubtitle}>{statusSubtitle}</Text>
+            </View>
+            <StatusBadge
+              label={isShopOpen ? 'Open' : 'Closed'}
+              tone={isShopOpen ? 'success' : 'pending'}
+            />
+          </View>
+
+          <LinearGradient
+            colors={palette.offerGradient}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={[styles.userCard, theme.shadows.card]}
+          >
+            <View style={styles.userCardTopRow}>
+              <View style={styles.avatarWrap}>
+                {authPhotoUrl ? (
+                  <Image source={{ uri: authPhotoUrl }} style={styles.avatarImage} />
+                ) : (
+                  <Text style={styles.avatarText}>{profileInitials}</Text>
+                )}
+              </View>
+
+              <StatusBadge label={membershipLabel} tone="member" />
+            </View>
+
+            <Text style={styles.userName}>{profileDisplayName}</Text>
+            <Text style={styles.userEmail}>{profile.email || 'coffeehub@guest.com'}</Text>
+            <Text style={styles.userAddress}>
+              {primaryAddress?.address || 'Add your main delivery address to speed up checkout.'}
+            </Text>
+
+            <ScalePressable
+              accessibilityRole="button"
+              onPress={() => {
+                setDraftProfile(profile);
+                setIsEditorOpen(true);
+              }}
+              style={styles.inlineEditAction}
+            >
+              <Text style={styles.inlineEditText}>Edit profile</Text>
+            </ScalePressable>
+          </LinearGradient>
 
           {isLoading ? (
-            <View style={styles.loaderCard}>
+            <View style={styles.messageCard}>
               <ActivityIndicator color={theme.colors.primary} />
-              <Text style={styles.loaderText}>Loading your profile...</Text>
+              <Text style={styles.messageText}>Loading your profile...</Text>
             </View>
           ) : null}
 
           {error ? (
-            <View style={styles.errorCard}>
-              <Text style={styles.errorTitle}>Profile issue</Text>
-              <Text style={styles.errorText}>{error}</Text>
+            <View style={styles.messageCard}>
+              <Text style={styles.messageTitle}>Profile issue</Text>
+              <Text style={styles.messageText}>{error}</Text>
             </View>
           ) : null}
 
-          {!isProfileComplete && isCustomer ? (
-            <View style={styles.incompleteCard}>
-              <Text style={styles.incompleteTitle}>Complete your profile</Text>
-              <Text style={styles.incompleteText}>
-                Add {missingSummary} so delivery details autofill cleanly across the app.
+          {!isProfileComplete ? (
+            <View style={styles.messageCard}>
+              <Text style={styles.messageTitle}>Complete your profile</Text>
+              <Text style={styles.messageText}>
+                Add {missingSummary} so checkout and delivery details stay beautifully prefilled.
               </Text>
               <PrimaryButton
                 title="Finish profile"
-                onPress={handleOpenEditor}
-                style={styles.incompleteAction}
+                onPress={() => {
+                  setDraftProfile(profile);
+                  setIsEditorOpen(true);
+                }}
+                style={styles.sectionAction}
               />
             </View>
           ) : null}
 
-          <ProfileSectionCard
-            title="Role access"
-            subtitle="Firestore access collections are the real source of truth."
-          >
-            <RoleBadge label={rolePresentation.label} tone={rolePresentation.badgeTone} />
-            <Text style={styles.roleHelperText}>{rolePresentation.helperText}</Text>
-            {showStaffFields ? (
-              <View style={styles.staffFields}>
-                {isAdmin ? (
-                  <ProfileActionRow
-                    icon="business-outline"
-                    title="Admin location"
-                    subtitle={profile.adminLocation?.trim() || 'No admin location saved yet'}
-                  />
-                ) : null}
-                {isDelivery ? (
-                  <>
-                    <ProfileActionRow
-                      icon="bicycle-outline"
-                      title="Vehicle type"
-                      subtitle={profile.vehicleType?.trim() || 'No vehicle type saved yet'}
-                    />
-                    <ProfileActionRow
-                      icon="pulse-outline"
-                      title="Delivery status"
-                      subtitle={profile.staffStatus?.trim() || 'No delivery status saved yet'}
-                    />
-                  </>
-                ) : null}
+          <View style={styles.statsRow}>
+            <View style={styles.statCard}>
+              <Text style={styles.statLabel}>Total Beans</Text>
+              <Text style={styles.statValue}>{orders.length}</Text>
+              <Text style={styles.statMeta}>Orders brewed</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Text style={styles.statLabel}>Rewards</Text>
+              <Text style={styles.statValue}>{activeOffers.length}</Text>
+              <Text style={styles.statMeta}>Active offers</Text>
+            </View>
+          </View>
+
+          <View style={styles.sectionCard}>
+            <View style={styles.sectionHeader}>
+              <View>
+                <Text style={styles.sectionTitle}>Active orders</Text>
+                <Text style={styles.sectionSubtitle}>A preview of what is still moving.</Text>
               </View>
-            ) : null}
-            <Text style={styles.roleMetaText}>
-              users.role stays display-only. Runtime authorization comes from {role === 'admin'
-                ? ' admin_access'
-                : role === 'delivery'
-                  ? ' agents'
-                  : ' Firestore role checks'}.
-            </Text>
-          </ProfileSectionCard>
-
-          <ProfileSectionCard
-            title="Personal info"
-            subtitle="Identity and delivery details pulled into checkout."
-          >
-            <ProfileActionRow
-              icon="person-outline"
-              title="Name"
-              subtitle={profile.name || profileDisplayName}
-            />
-            <ProfileActionRow
-              icon="call-outline"
-              title="Phone"
-              subtitle={profile.phone || 'Add a phone number'}
-            />
-            <ProfileActionRow
-              icon="mail-outline"
-              title="Email"
-              subtitle={profile.email || 'Add an email'}
-            />
-            <ProfileActionRow
-              icon="location-outline"
-              title="Primary address"
-              subtitle={primaryAddress?.address || 'No primary address saved yet'}
-            />
-          </ProfileSectionCard>
-
-          <ProfileSectionCard
-            title="Addresses"
-            subtitle="Home, work, and one extra saved spot."
-            action={(
               <ScalePressable
                 accessibilityRole="button"
-                onPress={handleOpenEditor}
+                onPress={() => navigation.navigate(TAB_ROUTES.ORDERS)}
                 style={styles.inlineAction}
               >
-                <Text style={styles.inlineActionText}>Manage</Text>
+                <Text style={styles.inlineActionText}>View all</Text>
               </ScalePressable>
-            )}
-          >
-            {profile.addresses.length > 0 ? (
-              profile.addresses.map(address => (
-                <ProfileActionRow
-                  key={address.id}
-                  icon="home-outline"
-                  title={`${address.label}${address.isPrimary ? ' | Primary' : ''}`}
-                  subtitle={address.address}
-                />
-              ))
-            ) : (
-              <Text style={styles.emptyText}>No saved addresses yet.</Text>
-            )}
-          </ProfileSectionCard>
-
-          {isCustomer ? (
-            <ProfileSectionCard
-              title="My orders"
-              subtitle="Jump back into history and live order tracking."
-            >
-              <ProfileActionRow
-                icon="receipt-outline"
-                onPress={() => navigation.navigate(TAB_ROUTES.ORDERS)}
-                title={isOrdersLoading ? 'Loading orders...' : `${orders.length} total orders`}
-                subtitle={activeOrders.length > 0
-                  ? `${activeOrders.length} order${activeOrders.length === 1 ? '' : 's'} currently active`
-                  : 'View delivered and in-progress orders'}
-                trailingLabel="Open"
-              />
-            </ProfileSectionCard>
-          ) : null}
-
-          <ProfileSectionCard
-            title="Settings"
-            subtitle="Fine tune the app experience."
-          >
-            <View style={styles.settingRow}>
-              <View style={styles.settingLead}>
-                <View style={styles.settingIconWrap}>
-                  <Ionicons
-                    name={theme.isDark ? 'moon-outline' : 'sunny-outline'}
-                    size={18}
-                    color={theme.colors.primary}
-                  />
-                </View>
-                <View style={styles.settingCopy}>
-                  <Text style={styles.settingTitle}>Appearance</Text>
-                  <Text style={styles.settingSubtitle}>
-                    {theme.isDark ? 'Dark roast mode enabled' : 'Light roast mode enabled'}
-                  </Text>
-                </View>
-              </View>
-              <Switch
-                trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
-                thumbColor={theme.colors.surface}
-                value={theme.isDark}
-                onValueChange={() => {
-                  animateLayout();
-                  toggleTheme();
-                }}
-              />
             </View>
-          </ProfileSectionCard>
 
-          <ProfileSectionCard
-            title="Help & support"
-            subtitle="Simple customer-help placeholders for now."
-          >
-            <ProfileActionRow
-              icon="chatbubble-ellipses-outline"
-              onPress={() => Alert.alert('Support', 'Customer support chat is coming soon.')}
-              title="Contact support"
-              subtitle="Reach out for order or delivery help."
-            />
-            <ProfileActionRow
-              icon="help-circle-outline"
-              onPress={() => Alert.alert('FAQ', 'A help center and FAQ will be added next.')}
-              title="FAQ"
-              subtitle="Common questions about delivery, orders, and payments."
-            />
-          </ProfileSectionCard>
+            {activeOrders.length > 0 ? (
+              <ScalePressable
+                accessibilityRole="button"
+                onPress={() => navigation.navigate(TAB_ROUTES.ORDERS)}
+                style={styles.previewCard}
+              >
+                <View style={styles.previewHeader}>
+                  <View style={styles.previewCopy}>
+                    <Text style={styles.previewEyebrow}>Order #{activeOrders[0].id}</Text>
+                    <Text style={styles.previewTitle}>
+                      {activeOrders[0].items?.[0]?.name || 'COFFEE-HUB order'}
+                    </Text>
+                  </View>
+                  <StatusBadge label={activeOrders[0].status} tone="progress" />
+                </View>
+                <Text style={styles.previewText}>
+                  {activeOrders[0].items?.length ?? 0} item(s) • currently {activeOrders[0].status.toLowerCase()}.
+                </Text>
+              </ScalePressable>
+            ) : (
+              <View style={styles.previewCard}>
+                <Text style={styles.previewTitle}>No active orders right now</Text>
+                <Text style={styles.previewText}>
+                  Your next checkout will appear here with status and progress.
+                </Text>
+              </View>
+            )}
+          </View>
 
-          <ProfileSectionCard
-            title="Account"
-            subtitle="This temporary email login keeps the app role-aware until a permanent auth provider is added."
-          >
-            <Text style={styles.roleHelperText}>
-              Current account email: {profile.email || 'customer@coffeehub.com'}
-            </Text>
-            <Text style={styles.roleMetaText}>
-              Your role is resolved from Firestore access collections after you enter an email. You can log out here to switch accounts.
-            </Text>
-            <PrimaryButton
-              title="Log out"
+          <View style={styles.sectionCard}>
+            <View style={styles.sectionHeader}>
+              <View>
+                <Text style={styles.sectionTitle}>Options</Text>
+                <Text style={styles.sectionSubtitle}>Addresses, settings, and account actions.</Text>
+              </View>
+            </View>
+
+            <ProfileOptionRow
+              icon="location-outline"
+              onPress={() => {
+                setDraftProfile(profile);
+                setIsEditorOpen(true);
+              }}
+              title="Addresses"
+              subtitle={primaryAddress?.address || 'Manage your saved delivery places'}
+            />
+
+            <ProfileOptionRow
+              icon={theme.isDark ? 'moon-outline' : 'sunny-outline'}
+              title="Appearance"
+              subtitle={theme.isDark ? 'Warm dark mode enabled' : 'Soft light mode enabled'}
+              trailing={(
+                <Switch
+                  trackColor={{ false: palette.surfaceHighest, true: palette.caramel }}
+                  thumbColor={palette.surfaceHigh}
+                  value={theme.isDark}
+                  onValueChange={() => {
+                    toggleTheme();
+                  }}
+                />
+              )}
+            />
+
+            <ProfileOptionRow
+              icon="log-out-outline"
               onPress={() => {
                 void logout().catch(logoutError => {
                   console.error('[ProfileScreen] logout:error', logoutError);
                 });
               }}
-              style={styles.sessionAction}
-              variant="secondary"
+              title="Log out"
+              subtitle="Switch the current account"
             />
-          </ProfileSectionCard>
+          </View>
+
+          {isOrdersLoading ? (
+            <Text style={styles.footerMeta}>Refreshing your account preview…</Text>
+          ) : (
+            <Text style={styles.footerMeta}>
+              Current time: {currentTime} minutes into the day • {orders.length} order(s) connected to this account.
+            </Text>
+          )}
         </ScreenTransition>
       </ScrollView>
 
@@ -408,7 +382,7 @@ export function ProfileScreen() {
               onPress={() => setIsEditorOpen(false)}
               style={styles.closeButton}
             >
-              <Ionicons name="close" size={20} color={theme.colors.text} />
+              <Ionicons name="close" size={20} color={palette.text} />
             </ScalePressable>
           </View>
 
@@ -441,9 +415,9 @@ export function ProfileScreen() {
             />
 
             {saveError ? (
-              <View style={styles.errorCard}>
-                <Text style={styles.errorTitle}>Save issue</Text>
-                <Text style={styles.errorText}>{saveError}</Text>
+              <View style={styles.messageCard}>
+                <Text style={styles.messageTitle}>Save issue</Text>
+                <Text style={styles.messageText}>{saveError}</Text>
               </View>
             ) : null}
           </ScrollView>
@@ -470,194 +444,311 @@ export function ProfileScreen() {
   );
 }
 
-const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: theme.colors.background,
-  },
-  content: {
-    padding: theme.spacing.lg,
-    paddingBottom: 120,
-  },
-  loaderCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing.sm,
-    marginTop: theme.spacing.lg,
-    borderRadius: theme.radius.lg,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    backgroundColor: theme.colors.surface,
-    padding: theme.spacing.md,
-  },
-  loaderText: {
-    fontSize: theme.typography.body,
-    fontWeight: '700',
-    color: theme.colors.textMuted,
-  },
-  errorCard: {
-    marginTop: theme.spacing.lg,
-    borderRadius: theme.radius.lg,
-    borderWidth: 1,
-    borderColor: theme.colors.danger,
-    backgroundColor: theme.colors.dangerSurface,
-    padding: theme.spacing.md,
-  },
-  errorTitle: {
-    fontSize: theme.typography.body,
-    fontWeight: '800',
-    color: theme.colors.text,
-  },
-  errorText: {
-    marginTop: 6,
-    fontSize: theme.typography.body,
-    lineHeight: 20,
-    color: theme.colors.danger,
-  },
-  incompleteCard: {
-    marginTop: theme.spacing.lg,
-    borderRadius: theme.radius.lg,
-    borderWidth: 1,
-    borderColor: theme.colors.borderStrong,
-    backgroundColor: theme.colors.surfaceMuted,
-    padding: theme.spacing.lg,
-  },
-  incompleteTitle: {
-    fontSize: theme.typography.subheading,
-    fontWeight: '800',
-    color: theme.colors.text,
-  },
-  incompleteText: {
-    marginTop: 6,
-    fontSize: theme.typography.body,
-    lineHeight: 22,
-    color: theme.colors.textMuted,
-  },
-  incompleteAction: {
-    marginTop: theme.spacing.md,
-  },
-  roleHelperText: {
-    marginTop: theme.spacing.sm,
-    fontSize: theme.typography.body,
-    lineHeight: 22,
-    color: theme.colors.textMuted,
-  },
-  roleMetaText: {
-    marginTop: theme.spacing.md,
-    fontSize: theme.typography.caption,
-    lineHeight: 18,
-    color: theme.colors.textMuted,
-  },
-  sessionAction: {
-    marginTop: theme.spacing.md,
-  },
-  staffFields: {
-    marginTop: theme.spacing.sm,
-    gap: theme.spacing.sm,
-  },
-  inlineAction: {
-    paddingVertical: 6,
-  },
-  inlineActionText: {
-    fontSize: theme.typography.caption,
-    fontWeight: '800',
-    color: theme.colors.primary,
-  },
-  emptyText: {
-    fontSize: theme.typography.body,
-    lineHeight: 22,
-    color: theme.colors.textMuted,
-  },
-  settingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: theme.spacing.md,
-  },
-  settingLead: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing.sm,
-  },
-  settingIconWrap: {
-    width: 42,
-    height: 42,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: theme.colors.tag,
-  },
-  settingCopy: {
-    flex: 1,
-  },
-  settingTitle: {
-    fontSize: theme.typography.body,
-    fontWeight: '800',
-    color: theme.colors.text,
-  },
-  settingSubtitle: {
-    marginTop: 4,
-    fontSize: theme.typography.body,
-    lineHeight: 20,
-    color: theme.colors.textMuted,
-  },
-  modalScreen: {
-    flex: 1,
-    backgroundColor: theme.colors.background,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: theme.spacing.md,
-    paddingHorizontal: theme.spacing.lg,
-    paddingTop: theme.spacing.sm,
-    paddingBottom: theme.spacing.md,
-  },
-  modalCopy: {
-    flex: 1,
-  },
-  modalEyebrow: {
-    fontSize: theme.typography.eyebrow,
-    fontWeight: '800',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-    color: theme.colors.primary,
-  },
-  modalTitle: {
-    marginTop: 4,
-    fontSize: theme.typography.heading,
-    fontWeight: '800',
-    color: theme.colors.text,
-  },
-  closeButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    backgroundColor: theme.colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalContent: {
-    paddingHorizontal: theme.spacing.lg,
-    paddingBottom: theme.spacing.xl,
-  },
-  modalFooter: {
-    flexDirection: 'row',
-    gap: theme.spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: theme.colors.border,
-    backgroundColor: theme.colors.surface,
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.md,
-  },
-  cancelAction: {
-    flex: 0.4,
-  },
-  saveAction: {
-    flex: 0.6,
-  },
-});
+const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => {
+  const palette = getCustomerPalette(theme);
+
+  return StyleSheet.create({
+    screen: {
+      flex: 1,
+      backgroundColor: palette.background,
+    },
+    content: {
+      paddingLeft: theme.spacing.xl,
+      paddingRight: theme.spacing.lg,
+      paddingTop: theme.spacing.xl,
+      paddingBottom: 120,
+      gap: theme.spacing.lg,
+    },
+    statusBanner: {
+      borderRadius: theme.radius.hero,
+      backgroundColor: palette.surfaceHigh,
+      padding: theme.spacing.lg,
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      gap: theme.spacing.md,
+    },
+    statusEyebrow: {
+      fontSize: theme.typography.eyebrow,
+      fontWeight: '700',
+      letterSpacing: 1.2,
+      textTransform: 'uppercase',
+      color: palette.caramel,
+    },
+    statusTitle: {
+      marginTop: 6,
+      fontSize: theme.typography.subheading,
+      fontWeight: '800',
+      color: palette.text,
+    },
+    statusSubtitle: {
+      marginTop: 4,
+      maxWidth: '92%',
+      fontSize: theme.typography.body,
+      lineHeight: 20,
+      color: palette.textMuted,
+    },
+    userCard: {
+      borderRadius: theme.radius.hero,
+      padding: theme.spacing.lg,
+      gap: theme.spacing.sm,
+    },
+    userCardTopRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: theme.spacing.md,
+    },
+    avatarWrap: {
+      width: 76,
+      height: 76,
+      borderRadius: 24,
+      backgroundColor: 'rgba(255, 255, 255, 0.14)',
+      alignItems: 'center',
+      justifyContent: 'center',
+      overflow: 'hidden',
+    },
+    avatarImage: {
+      width: '100%',
+      height: '100%',
+    },
+    avatarText: {
+      fontSize: 24,
+      fontWeight: '900',
+      color: 'rgba(248, 244, 239, 0.96)',
+    },
+    userName: {
+      marginTop: theme.spacing.sm,
+      fontSize: 28,
+      fontWeight: '900',
+      color: 'rgba(248, 244, 239, 0.98)',
+    },
+    userEmail: {
+      fontSize: theme.typography.body,
+      color: 'rgba(248, 244, 239, 0.86)',
+    },
+    userAddress: {
+      fontSize: theme.typography.body,
+      lineHeight: 20,
+      color: 'rgba(248, 244, 239, 0.78)',
+    },
+    inlineEditAction: {
+      alignSelf: 'flex-start',
+      marginTop: theme.spacing.sm,
+      borderRadius: theme.radius.pill,
+      backgroundColor: 'rgba(255, 255, 255, 0.14)',
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+    },
+    inlineEditText: {
+      fontSize: theme.typography.caption,
+      fontWeight: '800',
+      color: 'rgba(248, 244, 239, 0.96)',
+    },
+    messageCard: {
+      borderRadius: theme.radius.hero,
+      backgroundColor: palette.surfaceHigh,
+      padding: theme.spacing.lg,
+      gap: theme.spacing.sm,
+    },
+    messageTitle: {
+      fontSize: theme.typography.subheading,
+      fontWeight: '800',
+      color: palette.text,
+    },
+    messageText: {
+      fontSize: theme.typography.body,
+      lineHeight: 20,
+      color: palette.textMuted,
+    },
+    sectionAction: {
+      marginTop: theme.spacing.sm,
+    },
+    statsRow: {
+      flexDirection: 'row',
+      gap: theme.spacing.md,
+    },
+    statCard: {
+      flex: 1,
+      borderRadius: theme.radius.xl,
+      backgroundColor: palette.surfaceHigh,
+      padding: theme.spacing.lg,
+      gap: 6,
+    },
+    statLabel: {
+      fontSize: theme.typography.eyebrow,
+      fontWeight: '700',
+      letterSpacing: 1,
+      textTransform: 'uppercase',
+      color: palette.textMuted,
+    },
+    statValue: {
+      fontSize: 30,
+      fontWeight: '900',
+      color: palette.caramel,
+    },
+    statMeta: {
+      fontSize: theme.typography.caption,
+      color: palette.textMuted,
+    },
+    sectionCard: {
+      borderRadius: theme.radius.hero,
+      backgroundColor: palette.surfaceHigh,
+      padding: theme.spacing.lg,
+      gap: theme.spacing.sm,
+    },
+    sectionHeader: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      gap: theme.spacing.md,
+    },
+    sectionTitle: {
+      fontSize: theme.typography.subheading,
+      fontWeight: '800',
+      color: palette.text,
+    },
+    sectionSubtitle: {
+      marginTop: 4,
+      fontSize: theme.typography.body,
+      lineHeight: 20,
+      color: palette.textMuted,
+    },
+    inlineAction: {
+      paddingVertical: 6,
+    },
+    inlineActionText: {
+      fontSize: theme.typography.caption,
+      fontWeight: '800',
+      color: palette.caramel,
+    },
+    previewCard: {
+      marginTop: theme.spacing.sm,
+      borderRadius: theme.radius.xl,
+      backgroundColor: palette.surfaceHighest,
+      padding: theme.spacing.md,
+      gap: 8,
+    },
+    previewHeader: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      gap: theme.spacing.md,
+    },
+    previewCopy: {
+      flex: 1,
+    },
+    previewEyebrow: {
+      fontSize: theme.typography.eyebrow,
+      fontWeight: '700',
+      letterSpacing: 1,
+      textTransform: 'uppercase',
+      color: palette.textMuted,
+    },
+    previewTitle: {
+      fontSize: theme.typography.body,
+      fontWeight: '800',
+      color: palette.text,
+    },
+    previewText: {
+      fontSize: theme.typography.body,
+      lineHeight: 20,
+      color: palette.textMuted,
+    },
+    optionRow: {
+      minHeight: 68,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: theme.spacing.md,
+      paddingVertical: theme.spacing.xs,
+    },
+    optionLead: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: theme.spacing.sm,
+    },
+    optionIconWrap: {
+      width: 42,
+      height: 42,
+      borderRadius: 16,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: palette.surfaceHighest,
+    },
+    optionCopy: {
+      flex: 1,
+    },
+    optionTitle: {
+      fontSize: theme.typography.body,
+      fontWeight: '800',
+      color: palette.text,
+    },
+    optionSubtitle: {
+      marginTop: 4,
+      fontSize: theme.typography.body,
+      lineHeight: 20,
+      color: palette.textMuted,
+    },
+    footerMeta: {
+      fontSize: theme.typography.caption,
+      color: palette.textMuted,
+    },
+    modalScreen: {
+      flex: 1,
+      backgroundColor: palette.background,
+    },
+    modalHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: theme.spacing.md,
+      paddingHorizontal: theme.spacing.lg,
+      paddingTop: theme.spacing.sm,
+      paddingBottom: theme.spacing.md,
+    },
+    modalCopy: {
+      flex: 1,
+    },
+    modalEyebrow: {
+      fontSize: theme.typography.eyebrow,
+      fontWeight: '800',
+      letterSpacing: 1,
+      textTransform: 'uppercase',
+      color: palette.caramel,
+    },
+    modalTitle: {
+      marginTop: 4,
+      fontSize: theme.typography.heading,
+      fontWeight: '800',
+      color: palette.text,
+    },
+    closeButton: {
+      width: 42,
+      height: 42,
+      borderRadius: 21,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: palette.surfaceHigh,
+    },
+    modalContent: {
+      paddingHorizontal: theme.spacing.lg,
+      paddingBottom: theme.spacing.xl,
+      gap: theme.spacing.lg,
+    },
+    modalFooter: {
+      flexDirection: 'row',
+      gap: theme.spacing.md,
+      backgroundColor: palette.surfaceHigh,
+      paddingHorizontal: theme.spacing.lg,
+      paddingVertical: theme.spacing.md,
+    },
+    cancelAction: {
+      flex: 0.4,
+    },
+    saveAction: {
+      flex: 0.6,
+    },
+  });
+};

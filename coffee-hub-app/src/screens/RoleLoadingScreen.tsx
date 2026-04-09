@@ -10,7 +10,7 @@ type RoleLoadingScreenProps = {
 
 export function RoleLoadingScreen({
   showSpinner = true,
-  subtitle = 'Checking your Coffee Hub access so we can open the right experience.',
+  subtitle = 'Checking your COFFEE-HUB access so we can open the right experience.',
   title = 'Preparing your workspace',
 }: RoleLoadingScreenProps) {
   const styles = useThemedStyles(createStyles);

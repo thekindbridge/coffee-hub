@@ -4,6 +4,7 @@ import { useTheme, useThemedStyles } from '../../../theme';
 import { PrimaryButton } from '../../../components/ui/PrimaryButton';
 import { ScalePressable } from '../../../components/ui/ScalePressable';
 import type { CustomerProfile } from '../../../types';
+import { getCustomerPalette } from '../../../components/customer/designSystem';
 
 type AddressManagerProps = {
   canAddMore: boolean;
@@ -23,6 +24,7 @@ export function AddressManager({
   profile,
 }: AddressManagerProps) {
   const { theme } = useTheme();
+  const palette = getCustomerPalette(theme);
   const styles = useThemedStyles(createStyles);
 
   return (
@@ -64,7 +66,7 @@ export function AddressManager({
                   onPress={() => onDeleteAddress(address.id)}
                   style={styles.deleteButton}
                 >
-                  <Ionicons name="trash-outline" size={16} color={theme.colors.danger} />
+                  <Ionicons name="trash-outline" size={16} color={palette.danger} />
                 </ScalePressable>
               </View>
             </View>
@@ -72,7 +74,7 @@ export function AddressManager({
             <TextInput
               multiline
               placeholder={`Enter ${address.label.toLowerCase()} address`}
-              placeholderTextColor={theme.colors.textMuted}
+              placeholderTextColor={palette.textMuted}
               style={styles.textArea}
               textAlignVertical="top"
               value={address.address}
@@ -92,103 +94,103 @@ export function AddressManager({
   );
 }
 
-const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => StyleSheet.create({
-  wrapper: {
-    marginTop: theme.spacing.lg,
-    gap: theme.spacing.md,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: theme.spacing.md,
-  },
-  title: {
-    fontSize: theme.typography.subheading,
-    fontWeight: '800',
-    color: theme.colors.text,
-  },
-  subtitle: {
-    marginTop: 4,
-    fontSize: theme.typography.body,
-    lineHeight: 20,
-    color: theme.colors.textMuted,
-  },
-  countText: {
-    fontSize: theme.typography.caption,
-    fontWeight: '800',
-    color: theme.colors.primary,
-  },
-  list: {
-    gap: theme.spacing.md,
-  },
-  addressCard: {
-    borderRadius: theme.radius.lg,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    backgroundColor: theme.colors.surfaceMuted,
-    padding: theme.spacing.md,
-  },
-  addressHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: theme.spacing.sm,
-    marginBottom: theme.spacing.sm,
-  },
-  labelChip: {
-    borderRadius: theme.radius.pill,
-    backgroundColor: theme.colors.surface,
-    paddingHorizontal: theme.spacing.sm,
-    paddingVertical: 8,
-  },
-  labelChipText: {
-    fontSize: theme.typography.caption,
-    fontWeight: '800',
-    color: theme.colors.text,
-  },
-  actions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing.sm,
-  },
-  primaryChip: {
-    borderRadius: theme.radius.pill,
-    backgroundColor: theme.colors.successSurface,
-    paddingHorizontal: theme.spacing.sm,
-    paddingVertical: 8,
-  },
-  primaryChipText: {
-    fontSize: theme.typography.caption,
-    fontWeight: '800',
-    color: theme.colors.success,
-  },
-  inlineAction: {
-    paddingVertical: 6,
-  },
-  inlineActionText: {
-    fontSize: theme.typography.caption,
-    fontWeight: '800',
-    color: theme.colors.primary,
-  },
-  deleteButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: theme.colors.dangerSurface,
-  },
-  textArea: {
-    minHeight: 92,
-    borderRadius: theme.radius.md,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    backgroundColor: theme.colors.input,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.md,
-    color: theme.colors.text,
-    fontSize: theme.typography.body,
-    lineHeight: 22,
-  },
-});
+const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => {
+  const palette = getCustomerPalette(theme);
+
+  return StyleSheet.create({
+    wrapper: {
+      marginTop: theme.spacing.lg,
+      gap: theme.spacing.md,
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      gap: theme.spacing.md,
+    },
+    title: {
+      fontSize: theme.typography.subheading,
+      fontWeight: '800',
+      color: palette.text,
+    },
+    subtitle: {
+      marginTop: 4,
+      fontSize: theme.typography.body,
+      lineHeight: 20,
+      color: palette.textMuted,
+    },
+    countText: {
+      fontSize: theme.typography.caption,
+      fontWeight: '800',
+      color: palette.caramel,
+    },
+    list: {
+      gap: theme.spacing.md,
+    },
+    addressCard: {
+      borderRadius: theme.radius.hero,
+      backgroundColor: palette.surfaceHigh,
+      padding: theme.spacing.md,
+      gap: theme.spacing.sm,
+    },
+    addressHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: theme.spacing.sm,
+    },
+    labelChip: {
+      borderRadius: theme.radius.pill,
+      backgroundColor: palette.surfaceHighest,
+      paddingHorizontal: theme.spacing.sm,
+      paddingVertical: 8,
+    },
+    labelChipText: {
+      fontSize: theme.typography.caption,
+      fontWeight: '800',
+      color: palette.text,
+    },
+    actions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: theme.spacing.sm,
+    },
+    primaryChip: {
+      borderRadius: theme.radius.pill,
+      backgroundColor: palette.successSurface,
+      paddingHorizontal: theme.spacing.sm,
+      paddingVertical: 8,
+    },
+    primaryChipText: {
+      fontSize: theme.typography.caption,
+      fontWeight: '800',
+      color: palette.success,
+    },
+    inlineAction: {
+      paddingVertical: 6,
+    },
+    inlineActionText: {
+      fontSize: theme.typography.caption,
+      fontWeight: '800',
+      color: palette.caramel,
+    },
+    deleteButton: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: palette.dangerSurface,
+    },
+    textArea: {
+      minHeight: 92,
+      borderRadius: theme.radius.xl,
+      backgroundColor: palette.surfaceHighest,
+      paddingHorizontal: theme.spacing.md,
+      paddingVertical: theme.spacing.md,
+      color: palette.text,
+      fontSize: theme.typography.body,
+      lineHeight: 22,
+    },
+  });
+};

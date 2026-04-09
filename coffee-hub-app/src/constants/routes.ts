@@ -21,8 +21,10 @@ export const ADMIN_ROUTES = {
 } as const;
 
 export const DELIVERY_ROUTES = {
-  ACTIVE_ORDERS: 'DeliveryActiveOrders',
+  TABS: 'DeliveryTabs',
+  DASHBOARD: 'DeliveryDashboard',
+  ORDERS: 'DeliveryOrders',
+  ORDER_DETAILS: 'DeliveryOrderDetails',
+  EARNINGS: 'DeliveryEarnings',
   PROFILE: 'DeliveryProfile',
-  STATUS_UPDATE: 'DeliveryStatusUpdate',
-  TRACKING: 'DeliveryTracking',
 } as const;

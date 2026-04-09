@@ -28,9 +28,14 @@ export type AdminStackParamList = {
   [ADMIN_ROUTES.PROFILE]: undefined;
 };
 
+export type DeliveryTabParamList = {
+  [DELIVERY_ROUTES.DASHBOARD]: undefined;
+  [DELIVERY_ROUTES.ORDERS]: undefined;
+  [DELIVERY_ROUTES.EARNINGS]: undefined;
+  [DELIVERY_ROUTES.PROFILE]: undefined;
+};
+
 export type DeliveryStackParamList = {
-  [DELIVERY_ROUTES.ACTIVE_ORDERS]: undefined;
-  [DELIVERY_ROUTES.TRACKING]: undefined;
-  [DELIVERY_ROUTES.STATUS_UPDATE]: undefined;
-  [DELIVERY_ROUTES.PROFILE]: { openEdit?: boolean } | undefined;
+  [DELIVERY_ROUTES.TABS]: NavigatorScreenParams<DeliveryTabParamList> | undefined;
+  [DELIVERY_ROUTES.ORDER_DETAILS]: { orderDocId: string };
 };

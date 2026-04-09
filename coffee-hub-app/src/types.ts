@@ -1,6 +1,8 @@
+import type { OrderStatus, OrderStatusCode } from './shared/orderStatus';
 import type { ShopTiming } from './shared/shopTiming';
 
 export type { ShopTiming } from './shared/shopTiming';
+export type { OrderStatus, OrderStatusCode } from './shared/orderStatus';
 
 export interface MenuItem {
   id: string;
@@ -63,6 +65,32 @@ export interface DeliveryLocation {
   updated_at?: string;
 }
 
+export type DeliverySessionStatus = 'assigned' | 'active' | 'completed';
+export type DeliveryAgentStatus = 'available' | 'offline' | 'busy';
+
+export interface DeliveryAgent {
+  id: string;
+  name: string;
+  phone: string;
+  email?: string;
+  vehicle_type?: string;
+  status?: DeliveryAgentStatus;
+  is_active: boolean;
+  current_order_id: string;
+  current_location?: DeliveryLocation | null;
+  last_location: DeliveryLocation | null;
+}
+
+export interface DeliverySession {
+  order_id: string;
+  order_doc_id: string;
+  agent_id: string;
+  agent_name: string;
+  status: DeliverySessionStatus;
+  started_at?: string;
+  completed_at?: string;
+}
+
 export interface Offer {
   id: string;
   title: string;
@@ -108,8 +136,8 @@ export interface Order {
   delivery_fee?: number;
   coupon_code?: string;
   final_total?: number;
-  status: string;
-  status_code: string;
+  status: OrderStatus;
+  status_code: OrderStatusCode;
   rejection_reason?: string;
   cancellation_reason?: string;
   payment_method: string;

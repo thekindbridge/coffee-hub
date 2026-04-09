@@ -252,7 +252,7 @@ export const getProfileDisplayName = (
   }
 
   const emailPrefix = authEmail.trim().split('@')[0];
-  return emailPrefix || 'Coffee Hub User';
+  return emailPrefix || 'COFFEE-HUB User';
 };
 
 export const getProfileInitials = (label: string) => {

@@ -1,23 +1,25 @@
+import React, { useEffect, useMemo, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useAuthContext } from '../../auth/context/AuthContext';
+import { AppHeader } from '../../components/customer/AppHeader';
+import { GlassSurface } from '../../components/ui/GlassSurface';
 import { PrimaryButton } from '../../components/ui/PrimaryButton';
 import { ScalePressable } from '../../components/ui/ScalePressable';
+import { ScreenTransition } from '../../components/ui/ScreenTransition';
+import { useProfileData } from '../../features/profile/hooks/useProfileData';
 import { useAuth } from '../../hooks/useAuth';
 import { useShopTiming } from '../../hooks/useShopTiming';
 import { updateShopTimingRequest } from '../../services/api/shopTimingService';
 import {
-  EMPTY_SHOP_TIMING,
-  SHOP_TIMEZONE,
   buildOpensInMessage,
   formatShopTime,
   formatShopTimingRange,
@@ -25,7 +27,14 @@ import {
   validateShopTiming,
   type ShopTiming,
 } from '../../shared/shopTiming';
-import { useTheme, useThemedStyles } from '../../theme';
+import { TimePickerInput } from '../components';
+import { useAccessRoles } from '../hooks';
+import {
+  adminPalette,
+  adminRadius,
+  adminShadow,
+  getAdminSurfaceColor,
+} from '../utils/designSystem';
 
 type TimeField = 'openTime' | 'closeTime';
 
@@ -35,141 +44,113 @@ type TimePickerState = {
   minute: number;
 };
 
-const MINUTE_QUICK_PICKS = [0, 15, 30, 45];
-
-const buildAdminName = (email: string, displayName?: string | null) => {
-  if (displayName?.trim()) {
-    return displayName.trim();
-  }
-
-  const fallbackLocalPart = email.split('@')[0] || 'admin';
-  return fallbackLocalPart
-    .split(/[._-]+/)
-    .filter(Boolean)
-    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ');
+type PickerStepperProps = {
+  label: string;
+  value: string;
+  onDecrement: () => void;
+  onIncrement: () => void;
 };
 
-const padTimePart = (value: number) => String(value).padStart(2, '0');
+type InfoCardProps = {
+  label: string;
+  value: string;
+};
 
-const formatTimeValue = (hour: number, minute: number) => (
-  `${padTimePart(hour)}:${padTimePart(minute)}`
-);
+const MINUTE_QUICK_PICKS = [0, 15, 30, 45];
 
-const getTimePickerState = (field: TimeField, value: string): TimePickerState => {
+function getInitials(value: string) {
+  const words = value
+    .split(/\s+/)
+    .map(part => part.trim())
+    .filter(Boolean);
+
+  return words.slice(0, 2).map(part => part[0]?.toUpperCase() || '').join('') || 'CH';
+}
+
+function padTimePart(value: number) {
+  return String(value).padStart(2, '0');
+}
+
+function formatTimeValue(hour: number, minute: number) {
+  return `${padTimePart(hour)}:${padTimePart(minute)}`;
+}
+
+function getTimePickerState(field: TimeField, value: string): TimePickerState {
   const totalMinutes = parseTimeToMinutes(value);
-  const safeMinutes = Number.isFinite(totalMinutes)
-    ? totalMinutes
-    : 0;
+  const safeMinutes = Number.isFinite(totalMinutes) ? totalMinutes : 0;
 
   return {
     field,
     hour: Math.floor(safeMinutes / 60),
     minute: safeMinutes % 60,
   };
-};
+}
 
-const formatUpdatedAt = (value?: string) => {
+function formatUpdatedAt(value?: string) {
   if (!value) {
     return 'Waiting for first save';
   }
 
-  const parsedDate = new Date(value);
-  if (Number.isNaN(parsedDate.getTime())) {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
     return 'Updated recently';
   }
 
-  return parsedDate.toLocaleString('en-IN', {
+  return parsed.toLocaleString('en-IN', {
     day: 'numeric',
     month: 'short',
     hour: 'numeric',
     minute: '2-digit',
   });
-};
+}
 
-type TimingFieldCardProps = {
-  description: string;
-  label: string;
-  onPress: () => void;
-  value: string;
-};
-
-function TimingFieldCard({
-  description,
-  label,
-  onPress,
-  value,
-}: TimingFieldCardProps) {
-  const { theme } = useTheme();
-  const styles = useThemedStyles(createStyles);
-
+function InfoCard({ label, value }: InfoCardProps) {
   return (
-    <ScalePressable
-      accessibilityRole="button"
-      onPress={onPress}
-      style={styles.timingFieldCard}
-    >
-      <View style={styles.timingFieldCopy}>
-        <Text style={styles.fieldLabel}>{label}</Text>
-        <Text style={styles.fieldValue}>{value}</Text>
-        <Text style={styles.fieldDescription}>{description}</Text>
-      </View>
-
-      <View style={styles.fieldMeta}>
-        <Text style={styles.fieldDisplay}>{formatShopTime(value)}</Text>
-        <Ionicons name="chevron-forward" size={18} color={theme.colors.textMuted} />
-      </View>
-    </ScalePressable>
+    <View style={styles.infoCardWrap}>
+      <GlassSurface
+        depth="card"
+        intensity={64}
+        overlayColor={getAdminSurfaceColor('card')}
+        style={styles.infoCard}
+      >
+        <Text style={styles.infoLabel}>{label}</Text>
+        <Text style={styles.infoValue}>{value || 'Not available'}</Text>
+      </GlassSurface>
+    </View>
   );
 }
 
-type PickerStepperProps = {
-  label: string;
-  onDecrement: () => void;
-  onIncrement: () => void;
-  value: string;
-};
-
 function PickerStepper({
   label,
+  value,
   onDecrement,
   onIncrement,
-  value,
 }: PickerStepperProps) {
-  const { theme } = useTheme();
-  const styles = useThemedStyles(createStyles);
-
   return (
     <View style={styles.pickerColumn}>
       <Text style={styles.pickerLabel}>{label}</Text>
-      <View style={styles.pickerStepper}>
-        <ScalePressable
-          accessibilityRole="button"
-          onPress={onDecrement}
-          style={styles.pickerButton}
-        >
-          <Ionicons name="remove" size={18} color={theme.colors.primary} />
+      <GlassSurface
+        depth="card"
+        intensity={64}
+        overlayColor={getAdminSurfaceColor('card')}
+        style={styles.pickerStepper}
+      >
+        <ScalePressable accessibilityRole="button" onPress={onDecrement} style={styles.pickerButton}>
+          <Ionicons color={adminPalette.caramelSoft} name="remove" size={18} />
         </ScalePressable>
-
         <Text style={styles.pickerValue}>{value}</Text>
-
-        <ScalePressable
-          accessibilityRole="button"
-          onPress={onIncrement}
-          style={styles.pickerButton}
-        >
-          <Ionicons name="add" size={18} color={theme.colors.primary} />
+        <ScalePressable accessibilityRole="button" onPress={onIncrement} style={styles.pickerButton}>
+          <Ionicons color={adminPalette.caramelSoft} name="add" size={18} />
         </ScalePressable>
-      </View>
+      </GlassSurface>
     </View>
   );
 }
 
 export function AdminProfileScreen() {
-  const { theme } = useTheme();
-  const styles = useThemedStyles(createStyles);
-  const { user: currentUser } = useAuth();
-  const { logout } = useAuthContext();
+  const { currentUserEmail, normalizedCurrentEmail, user } = useAuth();
+  const { profile, profileDisplayName, authPhotoUrl, primaryAddress } = useProfileData();
+  const { isMainAdmin } = useAccessRoles(currentUserEmail, normalizedCurrentEmail);
   const {
     closeTime,
     currentTime,
@@ -180,15 +161,23 @@ export function AdminProfileScreen() {
     shopCountdownMessage,
     shopTiming,
   } = useShopTiming();
-  const adminEmail = currentUser?.email || 'coffeehubinkollu@gmail.com';
-  const adminName = buildAdminName(adminEmail, currentUser?.displayName);
-  const avatarLetter = adminName.charAt(0).toUpperCase() || 'A';
-  const [draftTiming, setDraftTiming] = useState<ShopTiming>(EMPTY_SHOP_TIMING);
+  const [draftTiming, setDraftTiming] = useState<ShopTiming>({
+    openTime: '',
+    closeTime: '',
+  });
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [pickerState, setPickerState] = useState<TimePickerState | null>(null);
   const [saveError, setSaveError] = useState('');
   const [saveSuccess, setSaveSuccess] = useState('');
+
+  const displayName = profileDisplayName || user?.displayName || 'COFFEE-HUB';
+  const initials = getInitials(displayName);
+  const locationValue = profile.adminLocation || primaryAddress?.address || 'COFFEE-HUB Roastery';
+  const validationMessage = useMemo(
+    () => validateShopTiming(draftTiming.openTime, draftTiming.closeTime),
+    [draftTiming.closeTime, draftTiming.openTime],
+  );
 
   useEffect(() => {
     if (hasUnsavedChanges) {
@@ -200,45 +189,7 @@ export function AdminProfileScreen() {
       closeTime: shopTiming.closeTime,
       updatedAt: shopTiming.updatedAt,
     });
-  }, [
-    hasUnsavedChanges,
-    shopTiming.closeTime,
-    shopTiming.openTime,
-    shopTiming.updatedAt,
-  ]);
-
-  const statusTitle = isOpen ? 'Shop is open' : 'Shop is closed';
-  const statusMessage = isOpen
-    ? `Accepting orders until ${formatShopTime(closeTime)}.`
-    : `Orders reopen at ${formatShopTime(openTime)}.`;
-  const timingValidationMessage = useMemo(
-    () => validateShopTiming(draftTiming.openTime, draftTiming.closeTime),
-    [draftTiming.closeTime, draftTiming.openTime],
-  );
-  const draftRangeLabel = useMemo(() => {
-    const validationError = validateShopTiming(draftTiming.openTime, draftTiming.closeTime);
-    if (validationError) {
-      return `${draftTiming.openTime} - ${draftTiming.closeTime}`;
-    }
-
-    return formatShopTimingRange(draftTiming.openTime, draftTiming.closeTime);
-  }, [draftTiming.closeTime, draftTiming.openTime]);
-
-  const updateDraftTimingField = (field: TimeField, value: string) => {
-    setDraftTiming(previous => ({
-      ...previous,
-      [field]: value,
-    }));
-    setHasUnsavedChanges(true);
-    setSaveError('');
-    setSaveSuccess('');
-  };
-
-  const openTimePicker = (field: TimeField) => {
-    setSaveError('');
-    setSaveSuccess('');
-    setPickerState(getTimePickerState(field, draftTiming[field]));
-  };
+  }, [hasUnsavedChanges, shopTiming]);
 
   const changePickerPart = (part: 'hour' | 'minute', delta: number) => {
     setPickerState(current => {
@@ -265,14 +216,17 @@ export function AdminProfileScreen() {
       return;
     }
 
-    updateDraftTimingField(
-      pickerState.field,
-      formatTimeValue(pickerState.hour, pickerState.minute),
-    );
+    setDraftTiming(current => ({
+      ...current,
+      [pickerState.field]: formatTimeValue(pickerState.hour, pickerState.minute),
+    }));
+    setHasUnsavedChanges(true);
+    setSaveError('');
+    setSaveSuccess('');
     setPickerState(null);
   };
 
-  const resetDraftTiming = () => {
+  const resetDraft = () => {
     setDraftTiming({
       openTime: shopTiming.openTime,
       closeTime: shopTiming.closeTime,
@@ -283,9 +237,9 @@ export function AdminProfileScreen() {
     setSaveSuccess('');
   };
 
-  const handleSaveTiming = async () => {
-    if (timingValidationMessage) {
-      setSaveError(timingValidationMessage);
+  const handleSave = async () => {
+    if (validationMessage) {
+      setSaveError(validationMessage);
       setSaveSuccess('');
       return;
     }
@@ -298,18 +252,18 @@ export function AdminProfileScreen() {
       const response = await updateShopTimingRequest({
         openTime: draftTiming.openTime,
         closeTime: draftTiming.closeTime,
-        userEmail: adminEmail,
+        userEmail: currentUserEmail,
       });
       await refreshShopTiming({ suppressLoading: true });
       setDraftTiming(response.shopTiming);
-
       setHasUnsavedChanges(false);
-      setSaveSuccess(`Saved ${draftRangeLabel} to Firestore settings/shop.`);
+      setSaveSuccess('Shop timing saved to Firestore settings/shop.');
     } catch (error) {
-      const message = error instanceof Error
-        ? error.message
-        : 'Unable to save shop timing right now.';
-      setSaveError(message);
+      setSaveError(
+        error instanceof Error
+          ? error.message
+          : 'Unable to save shop timing right now.',
+      );
     } finally {
       setIsSaving(false);
     }
@@ -321,163 +275,171 @@ export function AdminProfileScreen() {
 
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
-      <ScrollView
-        style={styles.screen}
-        contentContainerStyle={styles.content}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
-        <Text style={styles.eyebrow}>Admin Account</Text>
-        <Text style={styles.title}>Profile & shop hours</Text>
-        <Text style={styles.subtitle}>
-          Control live order availability for the mobile customer flow from one place.
-        </Text>
-
-        <View style={styles.profileCard}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{avatarLetter}</Text>
-          </View>
-
-          <Text style={styles.adminName}>{adminName || 'Coffee Hub Admin'}</Text>
-          <Text style={styles.adminEmail}>{adminEmail}</Text>
-
-          <View style={styles.roleBadge}>
-            <Text style={styles.roleBadgeText}>ADMIN</Text>
-          </View>
-        </View>
-
-        <View style={styles.statusCard}>
-          <View style={styles.statusHeader}>
-            <View>
-              <Text style={styles.sectionTitle}>Live shop status</Text>
-              <Text style={styles.sectionDescription}>
-                Customer ordering is enforced in {SHOP_TIMEZONE}.
-              </Text>
-            </View>
-
-            <View style={[styles.statusChip, isOpen ? styles.statusChipOpen : styles.statusChipClosed]}>
-              <View style={[styles.statusDot, isOpen ? styles.statusDotOpen : styles.statusDotClosed]} />
-              <Text style={[styles.statusChipText, isOpen ? styles.statusChipTextOpen : styles.statusChipTextClosed]}>
-                {isOpen ? 'Open' : 'Closed'}
-              </Text>
-            </View>
-          </View>
-
-          {isLoading ? (
-            <View style={styles.loadingRow}>
-              <ActivityIndicator color={theme.colors.primary} />
-              <Text style={styles.metaText}>Loading shop timing...</Text>
-            </View>
-          ) : (
-            <>
-              <Text style={styles.statusTitle}>{statusTitle}</Text>
-              <Text style={styles.statusMessage}>{statusMessage}</Text>
-              <Text style={styles.metaText}>Hours: {formatShopTimingRange(openTime, closeTime)}</Text>
-              <Text style={styles.metaText}>Current time: {formatShopTime(formatTimeValue(Math.floor(currentTime / 60), currentTime % 60))}</Text>
-              {!isOpen ? (
-                <Text style={styles.countdownText}>
-                  {shopCountdownMessage || buildOpensInMessage(openTime, currentTime)}
-                </Text>
-              ) : null}
-              <Text style={styles.updatedAtText}>
-                Last updated: {formatUpdatedAt(shopTiming.updatedAt)}
-              </Text>
-            </>
-          )}
-        </View>
-
-        <View style={styles.timingCard}>
-          <View style={styles.sectionHeader}>
-            <View style={styles.sectionCopy}>
-              <Text style={styles.sectionTitle}>Shop timing</Text>
-              <Text style={styles.sectionDescription}>
-                Saved to Firestore `settings/shop` and synced to menu, checkout, and final order placement.
-              </Text>
-            </View>
-          </View>
-
-          <TimingFieldCard
-            label="Opening time"
-            value={draftTiming.openTime}
-            description="Customers can start adding items from this time."
-            onPress={() => openTimePicker('openTime')}
+      <ScreenTransition style={styles.screen}>
+        <ScrollView
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <AppHeader
+            mode="admin"
+            avatarUrl={authPhotoUrl}
+            initials={initials}
+            title="COFFEE-HUB"
+            subtitle="Admin profile"
           />
 
-          <TimingFieldCard
-            label="Closing time"
-            value={draftTiming.closeTime}
-            description="New orders stop at this time."
-            onPress={() => openTimePicker('closeTime')}
-          />
-
-          <View style={styles.summaryCard}>
-            <Text style={styles.summaryLabel}>Draft window</Text>
-            <Text style={styles.summaryValue}>{draftRangeLabel}</Text>
-            <Text style={styles.summaryMeta}>
-              Timing is stored in strict HH:MM format and midnight crossing is intentionally blocked.
+          <View style={styles.titleBlock}>
+            <Text style={styles.eyebrow}>Admin Profile</Text>
+            <Text style={styles.title}>Keep identity, access, and timings in one place.</Text>
+            <Text style={styles.subtitle}>
+              Manage the live delivery window without leaving the premium control surface.
             </Text>
           </View>
 
-          {timingValidationMessage ? (
-            <View style={styles.inlineErrorCard}>
-              <Text style={styles.inlineErrorText}>{timingValidationMessage}</Text>
-            </View>
-          ) : null}
+          <View style={styles.profileWrap}>
+            <GlassSurface
+              depth="card"
+              intensity={72}
+              overlayColor={getAdminSurfaceColor('card')}
+              style={styles.profileCard}
+            >
+              <View style={styles.avatarWrap}>
+                <GlassSurface
+                  depth="floating"
+                  intensity={72}
+                  overlayColor={getAdminSurfaceColor('floating')}
+                  style={styles.avatarGlass}
+                >
+                  {authPhotoUrl ? (
+                    <Text style={styles.avatarText}>{initials}</Text>
+                  ) : (
+                    <Text style={styles.avatarText}>{initials}</Text>
+                  )}
+                </GlassSurface>
+              </View>
 
-          {saveError ? (
-            <View style={styles.inlineErrorCard}>
-              <Text style={styles.inlineErrorText}>{saveError}</Text>
-            </View>
-          ) : null}
-
-          {saveSuccess ? (
-            <View style={styles.inlineSuccessCard}>
-              <Text style={styles.inlineSuccessText}>{saveSuccess}</Text>
-            </View>
-          ) : null}
-
-          <View style={styles.actionRow}>
-            <PrimaryButton
-              title="Reset"
-              onPress={resetDraftTiming}
-              style={styles.secondaryActionSingle}
-              variant="ghost"
-            />
+              <Text style={styles.profileName}>{displayName}</Text>
+              <Text style={styles.profileRole}>{isMainAdmin ? 'Main Admin' : 'Admin'}</Text>
+            </GlassSurface>
           </View>
 
-          <PrimaryButton
-            title={isSaving ? 'Saving timing...' : 'Save shop timing'}
-            onPress={() => {
-              void handleSaveTiming();
-            }}
-            disabled={isLoading || isSaving}
-            loading={isSaving}
-            style={styles.primaryAction}
-          />
+          <View style={styles.infoGrid}>
+            <InfoCard label="Name" value={displayName} />
+            <InfoCard label="Email" value={currentUserEmail} />
+            <InfoCard label="Location" value={locationValue} />
+          </View>
 
-          <Text style={styles.footerNote}>
-            Source of truth: Firestore `settings/shop` with `openTime`, `closeTime`, and `updatedAt`.
-          </Text>
-        </View>
+          <View style={styles.statusWrap}>
+            <GlassSurface
+              depth="card"
+              intensity={66}
+              overlayColor={getAdminSurfaceColor('card')}
+              style={styles.statusCard}
+            >
+              <View style={styles.statusHeader}>
+                <Text style={styles.sectionTitle}>Online Delivery Timings</Text>
+                <View style={[styles.statusChip, isOpen ? styles.statusChipOpen : styles.statusChipClosed]}>
+                  <Text style={[styles.statusChipText, isOpen ? styles.statusChipTextOpen : styles.statusChipTextClosed]}>
+                    {isOpen ? 'Open' : 'Closed'}
+                  </Text>
+                </View>
+              </View>
 
-        <View style={styles.accountCard}>
-          <Text style={styles.sectionTitle}>Account</Text>
-          <Text style={styles.sectionDescription}>
-            Admin access is still derived from `admin_access/{'{email}'}` after login. Log out here to switch accounts.
-          </Text>
-          <Text style={styles.accountMeta}>Current account email: {adminEmail}</Text>
-          <PrimaryButton
-            title="Log out"
-            onPress={() => {
-              void logout().catch(logoutError => {
-                console.error('[AdminProfileScreen] logout:error', logoutError);
-              });
-            }}
-            style={styles.primaryAction}
-            variant="secondary"
-          />
-        </View>
-      </ScrollView>
+              {isLoading ? (
+                <View style={styles.loadingRow}>
+                  <ActivityIndicator color={adminPalette.caramelSoft} size="small" />
+                  <Text style={styles.statusText}>Loading timing...</Text>
+                </View>
+              ) : (
+                <>
+                  <Text style={styles.statusValue}>
+                    {formatShopTimingRange(openTime, closeTime)}
+                  </Text>
+                  <Text style={styles.statusText}>
+                    {isOpen
+                      ? `Accepting orders until ${formatShopTime(closeTime)}.`
+                      : `${shopCountdownMessage || buildOpensInMessage(openTime, currentTime)}`}
+                  </Text>
+                  <Text style={styles.statusMeta}>
+                    Last updated: {formatUpdatedAt(shopTiming.updatedAt)}
+                  </Text>
+                </>
+              )}
+            </GlassSurface>
+          </View>
+
+          <View style={styles.timingWrap}>
+            <TimePickerInput
+              label="Open Time"
+              value={draftTiming.openTime}
+              description="Customers can start placing orders from this time."
+              onPress={() => setPickerState(getTimePickerState('openTime', draftTiming.openTime))}
+            />
+
+            <TimePickerInput
+              label="Close Time"
+              value={draftTiming.closeTime}
+              description="New delivery orders stop at this time."
+              onPress={() => setPickerState(getTimePickerState('closeTime', draftTiming.closeTime))}
+            />
+
+            {validationMessage ? (
+              <View style={styles.messageWrap}>
+                <GlassSurface
+                  depth="card"
+                  intensity={64}
+                  overlayColor="rgba(225, 161, 141, 0.14)"
+                  style={styles.messageCard}
+                >
+                  <Text style={styles.messageTextDanger}>{validationMessage}</Text>
+                </GlassSurface>
+              </View>
+            ) : null}
+
+            {saveError ? (
+              <View style={styles.messageWrap}>
+                <GlassSurface
+                  depth="card"
+                  intensity={64}
+                  overlayColor="rgba(225, 161, 141, 0.14)"
+                  style={styles.messageCard}
+                >
+                  <Text style={styles.messageTextDanger}>{saveError}</Text>
+                </GlassSurface>
+              </View>
+            ) : null}
+
+            {saveSuccess ? (
+              <View style={styles.messageWrap}>
+                <GlassSurface
+                  depth="card"
+                  intensity={64}
+                  overlayColor="rgba(151, 201, 157, 0.18)"
+                  style={styles.messageCard}
+                >
+                  <Text style={styles.messageTextSuccess}>{saveSuccess}</Text>
+                </GlassSurface>
+              </View>
+            ) : null}
+
+            <PrimaryButton
+              title={isSaving ? 'Saving Changes...' : 'Save Changes'}
+              onPress={() => {
+                void handleSave();
+              }}
+              loading={isSaving}
+              disabled={isSaving || isLoading}
+            />
+            <PrimaryButton
+              title="Discard"
+              variant="ghost"
+              onPress={resetDraft}
+              disabled={!hasUnsavedChanges}
+            />
+          </View>
+        </ScrollView>
+      </ScreenTransition>
 
       <Modal
         animationType="slide"
@@ -485,12 +447,12 @@ export function AdminProfileScreen() {
         visible={Boolean(pickerState)}
         onRequestClose={() => setPickerState(null)}
       >
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
+        <Pressable style={styles.modalBackdrop} onPress={() => setPickerState(null)}>
+          <Pressable style={styles.modalCard} onPress={() => {}}>
             <View style={styles.modalHeader}>
               <View style={styles.modalCopy}>
                 <Text style={styles.modalEyebrow}>
-                  {pickerState?.field === 'closeTime' ? 'Closing time' : 'Opening time'}
+                  {pickerState?.field === 'closeTime' ? 'Close Time' : 'Open Time'}
                 </Text>
                 <Text style={styles.modalTitle}>{pickerPreviewValue}</Text>
                 <Text style={styles.modalSubtitle}>{formatShopTime(pickerPreviewValue)}</Text>
@@ -499,9 +461,16 @@ export function AdminProfileScreen() {
               <ScalePressable
                 accessibilityRole="button"
                 onPress={() => setPickerState(null)}
-                style={styles.modalCloseButton}
+                style={styles.closeButton}
               >
-                <Ionicons name="close" size={20} color={theme.colors.text} />
+                <GlassSurface
+                  depth="floating"
+                  intensity={58}
+                  overlayColor={getAdminSurfaceColor('floating')}
+                  style={styles.closeButtonGlass}
+                >
+                  <Ionicons color={adminPalette.text} name="close" size={20} />
+                </GlassSurface>
               </ScalePressable>
             </View>
 
@@ -523,6 +492,7 @@ export function AdminProfileScreen() {
             <View style={styles.quickMinuteRow}>
               {MINUTE_QUICK_PICKS.map(minute => {
                 const isSelected = minute === (pickerState?.minute ?? 0);
+
                 return (
                   <ScalePressable
                     key={`minute-${minute}`}
@@ -537,491 +507,339 @@ export function AdminProfileScreen() {
                           : current
                       ));
                     }}
-                    style={[
-                      styles.quickMinuteChip,
-                      isSelected ? styles.quickMinuteChipSelected : null,
-                    ]}
+                    style={styles.quickChipWrap}
                   >
-                    <Text
-                      style={[
-                        styles.quickMinuteText,
-                        isSelected ? styles.quickMinuteTextSelected : null,
-                      ]}
+                    <GlassSurface
+                      depth="floating"
+                      intensity={58}
+                      overlayColor={isSelected ? 'rgba(200, 146, 99, 0.24)' : getAdminSurfaceColor('floating')}
+                      style={[styles.quickChip, isSelected ? styles.quickChipActive : null]}
                     >
-                      :{padTimePart(minute)}
-                    </Text>
+                      <Text style={[styles.quickChipText, isSelected ? styles.quickChipTextActive : null]}>
+                        :{padTimePart(minute)}
+                      </Text>
+                    </GlassSurface>
                   </ScalePressable>
                 );
               })}
             </View>
 
-            <Text style={styles.modalHint}>
-              Use one-day timing only. Midnight crossing is not allowed.
-            </Text>
-
             <View style={styles.modalActions}>
               <PrimaryButton
                 title="Cancel"
+                variant="ghost"
                 onPress={() => setPickerState(null)}
-                style={styles.modalSecondaryAction}
-                variant="secondary"
+                style={styles.modalAction}
               />
               <PrimaryButton
                 title="Apply"
                 onPress={applyPickerValue}
-                style={styles.modalPrimaryAction}
+                style={styles.modalAction}
               />
             </View>
-          </View>
-        </View>
+          </Pressable>
+        </Pressable>
       </Modal>
     </SafeAreaView>
   );
 }
 
-const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => StyleSheet.create({
+const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: theme.colors.background,
+    backgroundColor: adminPalette.background,
   },
   content: {
-    padding: theme.spacing.lg,
-    paddingBottom: theme.spacing.xxl,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 120,
+    gap: 20,
+  },
+  titleBlock: {
+    gap: 10,
   },
   eyebrow: {
-    fontSize: theme.typography.eyebrow,
+    color: adminPalette.caramelSoft,
+    fontSize: 11,
     fontWeight: '800',
-    letterSpacing: 1.6,
+    letterSpacing: 1.4,
     textTransform: 'uppercase',
-    color: theme.colors.secondary,
   },
   title: {
-    color: theme.colors.text,
-    fontSize: 28,
-    fontWeight: '800',
-    marginTop: 8,
+    color: adminPalette.text,
+    fontSize: 32,
+    lineHeight: 36,
+    fontWeight: '900',
   },
   subtitle: {
-    color: theme.colors.textMuted,
-    fontSize: theme.typography.body,
+    color: adminPalette.textMuted,
+    fontSize: 15,
     lineHeight: 22,
-    marginTop: 8,
+  },
+  profileWrap: {
+    ...adminShadow,
+    borderRadius: adminRadius.card,
   },
   profileCard: {
+    borderRadius: adminRadius.card,
+    overflow: 'hidden',
+    padding: 20,
     alignItems: 'center',
-    backgroundColor: theme.colors.surface,
-    borderColor: theme.colors.border,
-    borderRadius: theme.radius.hero,
-    borderWidth: 1,
-    marginTop: theme.spacing.xl,
-    padding: theme.spacing.xl,
+    gap: 12,
   },
-  avatar: {
+  avatarWrap: {
+    borderRadius: 44,
+  },
+  avatarGlass: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
     alignItems: 'center',
-    backgroundColor: theme.colors.primary,
-    borderRadius: 999,
-    height: 84,
     justifyContent: 'center',
-    width: 84,
   },
   avatarText: {
-    color: theme.colors.onPrimary,
-    fontSize: 32,
-    fontWeight: '800',
+    color: adminPalette.text,
+    fontSize: 30,
+    fontWeight: '900',
   },
-  adminName: {
-    color: theme.colors.text,
+  profileName: {
+    color: adminPalette.text,
     fontSize: 24,
+    fontWeight: '900',
+  },
+  profileRole: {
+    color: adminPalette.caramelSoft,
+    fontSize: 13,
     fontWeight: '800',
-    marginTop: 18,
-    textAlign: 'center',
-  },
-  adminEmail: {
-    color: theme.colors.textMuted,
-    fontSize: theme.typography.body,
-    marginTop: 8,
-    textAlign: 'center',
-  },
-  roleBadge: {
-    backgroundColor: theme.colors.tag,
-    borderRadius: 999,
-    marginTop: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-  },
-  roleBadgeText: {
-    color: theme.colors.primary,
-    fontSize: theme.typography.caption,
-    fontWeight: '800',
-    letterSpacing: 1.2,
+    letterSpacing: 1,
     textTransform: 'uppercase',
   },
-  statusCard: {
-    backgroundColor: theme.colors.surface,
-    borderColor: theme.colors.border,
-    borderRadius: theme.radius.hero,
-    borderWidth: 1,
-    marginTop: theme.spacing.lg,
-    padding: theme.spacing.lg,
+  infoGrid: {
+    gap: 12,
   },
-  statusHeader: {
-    alignItems: 'flex-start',
-    flexDirection: 'row',
-    gap: theme.spacing.md,
-    justifyContent: 'space-between',
+  infoCardWrap: {
+    ...adminShadow,
+    borderRadius: adminRadius.card,
   },
-  sectionHeader: {
-    marginBottom: theme.spacing.md,
-  },
-  sectionCopy: {
+  infoCard: {
+    borderRadius: adminRadius.card,
+    overflow: 'hidden',
+    padding: 16,
     gap: 6,
   },
-  sectionTitle: {
-    color: theme.colors.text,
-    fontSize: theme.typography.subheading,
+  infoLabel: {
+    color: adminPalette.textMuted,
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.9,
+    textTransform: 'uppercase',
+  },
+  infoValue: {
+    color: adminPalette.text,
+    fontSize: 16,
+    lineHeight: 22,
     fontWeight: '800',
   },
-  sectionDescription: {
-    color: theme.colors.textMuted,
-    fontSize: theme.typography.body,
-    lineHeight: 21,
-    marginTop: 6,
+  statusWrap: {
+    ...adminShadow,
+    borderRadius: adminRadius.card,
+  },
+  statusCard: {
+    borderRadius: adminRadius.card,
+    overflow: 'hidden',
+    padding: 18,
+    gap: 10,
+  },
+  statusHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 12,
+  },
+  sectionTitle: {
+    color: adminPalette.text,
+    fontSize: 20,
+    fontWeight: '800',
   },
   statusChip: {
-    alignItems: 'center',
-    borderRadius: theme.radius.pill,
-    flexDirection: 'row',
-    gap: 8,
+    borderRadius: adminRadius.pill,
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
   statusChipOpen: {
-    backgroundColor: theme.colors.successSurface,
+    backgroundColor: 'rgba(151, 201, 157, 0.16)',
   },
   statusChipClosed: {
-    backgroundColor: theme.colors.dangerSurface,
-  },
-  statusDot: {
-    borderRadius: 4,
-    height: 8,
-    width: 8,
-  },
-  statusDotOpen: {
-    backgroundColor: theme.colors.success,
-  },
-  statusDotClosed: {
-    backgroundColor: theme.colors.danger,
+    backgroundColor: 'rgba(225, 161, 141, 0.16)',
   },
   statusChipText: {
-    fontSize: theme.typography.caption,
+    fontSize: 11,
     fontWeight: '800',
     letterSpacing: 0.8,
     textTransform: 'uppercase',
   },
   statusChipTextOpen: {
-    color: theme.colors.success,
+    color: adminPalette.success,
   },
   statusChipTextClosed: {
-    color: theme.colors.danger,
+    color: adminPalette.danger,
+  },
+  statusValue: {
+    color: adminPalette.text,
+    fontSize: 22,
+    fontWeight: '900',
+  },
+  statusText: {
+    color: adminPalette.textMuted,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  statusMeta: {
+    color: adminPalette.textSoft,
+    fontSize: 12,
+    lineHeight: 18,
   },
   loadingRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    flexDirection: 'row',
-    gap: theme.spacing.sm,
-    marginTop: theme.spacing.md,
+    gap: 10,
   },
-  statusTitle: {
-    color: theme.colors.text,
-    fontSize: 22,
-    fontWeight: '800',
-    marginTop: theme.spacing.lg,
+  timingWrap: {
+    gap: 14,
   },
-  statusMessage: {
-    color: theme.colors.textMuted,
-    fontSize: theme.typography.body,
-    lineHeight: 21,
-    marginTop: 6,
+  messageWrap: {
+    ...adminShadow,
+    borderRadius: adminRadius.card,
   },
-  metaText: {
-    color: theme.colors.textMuted,
-    fontSize: theme.typography.caption,
-    lineHeight: 18,
-    marginTop: 6,
+  messageCard: {
+    borderRadius: adminRadius.card,
+    overflow: 'hidden',
+    padding: 14,
   },
-  countdownText: {
-    color: theme.colors.primary,
-    fontSize: theme.typography.body,
-    fontWeight: '800',
-    marginTop: theme.spacing.sm,
-  },
-  updatedAtText: {
-    color: theme.colors.textMuted,
-    fontSize: theme.typography.caption,
-    marginTop: theme.spacing.md,
-  },
-  timingCard: {
-    backgroundColor: theme.colors.surface,
-    borderColor: theme.colors.border,
-    borderRadius: theme.radius.hero,
-    borderWidth: 1,
-    marginTop: theme.spacing.lg,
-    padding: theme.spacing.lg,
-  },
-  timingFieldCard: {
-    alignItems: 'center',
-    backgroundColor: theme.colors.surfaceRaised,
-    borderColor: theme.colors.border,
-    borderRadius: theme.radius.lg,
-    borderWidth: 1,
-    flexDirection: 'row',
-    gap: theme.spacing.md,
-    justifyContent: 'space-between',
-    marginTop: theme.spacing.md,
-    padding: theme.spacing.md,
-  },
-  timingFieldCopy: {
-    flex: 1,
-  },
-  fieldLabel: {
-    color: theme.colors.textMuted,
-    fontSize: theme.typography.eyebrow,
-    fontWeight: '800',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-  },
-  fieldValue: {
-    color: theme.colors.text,
-    fontSize: 26,
-    fontWeight: '800',
-    marginTop: 4,
-  },
-  fieldDescription: {
-    color: theme.colors.textMuted,
-    fontSize: theme.typography.body,
-    lineHeight: 20,
-    marginTop: 6,
-  },
-  fieldMeta: {
-    alignItems: 'flex-end',
-    gap: 8,
-  },
-  fieldDisplay: {
-    color: theme.colors.primary,
-    fontSize: theme.typography.caption,
-    fontWeight: '800',
-  },
-  summaryCard: {
-    backgroundColor: theme.colors.tag,
-    borderRadius: theme.radius.lg,
-    marginTop: theme.spacing.md,
-    padding: theme.spacing.md,
-  },
-  summaryLabel: {
-    color: theme.colors.textMuted,
-    fontSize: theme.typography.eyebrow,
-    fontWeight: '800',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-  },
-  summaryValue: {
-    color: theme.colors.text,
-    fontSize: 20,
-    fontWeight: '800',
-    marginTop: 6,
-  },
-  summaryMeta: {
-    color: theme.colors.textMuted,
-    fontSize: theme.typography.caption,
-    lineHeight: 18,
-    marginTop: 8,
-  },
-  inlineErrorCard: {
-    backgroundColor: theme.colors.dangerSurface,
-    borderColor: theme.colors.danger,
-    borderRadius: theme.radius.lg,
-    borderWidth: 1,
-    marginTop: theme.spacing.md,
-    padding: theme.spacing.md,
-  },
-  inlineErrorText: {
-    color: theme.colors.danger,
-    fontSize: theme.typography.body,
+  messageTextDanger: {
+    color: adminPalette.danger,
+    fontSize: 14,
     lineHeight: 20,
   },
-  inlineSuccessCard: {
-    backgroundColor: theme.colors.successSurface,
-    borderColor: theme.colors.success,
-    borderRadius: theme.radius.lg,
-    borderWidth: 1,
-    marginTop: theme.spacing.md,
-    padding: theme.spacing.md,
-  },
-  inlineSuccessText: {
-    color: theme.colors.success,
-    fontSize: theme.typography.body,
+  messageTextSuccess: {
+    color: adminPalette.success,
+    fontSize: 14,
     lineHeight: 20,
-  },
-  actionRow: {
-    flexDirection: 'row',
-    gap: theme.spacing.sm,
-    marginTop: theme.spacing.md,
-  },
-  secondaryActionSingle: {
-    flex: 1,
-  },
-  primaryAction: {
-    marginTop: theme.spacing.md,
-  },
-  footerNote: {
-    color: theme.colors.textMuted,
-    fontSize: theme.typography.caption,
-    lineHeight: 18,
-    marginTop: theme.spacing.md,
-  },
-  accountCard: {
-    backgroundColor: theme.colors.surface,
-    borderColor: theme.colors.border,
-    borderRadius: theme.radius.hero,
-    borderWidth: 1,
-    marginTop: theme.spacing.lg,
-    padding: theme.spacing.lg,
-  },
-  accountMeta: {
-    color: theme.colors.primary,
-    fontSize: theme.typography.caption,
-    fontWeight: '800',
-    marginTop: theme.spacing.md,
   },
   modalBackdrop: {
-    alignItems: 'center',
-    backgroundColor: theme.colors.overlay,
     flex: 1,
+    backgroundColor: 'rgba(10, 7, 6, 0.62)',
     justifyContent: 'flex-end',
-    padding: theme.spacing.lg,
+    padding: 16,
   },
   modalCard: {
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.radius.hero,
-    padding: theme.spacing.lg,
-    width: '100%',
+    backgroundColor: adminPalette.backdrop,
+    borderRadius: 28,
+    padding: 20,
+    gap: 18,
   },
   modalHeader: {
-    alignItems: 'flex-start',
     flexDirection: 'row',
-    gap: theme.spacing.md,
     justifyContent: 'space-between',
+    gap: 12,
+    alignItems: 'flex-start',
   },
   modalCopy: {
     flex: 1,
+    gap: 4,
   },
   modalEyebrow: {
-    color: theme.colors.secondary,
-    fontSize: theme.typography.eyebrow,
+    color: adminPalette.caramelSoft,
+    fontSize: 11,
     fontWeight: '800',
-    letterSpacing: 1,
+    letterSpacing: 1.2,
     textTransform: 'uppercase',
   },
   modalTitle: {
-    color: theme.colors.text,
-    fontSize: 32,
-    fontWeight: '800',
-    marginTop: 6,
+    color: adminPalette.text,
+    fontSize: 30,
+    fontWeight: '900',
   },
   modalSubtitle: {
-    color: theme.colors.textMuted,
-    fontSize: theme.typography.body,
-    marginTop: 4,
+    color: adminPalette.textMuted,
+    fontSize: 14,
+    lineHeight: 20,
   },
-  modalCloseButton: {
+  closeButton: {
+    borderRadius: 22,
+  },
+  closeButtonGlass: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
-    backgroundColor: theme.colors.surfaceRaised,
-    borderColor: theme.colors.border,
-    borderRadius: 21,
-    borderWidth: 1,
-    height: 42,
     justifyContent: 'center',
-    width: 42,
   },
   pickerRow: {
     flexDirection: 'row',
-    gap: theme.spacing.md,
-    marginTop: theme.spacing.xl,
+    gap: 12,
   },
   pickerColumn: {
     flex: 1,
+    gap: 8,
   },
   pickerLabel: {
-    color: theme.colors.textMuted,
-    fontSize: theme.typography.eyebrow,
+    color: adminPalette.textMuted,
+    fontSize: 11,
     fontWeight: '800',
-    letterSpacing: 1,
+    letterSpacing: 0.9,
     textTransform: 'uppercase',
   },
   pickerStepper: {
-    alignItems: 'center',
-    backgroundColor: theme.colors.surfaceRaised,
-    borderColor: theme.colors.border,
-    borderRadius: theme.radius.lg,
-    borderWidth: 1,
+    borderRadius: adminRadius.card,
+    overflow: 'hidden',
+    padding: 12,
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: theme.spacing.sm,
-    padding: theme.spacing.sm,
   },
   pickerButton: {
-    alignItems: 'center',
-    backgroundColor: theme.colors.tag,
-    borderRadius: 18,
-    height: 36,
-    justifyContent: 'center',
     width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: adminPalette.ghost,
   },
   pickerValue: {
-    color: theme.colors.text,
+    color: adminPalette.text,
     fontSize: 28,
-    fontWeight: '800',
+    fontWeight: '900',
   },
   quickMinuteRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: theme.spacing.sm,
-    marginTop: theme.spacing.lg,
+    gap: 10,
   },
-  quickMinuteChip: {
-    backgroundColor: theme.colors.surfaceRaised,
-    borderColor: theme.colors.border,
-    borderRadius: theme.radius.pill,
-    borderWidth: 1,
+  quickChipWrap: {
+    borderRadius: adminRadius.pill,
+  },
+  quickChip: {
+    borderRadius: adminRadius.pill,
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
-  quickMinuteChipSelected: {
-    backgroundColor: theme.colors.primary,
-    borderColor: theme.colors.primary,
+  quickChipActive: {
+    backgroundColor: 'rgba(200, 146, 99, 0.18)',
   },
-  quickMinuteText: {
-    color: theme.colors.text,
-    fontSize: theme.typography.caption,
+  quickChipText: {
+    color: adminPalette.textSoft,
+    fontSize: 12,
     fontWeight: '800',
   },
-  quickMinuteTextSelected: {
-    color: theme.colors.onPrimary,
-  },
-  modalHint: {
-    color: theme.colors.textMuted,
-    fontSize: theme.typography.caption,
-    lineHeight: 18,
-    marginTop: theme.spacing.md,
+  quickChipTextActive: {
+    color: adminPalette.caramelSoft,
   },
   modalActions: {
     flexDirection: 'row',
-    gap: theme.spacing.md,
-    marginTop: theme.spacing.lg,
+    gap: 10,
   },
-  modalSecondaryAction: {
-    flex: 0.42,
-  },
-  modalPrimaryAction: {
-    flex: 0.58,
+  modalAction: {
+    flex: 1,
   },
 });

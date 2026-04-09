@@ -34,6 +34,7 @@ export type CartState = {
   payableCartTotal: number;
   handleAddToCart: (item: MenuItem, delta: number) => void;
   handleRemoveFromCart: (itemId: string) => void;
+  handleApplyCouponCode: (couponCode: string) => Promise<void>;
   handleApplyCoupon: () => Promise<void>;
   handleRemoveCoupon: () => void;
 };
@@ -156,8 +157,8 @@ export const useCart = ({ findActiveOfferByCode = findInactiveOffer }: UseCartPa
     setCart(previousCart => previousCart.filter(item => item.id !== itemId));
   }, []);
 
-  const handleApplyCoupon = useCallback(async () => {
-    const normalizedCode = couponInput.trim().toUpperCase();
+  const handleApplyCouponCode = useCallback(async (couponCode: string) => {
+    const normalizedCode = couponCode.trim().toUpperCase();
     if (!normalizedCode) {
       setCouponError('Enter a coupon code.');
       setCouponSuccess('');
@@ -203,7 +204,11 @@ export const useCart = ({ findActiveOfferByCode = findInactiveOffer }: UseCartPa
     } finally {
       setIsApplyingCoupon(false);
     }
-  }, [cartTotal, couponInput, findActiveOfferByCode]);
+  }, [cartTotal, findActiveOfferByCode]);
+
+  const handleApplyCoupon = useCallback(async () => {
+    await handleApplyCouponCode(couponInput);
+  }, [couponInput, handleApplyCouponCode]);
 
   const handleRemoveCoupon = useCallback(() => {
     setAppliedCouponCode('');
@@ -236,6 +241,7 @@ export const useCart = ({ findActiveOfferByCode = findInactiveOffer }: UseCartPa
     payableCartTotal,
     handleAddToCart,
     handleRemoveFromCart,
+    handleApplyCouponCode,
     handleApplyCoupon,
     handleRemoveCoupon,
   };

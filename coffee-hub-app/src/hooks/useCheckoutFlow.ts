@@ -101,6 +101,7 @@ export const useCheckoutFlow = ({
     payableCartTotal: cart.payableCartTotal,
     handleAddToCart,
     handleRemoveFromCart: cart.handleRemoveFromCart,
+    handleApplyCouponCode: cart.handleApplyCouponCode,
     handleApplyCoupon: cart.handleApplyCoupon,
     handleRemoveCoupon: cart.handleRemoveCoupon,
 

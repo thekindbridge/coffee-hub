@@ -1,5 +1,7 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   RefreshControl,
@@ -9,197 +11,37 @@ import {
   View,
 } from 'react-native';
 import { useCartState } from '../app/providers/CartProvider';
+import { OrderCard } from '../components/customer/OrderCard';
+import { GlassSurface } from '../components/ui/GlassSurface';
 import { ScalePressable } from '../components/ui/ScalePressable';
+import { PrimaryButton } from '../components/ui/PrimaryButton';
 import { ScreenTransition } from '../components/ui/ScreenTransition';
 import { TAB_ROUTES } from '../constants/routes';
 import { useOrders } from '../hooks/useOrders';
 import type { MainTabParamList } from '../navigation/types';
-import { animateLayout, useTheme, useThemedStyles } from '../theme';
-import type { Order } from '../types';
-import { formatCurrency } from '../utils/formatCurrency';
+import { useTheme, useThemedStyles } from '../theme';
+import { getCustomerPalette } from '../components/customer/designSystem';
 
 type OrdersNavigation = BottomTabNavigationProp<MainTabParamList>;
-
-const formatOrderDate = (value: string) => {
-  const parsedDate = new Date(value);
-  if (Number.isNaN(parsedDate.getTime())) {
-    return 'Unknown date';
-  }
-
-  return parsedDate.toLocaleString('en-IN', {
-    day: 'numeric',
-    month: 'short',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
-};
-
-function useStatusToneMap() {
-  const { theme } = useTheme();
-
-  return useMemo(() => ({
-    Pending: {
-      background: theme.colors.surfaceMuted,
-      border: theme.colors.borderStrong,
-      text: theme.colors.textMuted,
-    },
-    Accepted: {
-      background: theme.colors.successSurface,
-      border: theme.colors.success,
-      text: theme.colors.success,
-    },
-    Preparing: {
-      background: theme.colors.warningSurface,
-      border: theme.colors.warning,
-      text: theme.colors.warning,
-    },
-    'Out for Delivery': {
-      background: theme.colors.tag,
-      border: theme.colors.secondary,
-      text: theme.colors.primary,
-    },
-    Delivered: {
-      background: theme.colors.successSurface,
-      border: theme.colors.success,
-      text: theme.colors.success,
-    },
-    Rejected: {
-      background: theme.colors.dangerSurface,
-      border: theme.colors.danger,
-      text: theme.colors.danger,
-    },
-    Cancelled: {
-      background: theme.colors.dangerSurface,
-      border: theme.colors.danger,
-      text: theme.colors.danger,
-    },
-  }), [theme]);
-}
-
-function OrderCard({
-  isHighlighted,
-  order,
-}: {
-  isHighlighted: boolean;
-  order: Order;
-}) {
-  const styles = useThemedStyles(createStyles);
-  const statusToneMap = useStatusToneMap();
-  const [isExpanded, setIsExpanded] = useState(false);
-  const statusTone = statusToneMap[order.status as keyof typeof statusToneMap] ?? statusToneMap.Pending;
-  const previewItems = order.items?.slice(0, 2) ?? [];
-
-  return (
-    <View style={[styles.orderCard, isHighlighted ? styles.highlightedCard : null]}>
-      <View style={styles.orderHeader}>
-        <View style={styles.orderMeta}>
-          <Text style={styles.cardEyebrow}>Order ID</Text>
-          <Text style={styles.orderId}>#{order.id}</Text>
-          <Text style={styles.orderDate}>{formatOrderDate(order.created_at)}</Text>
-        </View>
-
-        <View
-          style={[
-            styles.statusChip,
-            {
-              backgroundColor: statusTone.background,
-              borderColor: statusTone.border,
-            },
-          ]}
-        >
-          <Text style={[styles.statusChipText, { color: statusTone.text }]}>{order.status}</Text>
-        </View>
-      </View>
-
-      <Text style={styles.orderHint}>
-        {order.status_code === 'DELIVERED'
-          ? 'Delivered order'
-          : order.status_code === 'REJECTED'
-            ? 'Order was rejected by the kitchen'
-            : order.status_code === 'CANCELLED'
-              ? 'Order was cancelled'
-              : 'Order is currently in progress'}
-      </Text>
-
-      <View style={styles.itemPreview}>
-        {previewItems.length > 0 ? (
-          previewItems.map(item => (
-            <Text key={item.id} style={styles.itemLine}>
-              {item.name} x{item.quantity}
-            </Text>
-          ))
-        ) : (
-          <Text style={styles.itemLine}>Order items will appear here.</Text>
-        )}
-        {(order.items?.length ?? 0) > 2 ? (
-          <Text style={styles.moreItemsText}>+{(order.items?.length ?? 0) - 2} more items</Text>
-        ) : null}
-      </View>
-
-      <View style={styles.totalRow}>
-        <Text style={styles.totalLabel}>Total</Text>
-        <Text style={styles.totalValue}>
-          {formatCurrency(order.total_amount || order.final_total || 0)}
-        </Text>
-      </View>
-
-      {(order.rejection_reason || order.cancellation_reason) ? (
-        <View style={styles.reasonCard}>
-          <Text style={styles.reasonTitle}>
-            {order.rejection_reason ? 'Rejection reason' : 'Cancellation reason'}
-          </Text>
-          <Text style={styles.reasonText}>
-            {order.rejection_reason || order.cancellation_reason}
-          </Text>
-        </View>
-      ) : null}
-
-      <ScalePressable
-        onPress={() => {
-          animateLayout();
-          setIsExpanded(previous => !previous);
-        }}
-        style={styles.secondaryButton}
-      >
-        <Text style={styles.secondaryButtonText}>
-          {isExpanded ? 'Hide details' : 'View details'}
-        </Text>
-      </ScalePressable>
-
-      {isExpanded ? (
-        <View style={styles.detailsCard}>
-          <Text style={styles.cardEyebrow}>Order details</Text>
-          <View style={styles.detailsList}>
-            {(order.items?.length ?? 0) > 0 ? (
-              order.items!.map(item => (
-                <View key={`detail-${item.id}`} style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>
-                    {item.name} x{item.quantity}
-                  </Text>
-                  <Text style={styles.detailValue}>
-                    {formatCurrency(item.price * item.quantity)}
-                  </Text>
-                </View>
-              ))
-            ) : (
-              <Text style={styles.itemLine}>No item details found for this order.</Text>
-            )}
-          </View>
-        </View>
-      ) : null}
-    </View>
-  );
-}
 
 export function OrdersScreen() {
   const navigation = useNavigation<OrdersNavigation>();
   const { theme } = useTheme();
+  const palette = getCustomerPalette(theme);
   const styles = useThemedStyles(createStyles);
   const { currentUserId, isAuthReady, placedOrder, setPlacedOrder } = useCartState();
-  const { activeOrders, error, isLoading, orders, pastOrders, refreshOrders } = useOrders({
+  const {
+    activeOrders,
+    error,
+    isLoading,
+    orders,
+    pastOrders,
+    refreshOrders,
+  } = useOrders({
     currentUserId,
     optimisticOrder: placedOrder,
   });
+  const [activeTab, setActiveTab] = useState<'active' | 'history'>('active');
 
   useFocusEffect(
     useCallback(() => {
@@ -221,15 +63,27 @@ export function OrdersScreen() {
     }
   }, [orders, placedOrder, setPlacedOrder]);
 
+  useEffect(() => {
+    if (activeTab === 'active' && activeOrders.length === 0 && pastOrders.length > 0) {
+      setActiveTab('history');
+      return;
+    }
+
+    if (activeTab === 'history' && pastOrders.length === 0 && activeOrders.length > 0) {
+      setActiveTab('active');
+    }
+  }, [activeOrders.length, activeTab, pastOrders.length]);
+
+  const visibleOrders = activeTab === 'active' ? activeOrders : pastOrders;
   const emptyTitle = useMemo(
-    () => (isAuthReady ? 'No orders yet' : 'Loading your account'),
+    () => (isAuthReady ? 'No brews yet' : 'Loading your account'),
     [isAuthReady],
   );
   const emptySubtitle = useMemo(
     () => (
       isAuthReady
-        ? 'Place your first order and track it here.'
-        : 'Once your account details finish loading, your order history will appear here.'
+        ? 'Let\'s craft your first coffee and stage every update in this room.'
+        : 'Once your account finishes loading, your order history will appear here.'
     ),
     [isAuthReady],
   );
@@ -237,7 +91,7 @@ export function OrdersScreen() {
   return (
     <ScrollView
       style={styles.screen}
-      contentContainerStyle={styles.screenContent}
+      contentContainerStyle={styles.content}
       refreshControl={(
         <RefreshControl
           refreshing={isLoading}
@@ -250,354 +104,298 @@ export function OrdersScreen() {
       showsVerticalScrollIndicator={false}
     >
       <ScreenTransition>
-        <Text style={styles.sectionEyebrow}>History</Text>
-        <Text style={styles.pageTitle}>Orders</Text>
+        <View style={styles.header}>
+          <Text style={styles.eyebrow}>Order room</Text>
+          <Text style={styles.title}>Placed, brewing, couriered, and remembered.</Text>
+          <Text style={styles.subtitle}>
+            Follow the full coffee journey from checkout to doorstep without leaving the customer app.
+          </Text>
+        </View>
+
+        <View style={styles.summaryRow}>
+          <GlassSurface depth="section" intensity={54} overlayColor={palette.surfaceGlass} style={styles.summaryCard}>
+            <Text style={styles.summaryValue}>{activeOrders.length}</Text>
+            <Text style={styles.summaryLabel}>Active brews</Text>
+          </GlassSurface>
+          <GlassSurface depth="section" intensity={54} overlayColor={palette.surfaceGlass} style={styles.summaryCard}>
+            <Text style={styles.summaryValue}>{pastOrders.length}</Text>
+            <Text style={styles.summaryLabel}>Past rituals</Text>
+          </GlassSurface>
+        </View>
+
+        <GlassSurface depth="floating" intensity={58} overlayColor={palette.surfaceGlass} style={styles.segmentedControl}>
+          <ScalePressable
+            accessibilityRole="button"
+            onPress={() => setActiveTab('active')}
+            style={[
+              styles.segment,
+            ]}
+          >
+            {activeTab === 'active' ? (
+              <LinearGradient
+                colors={palette.ctaGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={[styles.segmentFill, styles.segmentActive]}
+              >
+                <Text style={[styles.segmentText, styles.segmentTextActive]}>
+                  Active
+                </Text>
+                <Text style={[styles.segmentCount, styles.segmentTextActive]}>
+                  {activeOrders.length}
+                </Text>
+              </LinearGradient>
+            ) : (
+              <View style={styles.segmentFill}>
+                <Text style={styles.segmentText}>
+                  Active
+                </Text>
+                <Text style={styles.segmentCount}>
+                  {activeOrders.length}
+                </Text>
+              </View>
+            )}
+          </ScalePressable>
+
+          <ScalePressable
+            accessibilityRole="button"
+            onPress={() => setActiveTab('history')}
+            style={[
+              styles.segment,
+            ]}
+          >
+            {activeTab === 'history' ? (
+              <LinearGradient
+                colors={palette.ctaGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={[styles.segmentFill, styles.segmentActive]}
+              >
+                <Text style={[styles.segmentText, styles.segmentTextActive]}>
+                  History
+                </Text>
+                <Text style={[styles.segmentCount, styles.segmentTextActive]}>
+                  {pastOrders.length}
+                </Text>
+              </LinearGradient>
+            ) : (
+              <View style={styles.segmentFill}>
+                <Text style={styles.segmentText}>
+                  History
+                </Text>
+                <Text style={styles.segmentCount}>
+                  {pastOrders.length}
+                </Text>
+              </View>
+            )}
+          </ScalePressable>
+        </GlassSurface>
 
         {error ? (
-          <View style={[styles.noticeCard, styles.errorNotice]}>
-            <Text style={styles.noticeText}>{error}</Text>
-          </View>
+          <GlassSurface depth="section" intensity={52} overlayColor={palette.surfaceGlass} style={styles.messageCard}>
+            <Text style={styles.messageTitle}>Unable to load orders</Text>
+            <Text style={styles.messageText}>{error}</Text>
+          </GlassSurface>
         ) : null}
 
         {orders.length === 0 && !isLoading ? (
-          <View style={styles.emptyCard}>
+          <GlassSurface depth="section" intensity={52} overlayColor={palette.surfaceGlass} style={styles.emptyCard}>
+            <GlassSurface depth="card" style={styles.emptyIconWrap}>
+              <Ionicons name="cafe-outline" size={26} color={palette.caramel} />
+            </GlassSurface>
             <Text style={styles.emptyTitle}>{emptyTitle}</Text>
             <Text style={styles.emptyText}>{emptySubtitle}</Text>
             {isAuthReady ? (
-              <ScalePressable
+              <PrimaryButton
+                title="Browse Menu"
                 onPress={() => navigation.navigate(TAB_ROUTES.MENU)}
-                style={styles.primaryButton}
-              >
-                <Text style={styles.primaryButtonText}>Browse Menu</Text>
-              </ScalePressable>
+                style={styles.emptyAction}
+              />
             ) : null}
-          </View>
+          </GlassSurface>
         ) : null}
 
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <View>
-              <Text style={styles.sectionEyebrow}>Active orders</Text>
-              <Text style={styles.sectionTitle}>In progress</Text>
-            </View>
-            <View style={styles.countBadge}>
-              <Text style={styles.countBadgeText}>{activeOrders.length}</Text>
-            </View>
+        {visibleOrders.length > 0 ? (
+          <View style={styles.list}>
+            {visibleOrders.map(order => (
+              <OrderCard
+                key={order.doc_id || order.id}
+                order={order}
+              />
+            ))}
           </View>
-
-          {activeOrders.length > 0 ? (
-            <View style={styles.list}>
-              {activeOrders.map((order, index) => (
-                <OrderCard
-                  key={order.doc_id || order.id}
-                  isHighlighted={index === 0 && placedOrder?.id === order.id}
-                  order={order}
-                />
-              ))}
-            </View>
-          ) : (
-            <View style={styles.placeholderCard}>
-              <Text style={styles.placeholderText}>No active orders right now.</Text>
-            </View>
-          )}
-        </View>
-
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <View>
-              <Text style={styles.sectionEyebrow}>Past orders</Text>
-              <Text style={styles.sectionTitle}>History</Text>
-            </View>
-            <View style={styles.countBadge}>
-              <Text style={styles.countBadgeText}>{pastOrders.length}</Text>
-            </View>
-          </View>
-
-          {pastOrders.length > 0 ? (
-            <View style={styles.list}>
-              {pastOrders.map(order => (
-                <OrderCard
-                  key={order.doc_id || order.id}
-                  isHighlighted={false}
-                  order={order}
-                />
-              ))}
-            </View>
-          ) : (
-            <View style={styles.placeholderCard}>
-              <Text style={styles.placeholderText}>
-                Delivered, rejected, and cancelled orders will appear here.
-              </Text>
-            </View>
-          )}
-        </View>
+        ) : orders.length > 0 ? (
+          <GlassSurface depth="section" intensity={52} overlayColor={palette.surfaceGlass} style={styles.emptyCard}>
+            <GlassSurface depth="card" style={styles.emptyIconWrap}>
+              <Ionicons
+                name={activeTab === 'active' ? 'time-outline' : 'archive-outline'}
+                size={24}
+                color={palette.caramel}
+              />
+            </GlassSurface>
+            <Text style={styles.emptyTitle}>
+              {activeTab === 'active' ? 'No active brews right now' : 'No ritual archive yet'}
+            </Text>
+            <Text style={styles.emptyText}>
+              {activeTab === 'active'
+                ? 'Once a new order starts moving, it will appear here with live progress.'
+                : 'Delivered, rejected, and cancelled orders will settle into this archive.'}
+            </Text>
+          </GlassSurface>
+        ) : null}
       </ScreenTransition>
     </ScrollView>
   );
 }
 
-const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: theme.colors.background,
-  },
-  screenContent: {
-    padding: theme.spacing.lg,
-    paddingBottom: 120,
-  },
-  pageTitle: {
-    fontSize: theme.typography.heading,
-    fontWeight: '800',
-    color: theme.colors.text,
-    marginBottom: theme.spacing.lg,
-  },
-  noticeCard: {
-    borderRadius: theme.radius.lg,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    backgroundColor: theme.colors.surface,
-    padding: theme.spacing.md,
-    marginBottom: theme.spacing.lg,
-  },
-  errorNotice: {
-    borderColor: theme.colors.danger,
-    backgroundColor: theme.colors.dangerSurface,
-  },
-  noticeText: {
-    fontSize: theme.typography.body,
-    lineHeight: 20,
-    color: theme.colors.textMuted,
-  },
-  emptyCard: {
-    borderRadius: theme.radius.hero,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    backgroundColor: theme.colors.surface,
-    padding: theme.spacing.xl,
-    marginBottom: theme.spacing.lg,
-  },
-  emptyTitle: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: theme.colors.text,
-  },
-  emptyText: {
-    marginTop: theme.spacing.sm,
-    fontSize: theme.typography.body,
-    lineHeight: 22,
-    color: theme.colors.textMuted,
-  },
-  primaryButton: {
-    minHeight: 50,
-    marginTop: theme.spacing.lg,
-    borderRadius: theme.radius.pill,
-    backgroundColor: theme.colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: theme.spacing.lg,
-  },
-  primaryButtonText: {
-    fontSize: theme.typography.body,
-    fontWeight: '700',
-    color: theme.colors.onPrimary,
-  },
-  section: {
-    marginBottom: theme.spacing.xl,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: theme.spacing.md,
-  },
-  sectionEyebrow: {
-    fontSize: theme.typography.eyebrow,
-    fontWeight: '700',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-    color: theme.colors.secondary,
-  },
-  sectionTitle: {
-    marginTop: 4,
-    fontSize: theme.typography.subheading,
-    fontWeight: '700',
-    color: theme.colors.text,
-  },
-  countBadge: {
-    minWidth: 38,
-    borderRadius: 19,
-    backgroundColor: theme.colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: theme.spacing.sm,
-    paddingVertical: 8,
-  },
-  countBadgeText: {
-    fontSize: theme.typography.caption,
-    fontWeight: '700',
-    color: theme.colors.onPrimary,
-  },
-  list: {
-    gap: theme.spacing.md,
-  },
-  placeholderCard: {
-    borderRadius: theme.radius.lg,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    backgroundColor: theme.colors.surface,
-    padding: theme.spacing.md,
-  },
-  placeholderText: {
-    fontSize: theme.typography.body,
-    lineHeight: 20,
-    color: theme.colors.textMuted,
-  },
-  orderCard: {
-    borderRadius: theme.radius.hero,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    backgroundColor: theme.colors.surface,
-    padding: theme.spacing.md,
-  },
-  highlightedCard: {
-    borderColor: theme.colors.primary,
-    backgroundColor: theme.colors.surfaceRaised,
-  },
-  orderHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: theme.spacing.md,
-  },
-  orderMeta: {
-    flex: 1,
-  },
-  cardEyebrow: {
-    fontSize: theme.typography.eyebrow,
-    fontWeight: '700',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-    color: theme.colors.textMuted,
-  },
-  orderId: {
-    marginTop: 4,
-    fontSize: theme.typography.subheading,
-    fontWeight: '800',
-    color: theme.colors.text,
-  },
-  orderDate: {
-    marginTop: 4,
-    fontSize: theme.typography.caption,
-    color: theme.colors.textMuted,
-  },
-  statusChip: {
-    borderRadius: 999,
-    borderWidth: 1,
-    alignSelf: 'flex-start',
-    paddingHorizontal: theme.spacing.sm,
-    paddingVertical: 8,
-  },
-  statusChipText: {
-    fontSize: theme.typography.eyebrow,
-    fontWeight: '700',
-  },
-  orderHint: {
-    marginTop: theme.spacing.md,
-    fontSize: theme.typography.body,
-    lineHeight: 20,
-    color: theme.colors.textMuted,
-  },
-  itemPreview: {
-    marginTop: theme.spacing.md,
-    gap: 4,
-  },
-  itemLine: {
-    fontSize: theme.typography.body,
-    color: theme.colors.textMuted,
-  },
-  moreItemsText: {
-    fontSize: theme.typography.caption,
-    color: theme.colors.textMuted,
-  },
-  totalRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderTopWidth: 1,
-    borderTopColor: theme.colors.border,
-    marginTop: theme.spacing.md,
-    paddingTop: theme.spacing.md,
-  },
-  totalLabel: {
-    fontSize: theme.typography.body,
-    color: theme.colors.textMuted,
-  },
-  totalValue: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: theme.colors.primary,
-  },
-  reasonCard: {
-    borderRadius: theme.radius.md,
-    borderWidth: 1,
-    borderColor: theme.colors.danger,
-    backgroundColor: theme.colors.dangerSurface,
-    padding: theme.spacing.md,
-    marginTop: theme.spacing.md,
-  },
-  reasonTitle: {
-    fontSize: theme.typography.eyebrow,
-    fontWeight: '700',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-    color: theme.colors.danger,
-  },
-  reasonText: {
-    marginTop: 6,
-    fontSize: theme.typography.body,
-    lineHeight: 20,
-    color: theme.colors.danger,
-  },
-  secondaryButton: {
-    minHeight: 46,
-    borderRadius: theme.radius.pill,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: theme.colors.surfaceRaised,
-    marginTop: theme.spacing.md,
-  },
-  secondaryButtonText: {
-    fontSize: theme.typography.body,
-    fontWeight: '700',
-    color: theme.colors.text,
-  },
-  detailsCard: {
-    borderRadius: theme.radius.lg,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    backgroundColor: theme.colors.surfaceRaised,
-    padding: theme.spacing.md,
-    marginTop: theme.spacing.md,
-  },
-  detailsList: {
-    gap: theme.spacing.sm,
-    marginTop: theme.spacing.md,
-  },
-  detailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: theme.spacing.md,
-    alignItems: 'center',
-  },
-  detailLabel: {
-    flex: 1,
-    fontSize: theme.typography.body,
-    color: theme.colors.textMuted,
-  },
-  detailValue: {
-    fontSize: theme.typography.body,
-    fontWeight: '700',
-    color: theme.colors.text,
-  },
-});
+const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => {
+  const palette = getCustomerPalette(theme);
+
+  return StyleSheet.create({
+    screen: {
+      flex: 1,
+      backgroundColor: palette.background,
+    },
+    content: {
+      paddingLeft: theme.spacing.xl,
+      paddingRight: theme.spacing.lg,
+      paddingTop: theme.spacing.xl,
+      paddingBottom: 120,
+    },
+    header: {
+      gap: 6,
+    },
+    eyebrow: {
+      fontSize: theme.typography.eyebrow,
+      fontWeight: '700',
+      letterSpacing: 1.2,
+      textTransform: 'uppercase',
+      color: palette.caramel,
+    },
+    title: {
+      maxWidth: '92%',
+      fontSize: 35,
+      lineHeight: 41,
+      fontWeight: '900',
+      color: palette.text,
+    },
+    subtitle: {
+      maxWidth: '92%',
+      fontSize: 15,
+      lineHeight: 23,
+      color: palette.textMuted,
+    },
+    summaryRow: {
+      marginTop: theme.spacing.lg,
+      flexDirection: 'row',
+      gap: theme.spacing.md,
+    },
+    summaryCard: {
+      flex: 1,
+      borderRadius: theme.radius.xl,
+      paddingHorizontal: theme.spacing.lg,
+      paddingVertical: theme.spacing.md,
+    },
+    summaryValue: {
+      fontSize: 26,
+      fontWeight: '900',
+      color: palette.text,
+    },
+    summaryLabel: {
+      marginTop: 4,
+      fontSize: theme.typography.caption,
+      fontWeight: '700',
+      letterSpacing: 0.8,
+      textTransform: 'uppercase',
+      color: palette.textMuted,
+    },
+    segmentedControl: {
+      marginTop: theme.spacing.xl,
+      flexDirection: 'row',
+      gap: theme.spacing.sm,
+      borderRadius: theme.radius.hero,
+      padding: 6,
+    },
+    segment: {
+      flex: 1,
+      minHeight: 54,
+      borderRadius: theme.radius.pill,
+      overflow: 'hidden',
+    },
+    segmentFill: {
+      minHeight: 54,
+      borderRadius: theme.radius.pill,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+    },
+    segmentActive: {
+      shadowColor: theme.colors.shadowStrong,
+      shadowOffset: { width: 0, height: 10 },
+      shadowOpacity: theme.isDark ? 0.24 : 0.16,
+      shadowRadius: 18,
+      elevation: 6,
+    },
+    segmentText: {
+      fontSize: theme.typography.body,
+      fontWeight: '800',
+      color: palette.textMuted,
+    },
+    segmentTextActive: {
+      color: palette.background,
+    },
+    segmentCount: {
+      fontSize: theme.typography.caption,
+      fontWeight: '900',
+      color: palette.textMuted,
+    },
+    messageCard: {
+      marginTop: theme.spacing.lg,
+      borderRadius: theme.radius.hero,
+      padding: theme.spacing.lg,
+      gap: theme.spacing.sm,
+    },
+    messageTitle: {
+      fontSize: theme.typography.subheading,
+      fontWeight: '800',
+      color: palette.text,
+    },
+    messageText: {
+      fontSize: theme.typography.body,
+      lineHeight: 20,
+      color: palette.textMuted,
+    },
+    emptyCard: {
+      marginTop: theme.spacing.lg,
+      borderRadius: theme.radius.hero,
+      padding: theme.spacing.xl,
+      gap: theme.spacing.sm,
+    },
+    emptyIconWrap: {
+      width: 56,
+      height: 56,
+      borderRadius: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: theme.spacing.xs,
+    },
+    emptyTitle: {
+      fontSize: 24,
+      fontWeight: '900',
+      color: palette.text,
+    },
+    emptyText: {
+      fontSize: theme.typography.body,
+      lineHeight: 21,
+      color: palette.textMuted,
+    },
+    emptyAction: {
+      marginTop: theme.spacing.sm,
+    },
+    list: {
+      marginTop: theme.spacing.lg,
+      gap: theme.spacing.md,
+    },
+  });
+};

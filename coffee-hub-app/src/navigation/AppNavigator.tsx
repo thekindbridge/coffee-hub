@@ -34,7 +34,7 @@ export function AppNavigator() {
     console.log('[AppNavigator] -> loading-screen');
     return (
       <RoleLoadingScreen
-        subtitle="Checking for a saved Coffee Hub email login."
+        subtitle="Checking for a saved COFFEE-HUB email login."
         title="Preparing your workspace"
       />
     );

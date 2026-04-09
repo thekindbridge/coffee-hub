@@ -1,10 +1,8 @@
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { DELIVERY_ROUTES } from '../constants/routes';
-import { DeliveryActiveOrdersScreen } from '../screens/DeliveryActiveOrdersScreen';
-import { DeliveryStatusUpdateScreen } from '../screens/DeliveryStatusUpdateScreen';
-import { DeliveryTrackingScreen } from '../screens/DeliveryTrackingScreen';
-import { ProfileScreen } from '../screens/ProfileScreen';
+import { DeliveryOrderDetailsScreen } from '../screens/delivery/DeliveryOrderDetailsScreen';
 import { useTheme } from '../theme';
+import { DeliveryTabNavigator } from './DeliveryTabNavigator';
 import type { DeliveryStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<DeliveryStackParamList>();
@@ -30,24 +28,14 @@ export function DeliveryStackNavigator() {
       }}
     >
       <Stack.Screen
-        name={DELIVERY_ROUTES.ACTIVE_ORDERS}
-        component={DeliveryActiveOrdersScreen}
+        name={DELIVERY_ROUTES.TABS}
+        component={DeliveryTabNavigator}
         options={{ headerShown: false }}
       />
       <Stack.Screen
-        name={DELIVERY_ROUTES.TRACKING}
-        component={DeliveryTrackingScreen}
-        options={{ title: 'Delivery Tracking' }}
-      />
-      <Stack.Screen
-        name={DELIVERY_ROUTES.STATUS_UPDATE}
-        component={DeliveryStatusUpdateScreen}
-        options={{ title: 'Status Update' }}
-      />
-      <Stack.Screen
-        name={DELIVERY_ROUTES.PROFILE}
-        component={ProfileScreen}
-        options={{ headerShown: false }}
+        name={DELIVERY_ROUTES.ORDER_DETAILS}
+        component={DeliveryOrderDetailsScreen}
+        options={{ title: 'Order details' }}
       />
     </Stack.Navigator>
   );

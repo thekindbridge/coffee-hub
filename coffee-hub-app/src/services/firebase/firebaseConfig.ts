@@ -4,12 +4,12 @@ import { getFirestore, initializeFirestore } from 'firebase/firestore';
 import type { Firestore } from 'firebase/firestore';
 
 const firebaseConfig = {
-  apiKey: 'AIzaSyBi7bFAifGAe2Si82WUxn0caebJ4MQky3g',
-  authDomain: 'coffee-hub-c8fdb.firebaseapp.com',
-  projectId: 'coffee-hub-c8fdb',
-  storageBucket: 'coffee-hub-c8fdb.firebasestorage.app',
-  messagingSenderId: '490208209104',
-  appId: '1:490208209104:web:0ec7e53fd1667afc89d6d5',
+  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY || 'AIzaSyBi7bFAifGAe2Si82WUxn0caebJ4MQky3g',
+  authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN || 'coffee-hub-c8fdb.firebaseapp.com',
+  projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID || 'coffee-hub-c8fdb',
+  storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET || 'coffee-hub-c8fdb.firebasestorage.app',
+  messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || '490208209104',
+  appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID || '1:490208209104:web:0ec7e53fd1667afc89d6d5',
 };
 
 let firebaseApp: FirebaseApp = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);

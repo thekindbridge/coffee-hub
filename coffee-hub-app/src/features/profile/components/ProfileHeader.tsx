@@ -48,7 +48,7 @@ export function ProfileHeader({
         </View>
 
         <View style={styles.copy}>
-          <Text style={styles.eyebrow}>Coffee Hub Profile</Text>
+          <Text style={styles.eyebrow}>COFFEE-HUB Profile</Text>
           <Text style={styles.name}>{name}</Text>
           <Text style={styles.meta} numberOfLines={2}>{metaLine}</Text>
         </View>

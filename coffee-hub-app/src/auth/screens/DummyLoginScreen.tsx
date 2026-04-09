@@ -66,7 +66,7 @@ export function DummyLoginScreen({ errorMessage = '' }: DummyLoginScreenProps) {
         style={styles.screen}
       >
         <View style={styles.card}>
-          <Text style={styles.eyebrow}>Coffee Hub Access</Text>
+          <Text style={styles.eyebrow}>COFFEE-HUB Access</Text>
           <Text style={styles.title}>Enter your email</Text>
           <Text style={styles.subtitle}>
             We check `admin_access/{'{email}'}` first, then `agents/{'{email}'}`, and everyone

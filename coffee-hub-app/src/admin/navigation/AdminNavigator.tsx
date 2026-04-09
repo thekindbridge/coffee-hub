@@ -4,11 +4,11 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import type { AdminStackParamList } from '../../navigation/types';
 import { ADMIN_ROUTES } from '../../constants/routes';
 import {
+  AdminDashboardScreen,
+  AdminMenuScreen,
+  AdminOffersScreen,
+  AdminOrdersScreen,
   AdminProfileScreen,
-  MenuManagementScreen,
-  OffersManagementScreen,
-  OrderManagementScreen,
-  OverviewScreen,
 } from '../screens';
 
 const Tab = createBottomTabNavigator<AdminStackParamList>();
@@ -40,10 +40,10 @@ export const AdminNavigator: React.FC = () => {
       screenOptions={({ route }) => ({
         headerShown: false,
         sceneStyle: {
-          backgroundColor: '#0D0D0D',
+          backgroundColor: '#171210',
         },
-        tabBarActiveTintColor: '#C48A5A',
-        tabBarInactiveTintColor: '#7E736C',
+        tabBarActiveTintColor: '#E2BE98',
+        tabBarInactiveTintColor: '#8F7C74',
         tabBarHideOnKeyboard: true,
         tabBarIcon: ({ color, focused, size }) => (
           <Ionicons
@@ -54,37 +54,41 @@ export const AdminNavigator: React.FC = () => {
         ),
         tabBarLabelStyle: {
           fontSize: 11,
-          fontWeight: '700',
+          fontWeight: '800',
           paddingBottom: 3,
         },
         tabBarStyle: {
-          backgroundColor: '#16110D',
-          borderTopColor: 'rgba(196, 138, 90, 0.18)',
-          borderTopWidth: 1,
+          backgroundColor: 'rgba(29, 22, 19, 0.96)',
+          borderTopWidth: 0,
           height: 74,
           paddingTop: 8,
           paddingBottom: 10,
+          shadowColor: '#080504',
+          shadowOffset: { width: 0, height: -8 },
+          shadowOpacity: 0.18,
+          shadowRadius: 18,
+          elevation: 16,
         },
       })}
     >
       <Tab.Screen
         name={ADMIN_ROUTES.DASHBOARD}
-        component={OverviewScreen}
-        options={{ tabBarLabel: 'Overview' }}
+        component={AdminDashboardScreen}
+        options={{ tabBarLabel: 'Home' }}
       />
       <Tab.Screen
         name={ADMIN_ROUTES.MENU_MANAGEMENT}
-        component={MenuManagementScreen}
+        component={AdminMenuScreen}
         options={{ tabBarLabel: 'Menu' }}
       />
       <Tab.Screen
         name={ADMIN_ROUTES.ORDERS_MANAGEMENT}
-        component={OrderManagementScreen}
+        component={AdminOrdersScreen}
         options={{ tabBarLabel: 'Orders' }}
       />
       <Tab.Screen
         name={ADMIN_ROUTES.OFFERS_MANAGEMENT}
-        component={OffersManagementScreen}
+        component={AdminOffersScreen}
         options={{ tabBarLabel: 'Offers' }}
       />
       <Tab.Screen

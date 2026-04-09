@@ -36,7 +36,7 @@ export async function getUserRole(email: string): Promise<UserRole> {
   } catch (error) {
     throw toAppServiceError(
       error,
-      'Unable to verify your Coffee Hub role right now.',
+      'Unable to verify your COFFEE-HUB role right now.',
       'network',
     );
   }
