@@ -26,7 +26,7 @@ export const LoginPage = ({
         </div>
 
         <h1 className="font-display text-[2.1rem] font-semibold tracking-[0.08em] text-[#fff8f1] sm:text-[2.45rem]">
-          COFFEE HUB
+          COFFEE-HUB
         </h1>
         <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.45em] text-[#f0cfad] sm:text-xs">
           Inkollu

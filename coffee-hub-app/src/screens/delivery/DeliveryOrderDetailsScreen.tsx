@@ -1,6 +1,7 @@
+import { Ionicons } from '@expo/vector-icons';
+import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useMemo } from 'react';
-import { useRoute } from '@react-navigation/native';
-import type { RouteProp } from '@react-navigation/native';
 import {
   Alert,
   Linking,
@@ -10,19 +11,34 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { CardContainer } from '../../components/ui/CardContainer';
+import { DeliveryTimeline } from '../../components/delivery/DeliveryTimeline';
+import { DeliveryTopBar } from '../../components/delivery/DeliveryTopBar';
+import { getDeliveryPalette, getDeliveryShadow } from '../../components/delivery/designSystem';
 import { PrimaryButton } from '../../components/ui/PrimaryButton';
+import { ScreenTransition } from '../../components/ui/ScreenTransition';
+import { useDeliveryAgentModule } from '../../delivery-agent';
 import {
   buildMapsSearchUrl,
   formatCurrencyAmount,
-  formatDateTime,
   normalizePhoneForTel,
-  useDeliveryAgentModule,
-} from '../../delivery-agent';
-import { useTheme, useThemedStyles } from '../../theme';
+} from '../../delivery-agent/utils/orderHelpers';
+import {
+  buildDeliveryTimeline,
+  estimateEtaMinutes,
+  formatDistanceKm,
+  formatEta,
+  getAgentToCustomerDistanceKm,
+  getDeliveryState,
+  getDeliveryStateLabel,
+  getDeliveryStatePrimaryAction,
+  getInitials,
+} from '../../delivery-agent/utils/presentation';
+import { useProfileData } from '../../features/profile/hooks/useProfileData';
 import type { DeliveryStackParamList } from '../../navigation/types';
+import { useTheme, useThemedStyles } from '../../theme';
 
 type DeliveryDetailsRoute = RouteProp<DeliveryStackParamList, 'DeliveryOrderDetails'>;
+type DeliveryNavigation = NativeStackNavigationProp<DeliveryStackParamList>;
 
 const openUrl = async (url: string, fallbackTitle: string) => {
   try {
@@ -34,18 +50,22 @@ const openUrl = async (url: string, fallbackTitle: string) => {
 };
 
 export function DeliveryOrderDetailsScreen() {
+  const navigation = useNavigation<DeliveryNavigation>();
   const route = useRoute<DeliveryDetailsRoute>();
+  const { theme } = useTheme();
+  const palette = getDeliveryPalette(theme);
   const styles = useThemedStyles(createStyles);
+  const { authPhotoUrl } = useProfileData();
   const {
-    agentLastTrackedLocation,
-    agentPermissionState,
-    agentTrackerStatus,
     currentDeliveryAgent,
     currentDeliveryOrder,
     currentDeliverySession,
+    currentUserDisplayName,
+    handleAcceptDelivery,
     handleEndDelivery,
     handleStartDelivery,
     isAgentTracking,
+    acceptingOrderDocId,
     isEndingDelivery,
     isStartingDelivery,
     orders,
@@ -55,210 +75,188 @@ export function DeliveryOrderDetailsScreen() {
     () => orders.find(candidate => candidate.doc_id === route.params.orderDocId) || null,
     [orders, route.params.orderDocId],
   );
-
-  const isCurrentActiveOrder = currentDeliveryOrder?.doc_id === order?.doc_id;
-  const hasCustomerLocation = Boolean(order?.customer_location);
-  const normalizedPhone = normalizePhoneForTel(order?.phone || '');
-  const hasAddress = Boolean(order?.address?.trim());
-  const canCallCustomer = Boolean(normalizedPhone);
-  const canOpenMaps = hasAddress;
-  const canStartTracking = Boolean(order && isCurrentActiveOrder && !isAgentTracking && hasCustomerLocation);
-  const canCompleteDelivery = Boolean(order && isCurrentActiveOrder);
-  const assignedAgentName =
-    currentDeliveryAgent?.name ||
-    order?.delivery_agent_name ||
-    'Assigned agent';
-  const assignedAgentPhone =
-    currentDeliveryAgent?.phone ||
-    order?.delivery_agent_phone ||
-    'Phone number not available';
-  const assignedAgentVehicle =
-    currentDeliveryAgent?.vehicle_type ||
-    order?.delivery_agent_vehicle ||
-    'Vehicle details not available';
-  const trackerToneStyle = agentTrackerStatus.lifecycle === 'watching' || agentTrackerStatus.lifecycle === 'completed'
-    ? styles.trackerStateSuccess
-    : agentTrackerStatus.lifecycle === 'starting' || agentTrackerStatus.lifecycle === 'restarting'
-      ? styles.trackerStateWarning
-      : agentTrackerStatus.lifecycle === 'error' || agentTrackerStatus.lifecycle === 'denied'
-        ? styles.trackerStateDanger
-        : styles.trackerStateNeutral;
-  const trackingAvailabilityText = hasCustomerLocation
-    ? 'Customer coordinates are ready for live route sharing.'
-    : 'Customer coordinates are missing, so live GPS cannot start yet.';
+  const initials = getInitials(currentDeliveryAgent?.name || currentUserDisplayName);
 
   if (!order) {
     return (
-      <SafeAreaView style={styles.screen} edges={['bottom']}>
-        <View style={styles.content}>
-          <CardContainer>
-            <Text style={styles.title}>Order not found</Text>
-            <Text style={styles.bodyText}>
-              This delivery may have moved out of the current agent feed already.
+      <SafeAreaView style={styles.screen} edges={['top']}>
+        <View style={styles.emptyWrap}>
+          <DeliveryTopBar
+            avatarUrl={authPhotoUrl}
+            initials={initials}
+            leadingIcon="arrow-back"
+            leadingLabel="Orders"
+            onLeadingPress={() => navigation.goBack()}
+          />
+
+          <View style={styles.emptyCard}>
+            <Text style={styles.emptyTitle}>Order not found</Text>
+            <Text style={styles.emptyText}>
+              This delivery may have already moved out of the current agent feed.
             </Text>
-          </CardContainer>
+          </View>
         </View>
       </SafeAreaView>
     );
   }
 
+  const isCurrentActiveOrder = currentDeliveryOrder?.doc_id === order.doc_id;
+  const distance = getAgentToCustomerDistanceKm(
+    order,
+    currentDeliveryAgent?.current_location || currentDeliveryAgent?.last_location || null,
+  );
+  const eta = estimateEtaMinutes(distance, isCurrentActiveOrder && isAgentTracking);
+  const phone = normalizePhoneForTel(order.phone || '');
+  const deliveryState = getDeliveryState(order, {
+    isCurrentOrder: isCurrentActiveOrder,
+    isTracking: isCurrentActiveOrder && isAgentTracking,
+    session: isCurrentActiveOrder ? currentDeliverySession : null,
+  });
+  const primaryActionLabel = getDeliveryStatePrimaryAction(deliveryState);
+  const timeline = buildDeliveryTimeline(
+    order,
+    isCurrentActiveOrder ? currentDeliverySession : null,
+    isCurrentActiveOrder && isAgentTracking,
+  );
+  const canStartTracking = isCurrentActiveOrder && !isAgentTracking && Boolean(order.customer_location);
+  const canCompleteDelivery = isCurrentActiveOrder;
+
   return (
-    <SafeAreaView style={styles.screen} edges={['bottom']}>
+    <SafeAreaView style={styles.screen} edges={['top']}>
       <ScrollView
+        style={styles.screen}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        <CardContainer>
-          <Text style={styles.eyebrow}>Order #{order.id}</Text>
-          <Text style={styles.title}>{order.customer_name || 'Customer order'}</Text>
-          <Text style={styles.bodyText}>
-            {order.address || 'No delivery address provided'}
-          </Text>
-          <Text style={styles.metaText}>Status: {order.status}</Text>
-          <Text style={styles.metaText}>Created: {formatDateTime(order.created_at)}</Text>
-          {order.delivery_delivered_at ? (
-            <Text style={styles.metaText}>
-              Delivered: {formatDateTime(order.delivery_delivered_at)}
-            </Text>
-          ) : null}
-        </CardContainer>
+        <ScreenTransition>
+          <DeliveryTopBar
+            avatarUrl={authPhotoUrl}
+            initials={initials}
+            leadingIcon="arrow-back"
+            leadingLabel="Orders"
+            onLeadingPress={() => navigation.goBack()}
+          />
 
-        <CardContainer style={styles.section}>
-          <Text style={styles.sectionTitle}>Customer</Text>
-          <Text style={styles.bodyText}>Phone: {order.phone || 'Not provided'}</Text>
-          <View style={styles.buttonColumn}>
+          <View style={[styles.heroCard, getDeliveryShadow(theme)]}>
+            <View style={styles.heroHeader}>
+              <View style={styles.heroCopy}>
+                <Text style={styles.heroEyebrow}>Order Details</Text>
+                <Text style={styles.heroTitle}>Order #{order.id}</Text>
+              </View>
+              <View style={styles.heroBadge}>
+                <Text style={styles.heroBadgeLabel}>{getDeliveryStateLabel(deliveryState)}</Text>
+              </View>
+            </View>
+
+            <View style={styles.heroMetricRow}>
+              <View style={styles.heroMetric}>
+                <Text style={styles.heroMetricLabel}>Distance</Text>
+                <Text style={styles.heroMetricValue}>{formatDistanceKm(distance)}</Text>
+              </View>
+              <View style={styles.heroMetric}>
+                <Text style={styles.heroMetricLabel}>ETA</Text>
+                <Text style={styles.heroMetricValue}>{formatEta(eta)}</Text>
+              </View>
+              <View style={styles.heroMetric}>
+                <Text style={styles.heroMetricLabel}>Total</Text>
+                <Text style={styles.heroMetricValue}>{formatCurrencyAmount(order.final_total ?? order.total_amount)}</Text>
+              </View>
+            </View>
+          </View>
+
+          <View style={[styles.sectionCard, getDeliveryShadow(theme)]}>
+            <Text style={styles.sectionTitle}>Delivery Timeline</Text>
+            <View style={styles.sectionBody}>
+              <DeliveryTimeline steps={timeline} />
+            </View>
+          </View>
+
+          <View style={[styles.sectionCard, getDeliveryShadow(theme)]}>
+            <Text style={styles.sectionTitle}>Customer Info</Text>
+            <View style={styles.sectionBody}>
+              <View style={styles.infoRow}>
+                <Ionicons name="person-outline" size={18} color={palette.blush} />
+                <Text style={styles.infoValue}>{order.customer_name || 'Coffee guest'}</Text>
+              </View>
+              <View style={styles.infoRow}>
+                <Ionicons name="call-outline" size={18} color={palette.blush} />
+                <Text style={styles.infoValue}>{order.phone || 'Phone unavailable'}</Text>
+              </View>
+            </View>
+          </View>
+
+          <View style={[styles.sectionCard, getDeliveryShadow(theme)]}>
+            <Text style={styles.sectionTitle}>Address</Text>
+            <Text style={styles.addressText}>{order.address || 'Address unavailable'}</Text>
+          </View>
+
+          <View style={[styles.sectionCard, getDeliveryShadow(theme)]}>
+            <Text style={styles.sectionTitle}>Items List</Text>
+            <View style={styles.itemsList}>
+              {(order.items || []).map(item => (
+                <View key={item.id} style={styles.itemRow}>
+                  <View style={styles.itemCopy}>
+                    <Text style={styles.itemName}>{item.name}</Text>
+                    <Text style={styles.itemQuantity}>x{item.quantity}</Text>
+                  </View>
+                  <Text style={styles.itemPrice}>
+                    {formatCurrencyAmount(item.price * item.quantity)}
+                  </Text>
+                </View>
+              ))}
+              {(order.items || []).length === 0 ? (
+                <Text style={styles.emptyItems}>Order items are still syncing from Firestore.</Text>
+              ) : null}
+            </View>
+          </View>
+
+          <View style={styles.actionPair}>
             <PrimaryButton
-              title="Call customer"
-              disabled={!canCallCustomer}
+              title="Contact"
+              disabled={!phone}
               onPress={() => {
-                if (!canCallCustomer) {
+                if (!phone) {
                   return;
                 }
 
-                void openUrl(`tel:${normalizedPhone}`, 'Call unavailable');
+                void openUrl(`tel:${phone}`, 'Call unavailable');
               }}
+              style={styles.actionButton}
               variant="secondary"
             />
             <PrimaryButton
-              title="Open maps"
-              disabled={!canOpenMaps}
+              title="Navigate"
               onPress={() => {
-                if (!canOpenMaps) {
-                  return;
-                }
-
                 void openUrl(buildMapsSearchUrl(order.address), 'Maps unavailable');
               }}
-              variant="secondary"
+              style={styles.actionButton}
             />
           </View>
-        </CardContainer>
 
-        <CardContainer style={styles.section}>
-          <Text style={styles.sectionTitle}>Items</Text>
-          <View style={styles.itemsList}>
-            {(order.items || []).map(item => (
-              <View key={item.id} style={styles.itemRow}>
-                <Text style={styles.itemName}>
-                  {item.name} x{item.quantity}
-                </Text>
-                <Text style={styles.itemPrice}>
-                  {formatCurrencyAmount(item.price * item.quantity)}
-                </Text>
-              </View>
-            ))}
-            {(order.items || []).length === 0 ? (
-              <Text style={styles.bodyText}>Order items are still loading.</Text>
-            ) : null}
-          </View>
-        </CardContainer>
-
-        <CardContainer style={styles.section}>
-          <Text style={styles.sectionTitle}>Payment summary</Text>
-          <View style={styles.summaryRow}>
-            <Text style={styles.bodyText}>Subtotal</Text>
-            <Text style={styles.bodyText}>{formatCurrencyAmount(order.subtotal ?? order.total_amount)}</Text>
-          </View>
-          <View style={styles.summaryRow}>
-            <Text style={styles.bodyText}>Delivery fee</Text>
-            <Text style={styles.bodyText}>{formatCurrencyAmount(order.delivery_fee ?? 0)}</Text>
-          </View>
-          <View style={styles.summaryRow}>
-            <Text style={styles.bodyText}>Total</Text>
-            <Text style={styles.totalValue}>{formatCurrencyAmount(order.final_total ?? order.total_amount)}</Text>
-          </View>
-        </CardContainer>
-
-        <CardContainer style={styles.section}>
-          <Text style={styles.sectionTitle}>Live session</Text>
-          <View style={[styles.trackerStateCard, trackerToneStyle]}>
-            <Text style={styles.trackerLabel}>Tracker status</Text>
-            <Text style={styles.trackerMessage}>{agentTrackerStatus.message}</Text>
-          </View>
-
-          <View style={styles.sessionGrid}>
-            <View style={styles.sessionTile}>
-              <Text style={styles.sessionTileLabel}>Session</Text>
-              <Text style={styles.sessionTileValue}>
-                {isCurrentActiveOrder ? (currentDeliverySession?.status || 'assigned') : 'completed'}
-              </Text>
-            </View>
-            <View style={styles.sessionTile}>
-              <Text style={styles.sessionTileLabel}>Permission</Text>
-              <Text style={styles.sessionTileValue}>{agentPermissionState}</Text>
-            </View>
-            <View style={styles.sessionTile}>
-              <Text style={styles.sessionTileLabel}>Tracking</Text>
-              <Text style={styles.sessionTileValue}>{isAgentTracking ? 'Live' : 'Idle'}</Text>
-            </View>
-            <View style={styles.sessionTile}>
-              <Text style={styles.sessionTileLabel}>Location</Text>
-              <Text style={styles.sessionTileValue}>{hasCustomerLocation ? 'Ready' : 'Missing'}</Text>
-            </View>
-          </View>
-
-          <Text style={styles.bodyText}>{trackingAvailabilityText}</Text>
-
-          {currentDeliverySession?.started_at ? (
-            <Text style={styles.metaText}>
-              Started: {formatDateTime(currentDeliverySession.started_at)}
-            </Text>
-          ) : null}
-          {currentDeliverySession?.completed_at ? (
-            <Text style={styles.metaText}>
-              Completed: {formatDateTime(currentDeliverySession.completed_at)}
-            </Text>
-          ) : null}
-          {agentLastTrackedLocation && isCurrentActiveOrder ? (
-            <Text style={styles.metaText}>
-              Last tracked point: {agentLastTrackedLocation.lat.toFixed(5)}, {agentLastTrackedLocation.lng.toFixed(5)}
-            </Text>
-          ) : null}
-        </CardContainer>
-
-        <CardContainer style={styles.section}>
-          <Text style={styles.sectionTitle}>Assigned partner</Text>
-          <Text style={styles.bodyText}>{assignedAgentName}</Text>
-          <Text style={styles.metaText}>Phone: {assignedAgentPhone}</Text>
-          <Text style={styles.metaText}>Vehicle: {assignedAgentVehicle}</Text>
-        </CardContainer>
-
-        {isCurrentActiveOrder ? (
-          <View style={styles.section}>
-            <View style={styles.buttonColumn}>
+          {deliveryState === 'assigned' ? (
+            <View style={styles.actionPair}>
               <PrimaryButton
-                title={isAgentTracking ? 'Tracking live' : 'Start Delivery'}
+                title={acceptingOrderDocId === order.doc_id ? 'Accepting...' : primaryActionLabel}
+                disabled={acceptingOrderDocId === order.doc_id}
+                onPress={() => {
+                  void handleAcceptDelivery(order.doc_id);
+                }}
+                style={styles.actionButton}
+              />
+            </View>
+          ) : null}
+
+          {isCurrentActiveOrder ? (
+            <View style={styles.actionPair}>
+              <PrimaryButton
+                title={isAgentTracking ? 'Tracking Live' : 'Start Delivery'}
                 disabled={!canStartTracking}
                 loading={isStartingDelivery}
                 onPress={() => {
                   void handleStartDelivery();
                 }}
+                style={styles.actionButton}
               />
-              {!hasCustomerLocation ? (
-                <Text style={styles.warningText}>
-                  Add customer coordinates to this order before starting live delivery tracking.
-                </Text>
-              ) : null}
               <PrimaryButton
                 title="Complete Delivery"
                 disabled={!canCompleteDelivery}
@@ -266,153 +264,204 @@ export function DeliveryOrderDetailsScreen() {
                 onPress={() => {
                   void handleEndDelivery(order.doc_id);
                 }}
+                style={styles.actionButton}
                 variant="secondary"
               />
             </View>
-          </View>
-        ) : null}
+          ) : null}
+
+          {!order.customer_location ? (
+            <Text style={styles.noteText}>
+              Customer coordinates are missing, so live GPS can&apos;t start until the order location is captured.
+            </Text>
+          ) : null}
+        </ScreenTransition>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: theme.colors.background,
-  },
-  content: {
-    padding: theme.spacing.lg,
-    paddingBottom: theme.spacing.xxl,
-  },
-  eyebrow: {
-    fontSize: theme.typography.eyebrow,
-    fontWeight: '800',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-    color: theme.colors.secondary,
-  },
-  title: {
-    marginTop: theme.spacing.xs,
-    fontSize: theme.typography.heading,
-    fontWeight: '800',
-    color: theme.colors.text,
-  },
-  section: {
-    marginTop: theme.spacing.lg,
-  },
-  sectionTitle: {
-    fontSize: theme.typography.subheading,
-    fontWeight: '800',
-    color: theme.colors.text,
-  },
-  bodyText: {
-    marginTop: theme.spacing.sm,
-    fontSize: theme.typography.body,
-    lineHeight: 22,
-    color: theme.colors.textMuted,
-  },
-  metaText: {
-    marginTop: theme.spacing.sm,
-    fontSize: theme.typography.caption,
-    color: theme.colors.primary,
-  },
-  warningText: {
-    marginTop: theme.spacing.sm,
-    fontSize: theme.typography.caption,
-    lineHeight: 18,
-    color: theme.colors.warning,
-  },
-  buttonColumn: {
-    gap: theme.spacing.sm,
-    marginTop: theme.spacing.md,
-  },
-  trackerStateCard: {
-    marginTop: theme.spacing.md,
-    borderRadius: theme.radius.md,
-    borderWidth: 1,
-    padding: theme.spacing.md,
-  },
-  trackerStateNeutral: {
-    backgroundColor: theme.colors.surfaceMuted,
-    borderColor: theme.colors.borderStrong,
-  },
-  trackerStateSuccess: {
-    backgroundColor: theme.colors.successSurface,
-    borderColor: theme.colors.success,
-  },
-  trackerStateWarning: {
-    backgroundColor: theme.colors.warningSurface,
-    borderColor: theme.colors.warning,
-  },
-  trackerStateDanger: {
-    backgroundColor: theme.colors.dangerSurface,
-    borderColor: theme.colors.danger,
-  },
-  trackerLabel: {
-    fontSize: theme.typography.caption,
-    fontWeight: '800',
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
-    color: theme.colors.textMuted,
-  },
-  trackerMessage: {
-    marginTop: theme.spacing.xs,
-    fontSize: theme.typography.body,
-    fontWeight: '700',
-    color: theme.colors.text,
-  },
-  sessionGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: theme.spacing.sm,
-    marginTop: theme.spacing.md,
-  },
-  sessionTile: {
-    minWidth: '47%',
-    flexGrow: 1,
-    borderRadius: theme.radius.md,
-    backgroundColor: theme.colors.surfaceMuted,
-    padding: theme.spacing.md,
-  },
-  sessionTileLabel: {
-    fontSize: theme.typography.caption,
-    color: theme.colors.textMuted,
-  },
-  sessionTileValue: {
-    marginTop: theme.spacing.xs,
-    fontSize: theme.typography.body,
-    fontWeight: '800',
-    color: theme.colors.text,
-  },
-  itemsList: {
-    marginTop: theme.spacing.md,
-    gap: theme.spacing.sm,
-  },
-  itemRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: theme.spacing.md,
-  },
-  itemName: {
-    flex: 1,
-    fontSize: theme.typography.body,
-    color: theme.colors.text,
-  },
-  itemPrice: {
-    fontSize: theme.typography.body,
-    fontWeight: '700',
-    color: theme.colors.text,
-  },
-  summaryRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: theme.spacing.md,
-    marginTop: theme.spacing.sm,
-  },
-  totalValue: {
-    fontSize: theme.typography.body,
-    fontWeight: '800',
-    color: theme.colors.primary,
-  },
-});
+const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => {
+  const palette = getDeliveryPalette(theme);
+
+  return StyleSheet.create({
+    screen: {
+      flex: 1,
+      backgroundColor: palette.background,
+    },
+    content: {
+      paddingHorizontal: 22,
+      paddingTop: 10,
+      paddingBottom: 42,
+      gap: 18,
+    },
+    heroCard: {
+      borderRadius: 28,
+      backgroundColor: palette.cardMuted,
+      padding: 18,
+      borderWidth: 1,
+      borderColor: palette.divider,
+      gap: 18,
+    },
+    heroHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      gap: 12,
+    },
+    heroCopy: {
+      flex: 1,
+      gap: 6,
+    },
+    heroEyebrow: {
+      fontSize: theme.typography.eyebrow,
+      fontWeight: '900',
+      letterSpacing: 1.2,
+      textTransform: 'uppercase',
+      color: palette.caramel,
+    },
+    heroTitle: {
+      fontSize: 24,
+      fontWeight: '900',
+      color: palette.text,
+    },
+    heroBadge: {
+      alignSelf: 'flex-start',
+      borderRadius: theme.radius.pill,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      backgroundColor: palette.chipStrong,
+    },
+    heroBadgeLabel: {
+      fontSize: 12,
+      fontWeight: '900',
+      color: palette.blush,
+      textTransform: 'uppercase',
+    },
+    heroMetricRow: {
+      flexDirection: 'row',
+      gap: 12,
+    },
+    heroMetric: {
+      flex: 1,
+      borderRadius: 18,
+      backgroundColor: palette.card,
+      padding: 14,
+      gap: 6,
+    },
+    heroMetricLabel: {
+      fontSize: 11,
+      fontWeight: '800',
+      textTransform: 'uppercase',
+      color: palette.textMuted,
+    },
+    heroMetricValue: {
+      fontSize: 14,
+      fontWeight: '900',
+      color: palette.text,
+    },
+    sectionCard: {
+      borderRadius: 26,
+      backgroundColor: palette.cardMuted,
+      padding: 18,
+      borderWidth: 1,
+      borderColor: palette.divider,
+      gap: 12,
+    },
+    sectionTitle: {
+      fontSize: 18,
+      fontWeight: '900',
+      color: palette.text,
+    },
+    sectionBody: {
+      gap: 12,
+    },
+    infoRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+    infoValue: {
+      flex: 1,
+      fontSize: 15,
+      lineHeight: 21,
+      color: palette.text,
+    },
+    addressText: {
+      fontSize: 15,
+      lineHeight: 23,
+      color: palette.text,
+    },
+    itemsList: {
+      gap: 12,
+    },
+    itemRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 12,
+    },
+    itemCopy: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    itemName: {
+      flex: 1,
+      fontSize: 15,
+      lineHeight: 21,
+      color: palette.text,
+    },
+    itemQuantity: {
+      fontSize: 14,
+      fontWeight: '700',
+      color: palette.textMuted,
+    },
+    itemPrice: {
+      fontSize: 15,
+      fontWeight: '800',
+      color: palette.text,
+    },
+    emptyItems: {
+      fontSize: 14,
+      lineHeight: 20,
+      color: palette.textMuted,
+    },
+    actionPair: {
+      flexDirection: 'row',
+      gap: 12,
+    },
+    actionButton: {
+      flex: 1,
+    },
+    noteText: {
+      fontSize: 13,
+      lineHeight: 20,
+      color: palette.warning,
+    },
+    emptyWrap: {
+      flex: 1,
+      paddingHorizontal: 22,
+      paddingTop: 10,
+    },
+    emptyCard: {
+      marginTop: 28,
+      borderRadius: 26,
+      backgroundColor: palette.cardMuted,
+      padding: 22,
+      borderWidth: 1,
+      borderColor: palette.divider,
+    },
+    emptyTitle: {
+      fontSize: 22,
+      fontWeight: '900',
+      color: palette.text,
+    },
+    emptyText: {
+      marginTop: 10,
+      fontSize: 15,
+      lineHeight: 22,
+      color: palette.textMuted,
+    },
+  });
+};

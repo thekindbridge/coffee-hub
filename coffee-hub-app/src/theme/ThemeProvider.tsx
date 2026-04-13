@@ -1,10 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Appearance } from 'react-native';
 import {
   createContext,
   useCallback,
-  useEffect,
   useContext,
+  useEffect,
   useMemo,
   useState,
   type PropsWithChildren,
@@ -12,6 +11,7 @@ import {
 import { getThemeByMode, type AppTheme, type ThemeMode } from './tokens';
 
 const THEME_STORAGE_KEY = 'coffee-hub-theme-mode';
+const LOCKED_THEME_MODE: ThemeMode = 'dark';
 
 type ThemeContextValue = {
   mode: ThemeMode;
@@ -22,40 +22,30 @@ type ThemeContextValue = {
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
-const getInitialThemeMode = (): ThemeMode => (
-  Appearance.getColorScheme() === 'dark' ? 'dark' : 'light'
-);
-
 export function ThemeProvider({ children }: PropsWithChildren) {
-  const [mode, setMode] = useState<ThemeMode>(getInitialThemeMode);
+  const [mode, setMode] = useState<ThemeMode>(LOCKED_THEME_MODE);
 
-  const setThemeMode = useCallback((nextMode: ThemeMode) => {
-    setMode(nextMode);
-    void AsyncStorage.setItem(THEME_STORAGE_KEY, nextMode).catch(() => {
+  const setThemeMode = useCallback((_nextMode: ThemeMode) => {
+    setMode(LOCKED_THEME_MODE);
+    void AsyncStorage.setItem(THEME_STORAGE_KEY, LOCKED_THEME_MODE).catch(() => {
       console.warn('Failed to persist theme mode.');
     });
   }, []);
 
   const toggleTheme = useCallback(() => {
-    setThemeMode(mode === 'dark' ? 'light' : 'dark');
-  }, [mode, setThemeMode]);
+    setThemeMode(LOCKED_THEME_MODE);
+  }, [setThemeMode]);
 
   useEffect(() => {
-    void AsyncStorage.getItem(THEME_STORAGE_KEY)
-      .then(storedMode => {
-        if (storedMode === 'light' || storedMode === 'dark') {
-          setMode(storedMode);
-        }
-      })
-      .catch(() => {
-        console.warn('Failed to restore theme mode.');
-      });
+    void AsyncStorage.setItem(THEME_STORAGE_KEY, LOCKED_THEME_MODE).catch(() => {
+      console.warn('Failed to persist theme mode.');
+    });
   }, []);
 
   const value = useMemo<ThemeContextValue>(() => ({
     mode,
     setThemeMode,
-    theme: getThemeByMode(mode),
+    theme: getThemeByMode(LOCKED_THEME_MODE),
     toggleTheme,
   }), [mode, setThemeMode, toggleTheme]);
 

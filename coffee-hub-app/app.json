@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "COFFEE-HUB",
+    "name": "Coffee Hub",
     "slug": "coffee-hub-app",
     "version": "1.0.0",
     "scheme": "coffeehub",
@@ -19,9 +19,8 @@
     "android": {
       "package": "com.pavankumar3232.coffeehubapp",
       "permissions": [
-        "ACCESS_FINE_LOCATION",
-        "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_FINE_LOCATION"
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
       ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/app-icon.png",

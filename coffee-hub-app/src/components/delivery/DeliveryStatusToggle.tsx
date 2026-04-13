@@ -1,6 +1,8 @@
+import { LinearGradient } from 'expo-linear-gradient';
 import { StyleSheet, Text, View } from 'react-native';
+import { useTheme } from '../../theme';
 import { ScalePressable } from '../ui/ScalePressable';
-import { useTheme, useThemedStyles } from '../../theme';
+import { getDeliveryPalette } from './designSystem';
 
 type DeliveryStatusToggleOption<TValue extends string> = {
   label: string;
@@ -18,10 +20,11 @@ export function DeliveryStatusToggle<TValue extends string>({
   options,
   value,
 }: DeliveryStatusToggleProps<TValue>) {
-  const styles = useThemedStyles(createStyles);
+  const { theme } = useTheme();
+  const palette = getDeliveryPalette(theme);
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: palette.cardMuted, borderColor: palette.divider }]}>
       {options.map(option => {
         const isActive = option.value === value;
 
@@ -33,11 +36,26 @@ export function DeliveryStatusToggle<TValue extends string>({
               onChange(option.value);
             }}
             scaleTo={0.97}
-            style={[styles.option, isActive ? styles.optionActive : null]}
+            style={styles.option}
           >
-            <Text style={[styles.optionLabel, isActive ? styles.optionLabelActive : null]}>
-              {option.label}
-            </Text>
+            {isActive ? (
+              <LinearGradient
+                colors={palette.primaryGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.activePill}
+              >
+                <Text style={[styles.label, { color: palette.background }]}>
+                  {option.label}
+                </Text>
+              </LinearGradient>
+            ) : (
+              <View style={styles.inactivePill}>
+                <Text style={[styles.label, { color: palette.text }]}>
+                  {option.label}
+                </Text>
+              </View>
+            )}
           </ScalePressable>
         );
       })}
@@ -45,32 +63,33 @@ export function DeliveryStatusToggle<TValue extends string>({
   );
 }
 
-const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => StyleSheet.create({
+const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    gap: theme.spacing.sm,
+    gap: 10,
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: 6,
   },
   option: {
     flex: 1,
-    minHeight: 44,
+  },
+  activePill: {
+    minHeight: 42,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: theme.radius.pill,
-    borderWidth: 1,
-    borderColor: theme.colors.borderStrong,
-    backgroundColor: theme.colors.surface,
-    paddingHorizontal: theme.spacing.md,
+    paddingHorizontal: 14,
   },
-  optionActive: {
-    backgroundColor: theme.colors.primary,
-    borderColor: theme.colors.primary,
+  inactivePill: {
+    minHeight: 42,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 14,
   },
-  optionLabel: {
-    fontSize: theme.typography.body,
+  label: {
+    fontSize: 14,
     fontWeight: '800',
-    color: theme.colors.textMuted,
-  },
-  optionLabelActive: {
-    color: theme.colors.onPrimary,
   },
 });

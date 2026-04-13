@@ -26,6 +26,7 @@ type UseOrderOperationsParams = {
   currentDeliveryAgent: DeliveryAgent | null;
   currentDeliveryOrder: Order | null;
   normalizedCurrentEmail: string;
+  orders: Order[];
   setAgentLastTrackedLocation: Dispatch<SetStateAction<DeliveryLocation | null>>;
   setAgentPermissionState: Dispatch<SetStateAction<AgentTrackerPermissionState>>;
   setAgentTrackerStatus: Dispatch<SetStateAction<AgentTrackerStatus>>;
@@ -46,15 +47,111 @@ export const useOrderOperations = ({
   currentDeliveryAgent,
   currentDeliveryOrder,
   normalizedCurrentEmail,
+  orders,
   setAgentLastTrackedLocation,
   setAgentPermissionState,
   setAgentTrackerStatus,
   setIsAgentTracking,
   trackedOrderIdRef,
 }: UseOrderOperationsParams) => {
+  const [acceptingOrderDocId, setAcceptingOrderDocId] = useState('');
   const [isStartingDelivery, setIsStartingDelivery] = useState(false);
   const [isEndingDelivery, setIsEndingDelivery] = useState(false);
   const [isUpdatingAvailability, setIsUpdatingAvailability] = useState(false);
+
+  const handleAcceptDelivery = async (orderDocId?: string) => {
+    const orderToAccept = orderDocId
+      ? orders.find(order => order.doc_id === orderDocId) || null
+      : currentDeliveryOrder;
+
+    if (!orderToAccept) {
+      Alert.alert('Order missing', 'Unable to find the order for this delivery.');
+      return;
+    }
+
+    if (orderToAccept.delivery_delivered_at || orderToAccept.status_code === 'DELIVERED') {
+      Alert.alert('Already completed', 'This order has already been marked as delivered.');
+      return;
+    }
+
+    if (orderToAccept.delivery_picked_at) {
+      return;
+    }
+
+    const agentId =
+      orderToAccept.delivery_agent_id ||
+      currentDeliveryAgent?.id ||
+      normalizedCurrentEmail;
+
+    if (!agentId) {
+      Alert.alert(
+        'Missing agent',
+        'Unable to identify the assigned delivery agent for this order.',
+      );
+      return;
+    }
+
+    const currentOrderId = currentDeliveryAgent?.current_order_id?.trim();
+    if (currentOrderId && currentOrderId !== orderToAccept.id) {
+      Alert.alert(
+        'Active delivery',
+        'Finish or release the current delivery before accepting another order.',
+      );
+      return;
+    }
+
+    setAcceptingOrderDocId(orderToAccept.doc_id);
+
+    try {
+      const db = getFirebaseDb();
+      const batch = writeBatch(db);
+
+      batch.set(
+        doc(db, 'orders', orderToAccept.doc_id),
+        {
+          deliveryPickedAt: serverTimestamp(),
+          orderStatus: 'OUT_FOR_DELIVERY',
+          pickedAt: serverTimestamp(),
+          status: 'OUT_FOR_DELIVERY',
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      );
+
+      batch.set(
+        doc(db, 'agents', agentId),
+        {
+          currentOrderId: orderToAccept.id,
+          isActive: true,
+          status: 'BUSY',
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      );
+
+      batch.set(
+        doc(db, 'delivery_sessions', orderToAccept.id),
+        {
+          agentId,
+          agentName:
+            currentDeliveryAgent?.name ||
+            orderToAccept.delivery_agent_name ||
+            'Assigned agent',
+          orderDocId: orderToAccept.doc_id,
+          orderId: orderToAccept.id,
+          status: 'assigned',
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      );
+      await batch.commit();
+    } catch (error) {
+      console.error('Failed to accept delivery', error);
+      Alert.alert('Accept error', 'Unable to accept this delivery right now.');
+    } finally {
+      setAcceptingOrderDocId('');
+    }
+  };
 
   const handleStartDelivery = async () => {
     if (!currentDeliveryOrder?.customer_location) {
@@ -312,6 +409,8 @@ export const useOrderOperations = ({
   };
 
   return {
+    acceptingOrderDocId,
+    handleAcceptDelivery,
     handleEndDelivery,
     handleStartDelivery,
     isEndingDelivery,

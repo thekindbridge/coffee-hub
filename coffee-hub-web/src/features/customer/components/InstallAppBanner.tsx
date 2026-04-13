@@ -23,7 +23,7 @@ export const InstallAppBanner = ({
         <div className="pr-2">
           <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-secondary">Install app</p>
           <p className="mt-1 text-sm leading-6 text-ink-muted">
-            Add Coffee HUB to your home screen for quicker reorders and a cleaner full-screen experience.
+            Add COFFEE-HUB to your home screen for quicker reorders and a cleaner full-screen experience.
           </p>
         </div>
         <div className="flex gap-2 self-end sm:self-auto">

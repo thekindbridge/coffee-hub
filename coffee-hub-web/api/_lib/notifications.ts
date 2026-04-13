@@ -492,7 +492,7 @@ export const flushQueuedNotifications = async (adminDb: Firestore) => {
         body: `${jobData.body || ''}`.trim(),
         preferenceKey: (jobData.preferenceKey as NotificationPreferenceKey) || 'orderUpdates',
         tag: `${jobData.tag || ''}`.trim(),
-        title: `${jobData.title || 'Coffee HUB'}`.trim(),
+        title: `${jobData.title || 'COFFEE-HUB'}`.trim(),
         url: `${jobData.url || '/'}`.trim() || '/',
       });
     }

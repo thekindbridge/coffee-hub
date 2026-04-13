@@ -10,7 +10,7 @@ type LoaderProps = {
 export const Loader = ({
   className = '',
   fullScreen = false,
-  label = 'Loading Coffee Hub...',
+  label = 'Loading COFFEE-HUB...',
   minHeightClassName,
 }: LoaderProps) => {
   const minHeight = fullScreen ? 'min-h-screen' : minHeightClassName ?? 'min-h-[280px]';

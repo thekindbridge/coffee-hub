@@ -116,7 +116,7 @@ export const StaffProfileDrawer = ({
   }
 
   const profileTitle = isAdmin ? 'Admin Profile' : 'Agent Profile';
-  const profileSubtitle = isAdmin ? 'Coffee Hub Management' : 'Delivery operations';
+  const profileSubtitle = isAdmin ? 'COFFEE-HUB Management' : 'Delivery operations';
   const nameLabel = isAdmin ? 'Name' : 'Agent Name';
 
   return (
@@ -241,7 +241,7 @@ export const StaffProfileDrawer = ({
                         </label>
                         <div className="flex items-center gap-2 rounded-[20px] border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-ink">
                           <ShieldCheck size={16} className="text-secondary" />
-                          Admin - Coffee Hub Management
+                          Admin - COFFEE-HUB Management
                         </div>
                       </div>
                       <div>
@@ -255,7 +255,7 @@ export const StaffProfileDrawer = ({
                             className="coffee-input pl-10"
                             value={staffProfileDraft.adminLocation}
                             onChange={event => onStaffProfileDraftChange({ ...staffProfileDraft, adminLocation: event.target.value })}
-                            placeholder="Coffee Hub Inkollu"
+                            placeholder="COFFEE-HUB Inkollu"
                           />
                         </div>
                       </div>

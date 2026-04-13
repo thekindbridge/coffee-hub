@@ -2,7 +2,7 @@
   "name": "coffee-hub-web",
   "private": true,
   "version": "0.0.0",
-  "description": "Coffee HUB web ordering app and Vercel APIs",
+  "description": "COFFEE-HUB web ordering app and Vercel APIs",
   "type": "module",
   "engines": {
     "node": "20.x"

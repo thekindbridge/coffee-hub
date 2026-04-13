@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import {
   ActivityIndicator,
+  Image,
   Modal,
   Pressable,
   ScrollView,
@@ -10,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useAuthContext } from '../../auth/context/AuthContext';
 import { AppHeader } from '../../components/customer/AppHeader';
 import { GlassSurface } from '../../components/ui/GlassSurface';
 import { PrimaryButton } from '../../components/ui/PrimaryButton';
@@ -149,6 +151,7 @@ function PickerStepper({
 
 export function AdminProfileScreen() {
   const { currentUserEmail, normalizedCurrentEmail, user } = useAuth();
+  const { logout } = useAuthContext();
   const { profile, profileDisplayName, authPhotoUrl, primaryAddress } = useProfileData();
   const { isMainAdmin } = useAccessRoles(currentUserEmail, normalizedCurrentEmail);
   const {
@@ -168,6 +171,7 @@ export function AdminProfileScreen() {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [pickerState, setPickerState] = useState<TimePickerState | null>(null);
+  const [logoutError, setLogoutError] = useState('');
   const [saveError, setSaveError] = useState('');
   const [saveSuccess, setSaveSuccess] = useState('');
 
@@ -312,7 +316,7 @@ export function AdminProfileScreen() {
                   style={styles.avatarGlass}
                 >
                   {authPhotoUrl ? (
-                    <Text style={styles.avatarText}>{initials}</Text>
+                    <Image source={{ uri: authPhotoUrl }} style={styles.avatarImage} />
                   ) : (
                     <Text style={styles.avatarText}>{initials}</Text>
                   )}
@@ -437,6 +441,36 @@ export function AdminProfileScreen() {
               onPress={resetDraft}
               disabled={!hasUnsavedChanges}
             />
+
+            <ScalePressable
+              accessibilityRole="button"
+              onPress={() => {
+                setLogoutError('');
+                void logout().catch(error => {
+                  const message = error instanceof Error
+                    ? error.message
+                    : 'Unable to log out right now.';
+                  setLogoutError(message);
+                });
+              }}
+              style={styles.logoutButton}
+            >
+              <Ionicons color="#FFF3EE" name="log-out-outline" size={18} />
+              <Text style={styles.logoutButtonText}>Logout</Text>
+            </ScalePressable>
+
+            {logoutError ? (
+              <View style={styles.messageWrap}>
+                <GlassSurface
+                  depth="card"
+                  intensity={64}
+                  overlayColor="rgba(225, 161, 141, 0.14)"
+                  style={styles.messageCard}
+                >
+                  <Text style={styles.messageTextDanger}>{logoutError}</Text>
+                </GlassSurface>
+              </View>
+            ) : null}
           </View>
         </ScrollView>
       </ScreenTransition>
@@ -596,6 +630,11 @@ const styles = StyleSheet.create({
     borderRadius: 44,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
   },
   avatarText: {
     color: adminPalette.text,
@@ -706,6 +745,20 @@ const styles = StyleSheet.create({
   },
   timingWrap: {
     gap: 14,
+  },
+  logoutButton: {
+    minHeight: 56,
+    borderRadius: 20,
+    backgroundColor: '#4F1212',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+  },
+  logoutButtonText: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#FFF3EE',
   },
   messageWrap: {
     ...adminShadow,

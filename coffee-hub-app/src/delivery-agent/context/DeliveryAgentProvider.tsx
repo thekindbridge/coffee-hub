@@ -11,8 +11,10 @@ import { useDeliveryStatus, type DeliveryStatusState } from '../hooks/useDeliver
 
 type DeliveryAgentContextValue = DeliveryOrdersState &
   DeliveryStatusState & {
+    acceptingOrderDocId: string;
     currentUserDisplayName: string;
     currentUserEmail: string;
+    handleAcceptDelivery: (orderDocId?: string) => Promise<void>;
     isDeliveryAgent: boolean;
     isEndingDelivery: boolean;
     isStartingDelivery: boolean;
@@ -43,6 +45,7 @@ export function DeliveryAgentProvider({ auth, children }: DeliveryAgentProviderP
     currentDeliveryAgent: ordersState.currentDeliveryAgent,
     currentDeliveryOrder: ordersState.currentDeliveryOrder,
     normalizedCurrentEmail: auth.normalizedCurrentEmail,
+    orders: ordersState.orders,
     setAgentLastTrackedLocation: statusState.setAgentLastTrackedLocation,
     setAgentPermissionState: statusState.setAgentPermissionState,
     setAgentTrackerStatus: statusState.setAgentTrackerStatus,

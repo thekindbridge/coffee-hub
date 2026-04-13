@@ -17,11 +17,9 @@ import {
 import { CardContainer } from '../components/ui/CardContainer';
 import { PrimaryButton } from '../components/ui/PrimaryButton';
 import { RoleScreenFrame } from '../features/roles/components/RoleScreenFrame';
-import { ADMIN_ROUTES } from '../constants/routes';
 import { useAdminMenuManager } from '../hooks/useAdminMenuManager';
 import type { AdminStackParamList } from '../navigation/types';
 import { useTheme, useThemedStyles } from '../theme';
-import { formatCurrency } from '../utils/formatCurrency';
 
 type AddEditMenuNavigation = NativeStackNavigationProp<AdminStackParamList>;
 
@@ -47,7 +45,6 @@ export function AddEditMenuScreen() {
 
   const {
     menuForm,
-    editingId,
     isSaving,
     managerError,
     isFormValid,

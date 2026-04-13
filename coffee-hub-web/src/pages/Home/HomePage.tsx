@@ -70,7 +70,7 @@ export const HomePage = ({
           <div className="flex items-center gap-2">
             <Sparkles size={14} className="text-secondary" />
             <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-secondary">
-              Why customers love Coffee Hub
+              Why customers love COFFEE-HUB
             </p>
           </div>
           <div className="mt-4 grid grid-cols-2 gap-3">

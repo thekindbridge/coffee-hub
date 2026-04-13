@@ -109,7 +109,7 @@ export default function AdminDashboard({
         {activeSection === 'dashboard' && (
           <section className="space-y-4">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-secondary">Coffee HUB admin</p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-secondary">COFFEE-HUB admin</p>
               <h2 className="mt-1 text-[1.55rem] font-semibold text-accent">Operations overview</h2>
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">

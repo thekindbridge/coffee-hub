@@ -1,12 +1,11 @@
-import type { ComponentProps } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useEffect, useMemo, useState } from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
 import { animateLayout, useTheme, useThemedStyles } from '../../theme';
 import type { MenuItem } from '../../types';
 import { formatCurrency } from '../../utils/formatCurrency';
-import { getAmbientShadow, getCustomerPalette } from '../customer/designSystem';
-import { GlassSurface } from './GlassSurface';
+import { getCustomerPalette } from '../customer/designSystem';
 import { ScalePressable } from './ScalePressable';
 
 export type ProductCardProps = {
@@ -18,61 +17,111 @@ export type ProductCardProps = {
   shopAvailabilityMessage?: string;
 };
 
-type InfoPillProps = {
-  icon: ComponentProps<typeof Ionicons>['name'];
-  label: string;
-  tone?: 'neutral' | 'veg' | 'nonVeg';
-};
-
-function InfoPill({
-  icon,
-  label,
-  tone = 'neutral',
-}: InfoPillProps) {
-  const { theme } = useTheme();
-  const palette = getCustomerPalette(theme);
-  const styles = useThemedStyles(createStyles);
-
-  return (
-    <View
-      style={[
-        styles.infoPill,
-        tone === 'veg'
-          ? styles.infoPillVeg
-          : tone === 'nonVeg'
-            ? styles.infoPillNonVeg
-            : null,
-      ]}
-    >
-      <Ionicons
-        name={icon}
-        size={12}
-        color={
-          tone === 'veg'
-            ? palette.success
-            : tone === 'nonVeg'
-              ? palette.danger
-              : palette.caramel
-        }
-      />
-      <Text style={styles.infoPillText}>{label}</Text>
-    </View>
-  );
-}
-
 type ActionControlProps = {
+  actionLabel: string;
   item: MenuItem;
-  layout: 'horizontal' | 'vertical';
   quantity: number;
-  isShopOpen: boolean;
+  isItemAvailable: boolean;
+  canOrder: boolean;
   onAddToCart: (item: MenuItem, delta: number) => void;
 };
 
+const MENU_ACCENT = '#F2BE8C';
+const MENU_ACCENT_TEXT = '#3A2417';
+const LOW_QUALITY_IMAGE_MARKERS = [
+  'chatgpt_image',
+  'placeholder',
+  'dummy',
+  'mock',
+  'sample',
+  'cartoon',
+  'via.placeholder',
+  'placehold.co',
+];
+const PREMIUM_FALLBACK_IMAGES = {
+  coffee: 'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?auto=format&fit=crop&w=900&q=80',
+  latte: 'https://images.unsplash.com/photo-1517701604599-bb29b565090c?auto=format&fit=crop&w=900&q=80',
+  iced: 'https://images.unsplash.com/photo-1517705008128-361805f42e86?auto=format&fit=crop&w=900&q=80',
+  espresso: 'https://images.unsplash.com/photo-1510591509098-f4fdc6d0ff04?auto=format&fit=crop&w=900&q=80',
+  dessert: 'https://images.unsplash.com/photo-1515037893149-de7f840978e2?auto=format&fit=crop&w=900&q=80',
+  tea: 'https://images.unsplash.com/photo-1544787219-7f47ccb76574?auto=format&fit=crop&w=900&q=80',
+  snack: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=900&q=80',
+} as const;
+
+const needsPremiumFallback = (url: string) => {
+  const normalized = url.trim().toLowerCase();
+
+  if (!normalized) {
+    return true;
+  }
+
+  return LOW_QUALITY_IMAGE_MARKERS.some(marker => normalized.includes(marker))
+    || normalized.endsWith('.svg')
+    || normalized.endsWith('.gif')
+    || (normalized.endsWith('.png') && !normalized.includes('unsplash'));
+};
+
+const getPremiumFallbackImage = (item: MenuItem) => {
+  const descriptor = `${item.name} ${item.category}`.toLowerCase();
+
+  if (
+    descriptor.includes('latte')
+    || descriptor.includes('cappuccino')
+    || descriptor.includes('mocha')
+    || descriptor.includes('macchiato')
+  ) {
+    return PREMIUM_FALLBACK_IMAGES.latte;
+  }
+
+  if (
+    descriptor.includes('iced')
+    || descriptor.includes('cold')
+    || descriptor.includes('frappe')
+    || descriptor.includes('shake')
+  ) {
+    return PREMIUM_FALLBACK_IMAGES.iced;
+  }
+
+  if (
+    descriptor.includes('espresso')
+    || descriptor.includes('americano')
+  ) {
+    return PREMIUM_FALLBACK_IMAGES.espresso;
+  }
+
+  if (
+    descriptor.includes('dessert')
+    || descriptor.includes('cake')
+    || descriptor.includes('tart')
+    || descriptor.includes('cookie')
+    || descriptor.includes('brownie')
+  ) {
+    return PREMIUM_FALLBACK_IMAGES.dessert;
+  }
+
+  if (descriptor.includes('tea')) {
+    return PREMIUM_FALLBACK_IMAGES.tea;
+  }
+
+  if (
+    descriptor.includes('snack')
+    || descriptor.includes('croissant')
+    || descriptor.includes('sandwich')
+  ) {
+    return PREMIUM_FALLBACK_IMAGES.snack;
+  }
+
+  return descriptor.includes('coffee')
+    ? PREMIUM_FALLBACK_IMAGES.coffee
+    : PREMIUM_FALLBACK_IMAGES.latte;
+};
+
 function ActionControl({
+  actionLabel,
   item,
-  layout,
   quantity,
-  isShopOpen,
+  isItemAvailable,
+  canOrder,
   onAddToCart,
 }: ActionControlProps) {
   const { theme } = useTheme();
@@ -89,43 +138,39 @@ function ActionControl({
       <View style={styles.stepper}>
         <ScalePressable
           accessibilityRole="button"
-          disabled={!isShopOpen}
           onPress={() => updateQuantity(-1)}
-          style={[
-            styles.stepperButton,
-            styles.stepperButtonSecondary,
-            !isShopOpen ? styles.disabled : null,
-          ]}
+          style={styles.stepperButton}
         >
-          <Ionicons name="remove" size={16} color={palette.text} />
+          <View style={styles.stepperButtonSecondary}>
+            <Ionicons name="remove" size={16} color={palette.text} />
+          </View>
         </ScalePressable>
 
         <Text style={styles.stepperValue}>{quantity}</Text>
 
         <ScalePressable
           accessibilityRole="button"
-          disabled={!isShopOpen}
+          disabled={!canOrder}
           onPress={() => updateQuantity(1)}
-          style={[styles.stepperButtonWrap, !isShopOpen ? styles.disabled : null]}
+          style={[styles.stepperButtonWrap, !canOrder ? styles.disabled : null]}
         >
           <LinearGradient
-            colors={palette.ctaGradient}
+            colors={canOrder ? [MENU_ACCENT, '#D9A56F'] : palette.ctaGradientDisabled}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.stepperButtonPrimary}
           >
-            <Ionicons name="add" size={16} color={palette.background} />
+            <Ionicons name="add" size={16} color={MENU_ACCENT_TEXT} />
           </LinearGradient>
         </ScalePressable>
       </View>
     );
   }
 
-  if (!isShopOpen) {
+  if (!canOrder) {
     return (
-      <View style={[styles.closedButton, layout === 'vertical' ? styles.closedButtonVertical : null]}>
-        <Ionicons name="lock-closed-outline" size={14} color={palette.textMuted} />
-        <Text style={styles.closedButtonText}>Store Closed</Text>
+      <View style={styles.closedButton}>
+        <Text style={styles.closedButtonText}>{actionLabel}</Text>
       </View>
     );
   }
@@ -134,18 +179,18 @@ function ActionControl({
     <ScalePressable
       accessibilityRole="button"
       onPress={() => updateQuantity(1)}
-      style={layout === 'vertical' ? styles.iconButtonWrap : styles.addButtonWrap}
+      style={[
+        styles.addButtonWrap,
+        !isItemAvailable ? styles.disabled : null,
+      ]}
     >
       <LinearGradient
-        colors={palette.ctaGradient}
+        colors={[MENU_ACCENT, '#D9A56F']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
-        style={layout === 'vertical' ? styles.iconButton : styles.addButton}
+        style={styles.addButton}
       >
-        <Ionicons name="add" size={16} color={palette.background} />
-        {layout === 'horizontal' ? (
-          <Text style={styles.addButtonText}>Add</Text>
-        ) : null}
+        <Ionicons name="add" size={18} color={MENU_ACCENT_TEXT} />
       </LinearGradient>
     </ScalePressable>
   );
@@ -153,134 +198,100 @@ function ActionControl({
 
 export function ProductCard({
   item,
-  layout = 'vertical',
   quantity,
   isShopOpen = true,
   onAddToCart,
   shopAvailabilityMessage = '',
 }: ProductCardProps) {
+  const [hasImageError, setHasImageError] = useState(false);
   const { theme } = useTheme();
   const palette = getCustomerPalette(theme);
   const styles = useThemedStyles(createStyles);
-  const hasImage = item.image_url.trim().length > 0;
-  const isHorizontal = layout === 'horizontal';
-  const spiceLevel = Math.max(0, item.spice_level);
-  const imageTintColors: readonly [string, string, string] = theme.isDark
-    ? ['rgba(10, 8, 7, 0.02)', 'rgba(10, 8, 7, 0.22)', 'rgba(10, 8, 7, 0.84)']
-    : ['rgba(23, 18, 16, 0.02)', 'rgba(23, 18, 16, 0.14)', 'rgba(23, 18, 16, 0.7)'];
-  const imageSheenColors: readonly [string, string, string] = theme.isDark
-    ? ['rgba(255, 255, 255, 0.18)', 'rgba(255, 255, 255, 0.04)', 'rgba(255, 255, 255, 0)']
-    : ['rgba(255, 255, 255, 0.34)', 'rgba(255, 255, 255, 0.08)', 'rgba(255, 255, 255, 0)'];
+  const isItemAvailable = item.is_available !== false;
+  const canOrder = isShopOpen && isItemAvailable;
+  const statusLabel = !isItemAvailable ? 'Unavailable' : !isShopOpen ? 'Store Closed' : '';
+  const details = (item.description || 'Small-batch coffee crafted for your next ritual.').trim().replace(/\s+/g, ' ');
+
+  useEffect(() => {
+    setHasImageError(false);
+  }, [item.id, item.image_url]);
+
+  const resolvedImage = useMemo(() => {
+    if (hasImageError || needsPremiumFallback(item.image_url)) {
+      return getPremiumFallbackImage(item);
+    }
+
+    return item.image_url.trim();
+  }, [hasImageError, item]);
 
   return (
-    <GlassSurface
-      depth="card"
-      intensity={62}
-      style={[
-        styles.card,
-        styles.cardShadow,
-        isHorizontal ? styles.cardHorizontal : styles.cardVertical,
-      ]}
-    >
-      <View
-        style={[
-          styles.mediaWrap,
-          isHorizontal ? styles.mediaWrapHorizontal : styles.mediaWrapVertical,
-        ]}
-      >
-        <View
-          style={[
-            styles.imageBleed,
-            isHorizontal ? styles.imageBleedHorizontal : styles.imageBleedVertical,
-          ]}
-        >
-          {hasImage ? (
-            <Image
-              source={{ uri: item.image_url }}
-              style={styles.image}
-              resizeMode="cover"
-            />
-          ) : (
-            <View style={[styles.image, styles.imageFallback]}>
-              <Ionicons name="cafe-outline" size={28} color={palette.textMuted} />
-            </View>
-          )}
+    <View style={styles.card}>
+      <View style={styles.mediaWrap}>
+        <Image
+          source={{ uri: resolvedImage }}
+          style={styles.image}
+          resizeMode="cover"
+          onError={() => setHasImageError(true)}
+        />
 
-          <LinearGradient
-            colors={imageTintColors}
-            locations={[0, 0.45, 1]}
-            start={{ x: 0.5, y: 0 }}
-            end={{ x: 0.5, y: 1 }}
-            style={styles.imageTint}
-          />
+        <LinearGradient
+          colors={['rgba(14, 11, 9, 0.04)', 'rgba(14, 11, 9, 0.22)', 'rgba(14, 11, 9, 0.46)']}
+          locations={[0, 0.5, 1]}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={styles.imageOverlay}
+        />
 
-          <LinearGradient
-            colors={imageSheenColors}
-            locations={[0, 0.35, 1]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.imageSheen}
-          />
-
-          <GlassSurface
-            intensity={46}
-            overlayColor="rgba(23, 18, 16, 0.42)"
-            style={styles.ratingBadge}
-          >
-            <Ionicons name="star" size={12} color={palette.gold} />
-            <Text style={styles.ratingText}>{item.rating.toFixed(1)}</Text>
-          </GlassSurface>
+        <View style={styles.ratingBadge}>
+          <Ionicons name="star" size={12} color={palette.gold} />
+          <Text style={styles.ratingText}>{item.rating.toFixed(1)}</Text>
         </View>
 
-        {!isShopOpen ? (
-          <View style={styles.closedOverlay}>
-            <View style={styles.closedPill}>
-              <Ionicons name="lock-closed-outline" size={14} color={palette.text} />
-              <Text style={styles.closedText}>Store Closed</Text>
-            </View>
-          </View>
-        ) : null}
+        <View style={styles.availabilityBadge}>
+          <View
+            style={[
+              styles.availabilityDot,
+              canOrder ? styles.availabilityDotActive : styles.availabilityDotInactive,
+            ]}
+          />
+        </View>
       </View>
 
-      <View style={[styles.content, isHorizontal ? styles.contentHorizontal : null]}>
-        <View style={styles.infoRow}>
-          <InfoPill
-            icon={item.is_veg ? 'leaf-outline' : 'restaurant-outline'}
-            label={item.is_veg ? 'Veg' : 'Non-veg'}
-            tone={item.is_veg ? 'veg' : 'nonVeg'}
-          />
-          <InfoPill icon="water-outline" label={`${spiceLevel}/5 spice`} />
+      <View style={styles.content}>
+        <View style={styles.copyBlock}>
+          <Text style={styles.name} numberOfLines={2}>
+            {item.name}
+          </Text>
+          <Text style={styles.description} numberOfLines={2}>
+            {details}
+          </Text>
         </View>
-
-        <Text style={styles.name} numberOfLines={isHorizontal ? 1 : 2}>
-          {item.name}
-        </Text>
-        <Text style={styles.description} numberOfLines={isHorizontal ? 2 : 3}>
-          {item.description || 'Freshly brewed and plated for a slower, smoother coffee ritual.'}
-        </Text>
 
         <View style={styles.footer}>
           <View style={styles.priceBlock}>
-            <Text style={styles.priceLabel}>Price</Text>
-            <Text style={styles.price}>{formatCurrency(item.price)}</Text>
+            <Text numberOfLines={1} style={styles.price}>
+              {formatCurrency(item.price)}
+            </Text>
+            {!canOrder && shopAvailabilityMessage ? (
+              <Text style={styles.availabilityMessage} numberOfLines={2}>
+                {statusLabel === 'Store Closed' ? shopAvailabilityMessage : statusLabel}
+              </Text>
+            ) : null}
           </View>
 
-          <ActionControl
-            item={item}
-            layout={layout}
-            quantity={quantity}
-            isShopOpen={isShopOpen}
-            onAddToCart={onAddToCart}
-          />
+          <View style={[styles.actionSlot, quantity > 0 ? styles.actionSlotExpanded : null]}>
+            <ActionControl
+              actionLabel={statusLabel || 'Store Closed'}
+              item={item}
+              quantity={quantity}
+              isItemAvailable={isItemAvailable}
+              canOrder={canOrder}
+              onAddToCart={onAddToCart}
+            />
+          </View>
         </View>
-
-        {!isShopOpen && shopAvailabilityMessage ? (
-          <Text style={styles.availabilityMessage} numberOfLines={2}>
-            {shopAvailabilityMessage}
-          </Text>
-        ) : null}
       </View>
-    </GlassSurface>
+    </View>
   );
 }
 
@@ -289,264 +300,190 @@ const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => {
 
   return StyleSheet.create({
     card: {
-      borderRadius: theme.radius.hero,
-      overflow: 'hidden',
-    },
-    cardShadow: getAmbientShadow(theme),
-    cardHorizontal: {
-      minHeight: 176,
-      flexDirection: 'row',
-    },
-    cardVertical: {
-      minHeight: 318,
+      minHeight: 310,
+      borderRadius: 24,
+      backgroundColor: palette.surfaceLow,
+      padding: 12,
+      gap: 14,
+      shadowColor: '#000000',
+      shadowOffset: { width: 0, height: 20 },
+      shadowOpacity: 0.4,
+      shadowRadius: 40,
+      elevation: 16,
     },
     mediaWrap: {
       position: 'relative',
-      overflow: 'hidden',
-    },
-    mediaWrapHorizontal: {
-      width: 132,
-      paddingVertical: theme.spacing.xs,
-      paddingLeft: theme.spacing.xs,
-    },
-    mediaWrapVertical: {
       width: '100%',
-      height: 190,
-      paddingHorizontal: theme.spacing.xs,
-    },
-    imageBleed: {
-      flex: 1,
+      height: 166,
+      borderRadius: 20,
       overflow: 'hidden',
-      backgroundColor: palette.surfaceHighest,
-    },
-    imageBleedHorizontal: {
-      borderRadius: 24,
-      marginBottom: -theme.spacing.xs,
-    },
-    imageBleedVertical: {
-      borderRadius: 26,
-      marginLeft: -theme.spacing.xs,
-      marginRight: -theme.spacing.sm,
+      backgroundColor: palette.surfaceHigh,
     },
     image: {
       width: '100%',
       height: '100%',
-      backgroundColor: palette.surfaceHighest,
-      transform: [{ scale: 1.05 }],
+      backgroundColor: palette.surfaceHigh,
+      transform: [{ scale: 1.08 }],
     },
-    imageFallback: {
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    imageTint: {
-      ...StyleSheet.absoluteFillObject,
-    },
-    imageSheen: {
+    imageOverlay: {
       ...StyleSheet.absoluteFillObject,
     },
     ratingBadge: {
       position: 'absolute',
-      top: 14,
-      right: 14,
+      top: 12,
+      left: 12,
       flexDirection: 'row',
       alignItems: 'center',
       gap: 4,
-      borderRadius: theme.radius.pill,
-      paddingHorizontal: 10,
+      borderRadius: 999,
+      backgroundColor: 'rgba(14, 11, 9, 0.76)',
+      paddingHorizontal: 9,
       paddingVertical: 6,
-      shadowColor: theme.isDark ? '#080605' : '#3B261F',
-      shadowOffset: { width: 0, height: 10 },
-      shadowOpacity: theme.isDark ? 0.24 : 0.12,
-      shadowRadius: 18,
-      elevation: 6,
     },
     ratingText: {
       fontSize: theme.typography.caption,
       fontWeight: '800',
-      color: '#F8F4EF',
+      color: '#FFF4EB',
     },
-    closedOverlay: {
-      ...StyleSheet.absoluteFillObject,
+    availabilityBadge: {
+      position: 'absolute',
+      top: 12,
+      right: 12,
+      width: 20,
+      height: 20,
+      borderRadius: 10,
+      backgroundColor: 'rgba(14, 11, 9, 0.72)',
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: palette.surfaceOverlay,
     },
-    closedPill: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 8,
-      borderRadius: theme.radius.pill,
-      backgroundColor: 'rgba(23, 18, 16, 0.72)',
-      paddingHorizontal: 14,
-      paddingVertical: 8,
+    availabilityDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
     },
-    closedText: {
-      fontSize: theme.typography.eyebrow,
-      fontWeight: '800',
-      textTransform: 'uppercase',
-      color: palette.text,
+    availabilityDotActive: {
+      backgroundColor: '#52C97E',
+    },
+    availabilityDotInactive: {
+      backgroundColor: '#E35D56',
     },
     content: {
       flex: 1,
-      paddingHorizontal: theme.spacing.md,
-      paddingTop: theme.spacing.sm,
-      paddingBottom: theme.spacing.md,
-    },
-    contentHorizontal: {
       justifyContent: 'space-between',
+      gap: 14,
     },
-    infoRow: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: 6,
-    },
-    infoPill: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 4,
-      borderRadius: theme.radius.pill,
-      backgroundColor: palette.surfaceGlass,
-      paddingHorizontal: 8,
-      paddingVertical: 5,
-    },
-    infoPillVeg: {
-      backgroundColor: palette.successSurface,
-    },
-    infoPillNonVeg: {
-      backgroundColor: palette.dangerSurface,
-    },
-    infoPillText: {
-      fontSize: theme.typography.caption,
-      fontWeight: '700',
-      color: palette.textMuted,
+    copyBlock: {
+      gap: 8,
     },
     name: {
-      marginTop: theme.spacing.sm,
-      fontSize: 18,
-      lineHeight: 23,
+      fontSize: 19,
+      lineHeight: 24,
       fontWeight: '900',
       color: palette.text,
     },
     description: {
-      marginTop: 6,
-      fontSize: theme.typography.body,
-      lineHeight: 20,
+      fontSize: 13,
+      lineHeight: 18,
       color: palette.textMuted,
+      minHeight: 36,
     },
     footer: {
       flexDirection: 'row',
       alignItems: 'flex-end',
       justifyContent: 'space-between',
-      gap: theme.spacing.sm,
-      marginTop: theme.spacing.md,
+      flexWrap: 'wrap',
+      gap: 10,
     },
     priceBlock: {
       flex: 1,
+      minWidth: 0,
+      gap: 4,
     },
-    priceLabel: {
-      fontSize: theme.typography.eyebrow,
-      fontWeight: '700',
-      letterSpacing: 0.8,
-      textTransform: 'uppercase',
-      color: palette.textMuted,
+    actionSlot: {
+      marginLeft: 'auto',
+    },
+    actionSlotExpanded: {
+      width: '100%',
+      alignItems: 'flex-end',
+      marginLeft: 0,
     },
     price: {
-      marginTop: 2,
       fontSize: 20,
       fontWeight: '900',
-      color: palette.caramel,
+      color: MENU_ACCENT,
+      flexShrink: 1,
+    },
+    availabilityMessage: {
+      fontSize: theme.typography.caption,
+      color: palette.textMuted,
     },
     addButtonWrap: {
-      borderRadius: theme.radius.pill,
-      overflow: 'hidden',
+      borderRadius: 22,
+      shadowColor: '#000000',
+      shadowOffset: { width: 0, height: 10 },
+      shadowOpacity: 0.26,
+      shadowRadius: 18,
+      elevation: 12,
     },
     addButton: {
-      minHeight: 44,
-      borderRadius: theme.radius.pill,
-      paddingHorizontal: 16,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: 6,
-    },
-    addButtonText: {
-      fontSize: theme.typography.caption,
-      fontWeight: '800',
-      color: palette.background,
-    },
-    iconButtonWrap: {
+      width: 44,
+      height: 44,
       borderRadius: 22,
-      overflow: 'hidden',
-    },
-    iconButton: {
-      width: 46,
-      height: 46,
-      borderRadius: 23,
       alignItems: 'center',
       justifyContent: 'center',
     },
     closedButton: {
-      minHeight: 42,
-      flexDirection: 'row',
+      minHeight: 44,
+      borderRadius: 22,
       alignItems: 'center',
       justifyContent: 'center',
-      gap: 6,
-      borderRadius: theme.radius.pill,
-      backgroundColor: palette.surfaceHighest,
+      backgroundColor: palette.surfaceHigh,
       paddingHorizontal: 14,
-    },
-    closedButtonVertical: {
-      minWidth: 126,
     },
     closedButtonText: {
       fontSize: theme.typography.caption,
-      fontWeight: '700',
+      fontWeight: '800',
       color: palette.textMuted,
     },
     stepper: {
       flexDirection: 'row',
       alignItems: 'center',
-      borderRadius: theme.radius.pill,
-      backgroundColor: palette.surfaceGlassStrong,
-      padding: 4,
+      borderRadius: 22,
+      backgroundColor: palette.surfaceHigh,
+      paddingHorizontal: 3,
+      paddingVertical: 3,
+      gap: 3,
     },
     stepperButton: {
-      width: 34,
-      height: 34,
-      borderRadius: 17,
-      alignItems: 'center',
-      justifyContent: 'center',
+      borderRadius: 18,
     },
     stepperButtonSecondary: {
-      backgroundColor: palette.surfaceLow,
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: 'rgba(255, 255, 255, 0.05)',
     },
     stepperButtonWrap: {
-      borderRadius: 17,
-      overflow: 'hidden',
+      borderRadius: 18,
     },
     stepperButtonPrimary: {
-      width: 34,
-      height: 34,
-      borderRadius: 17,
+      width: 32,
+      height: 32,
+      borderRadius: 16,
       alignItems: 'center',
       justifyContent: 'center',
     },
     stepperValue: {
-      minWidth: 28,
+      minWidth: 20,
       textAlign: 'center',
-      fontSize: theme.typography.body,
+      fontSize: 14,
       fontWeight: '800',
       color: palette.text,
     },
-    availabilityMessage: {
-      marginTop: theme.spacing.sm,
-      fontSize: theme.typography.caption,
-      lineHeight: 17,
-      fontWeight: '700',
-      color: palette.textMuted,
-    },
     disabled: {
-      opacity: 0.52,
+      opacity: 0.54,
     },
   });
 };

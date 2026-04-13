@@ -39,77 +39,74 @@ export function OfferCard({
       style={[styles.card, theme.shadows.card]}
     >
       <View style={styles.headerRow}>
-        <View style={styles.titleWrap}>
-          <View style={styles.tagPill}>
-            <Text style={styles.tagText}>{tagLabel}</Text>
-          </View>
-          <Text style={styles.title}>{offer.title}</Text>
+        <View style={styles.tagPill}>
+          <Text style={styles.tagText}>{tagLabel}</Text>
         </View>
 
         <View style={styles.discountBadge}>
-          <Text style={styles.discountText}>{getDiscountLabel(offer)}</Text>
+          <Text style={styles.discountBadgeText}>{getDiscountLabel(offer)}</Text>
         </View>
       </View>
 
-      <Text style={styles.description}>{offer.description}</Text>
+      <View style={styles.copyBlock}>
+        <Text style={styles.title}>{offer.title}</Text>
+        <Text style={styles.description} numberOfLines={3}>
+          {offer.description}
+        </Text>
+      </View>
 
-      <Text style={styles.discountHighlight}>
-        {offer.discountType === 'percentage'
-          ? `${offer.discountValue}%`
-          : `Rs ${offer.discountValue}`}
-      </Text>
+      <View style={styles.metaRow}>
+        <View style={styles.valueBlock}>
+          <Text style={styles.valueText}>
+            {offer.discountType === 'percentage'
+              ? `${offer.discountValue}%`
+              : `Rs ${offer.discountValue}`}
+          </Text>
+          <Text style={styles.valueSubtext}>
+            Minimum order {offer.minOrderAmount > 0 ? `Rs ${offer.minOrderAmount}` : 'not required'}
+          </Text>
+        </View>
 
-      <View style={styles.footerRow}>
         <View style={styles.couponPill}>
           <Ionicons name="ticket-outline" size={14} color="rgba(248, 244, 239, 0.82)" />
           <Text style={styles.couponText}>{offer.couponCode}</Text>
         </View>
-
-        <ScalePressable
-          accessibilityRole={onApply ? 'button' : undefined}
-          disabled={!onApply}
-          onPress={() => {
-            if (onApply) {
-              onApply(offer);
-            }
-          }}
-          style={styles.applyButtonWrap}
-        >
-          <View style={styles.applyButton}>
-            <Text style={styles.applyButtonText}>
-              {isApplied ? 'Applied' : actionLabel}
-            </Text>
-          </View>
-        </ScalePressable>
       </View>
 
-      <Text style={styles.metaText}>
-        Minimum order {offer.minOrderAmount > 0 ? `Rs ${offer.minOrderAmount}` : 'not required'}
-      </Text>
+      <ScalePressable
+        accessibilityRole={onApply ? 'button' : undefined}
+        disabled={!onApply}
+        onPress={() => {
+          if (onApply) {
+            onApply(offer);
+          }
+        }}
+        style={styles.buttonWrap}
+      >
+        <View style={[styles.button, isApplied ? styles.buttonApplied : null]}>
+          <Text style={styles.buttonText}>{isApplied ? 'Applied' : actionLabel}</Text>
+        </View>
+      </ScalePressable>
     </LinearGradient>
   );
 }
 
 const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => StyleSheet.create({
   card: {
-    borderRadius: theme.radius.hero,
+    borderRadius: theme.radius.xl,
     padding: theme.spacing.lg,
-    gap: theme.spacing.sm,
+    gap: theme.spacing.md,
   },
   headerRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
     gap: theme.spacing.sm,
-  },
-  titleWrap: {
-    flex: 1,
-    minWidth: 0,
   },
   tagPill: {
     alignSelf: 'flex-start',
     borderRadius: theme.radius.pill,
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    backgroundColor: 'rgba(255, 255, 255, 0.14)',
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
@@ -118,50 +115,59 @@ const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => StyleSheet
     fontWeight: '900',
     letterSpacing: 0.8,
     textTransform: 'uppercase',
-    color: 'rgba(248, 244, 239, 0.86)',
-  },
-  title: {
-    marginTop: theme.spacing.sm,
-    fontSize: 19,
-    fontWeight: '900',
-    lineHeight: 24,
-    color: 'rgba(248, 244, 239, 0.96)',
+    color: 'rgba(248, 244, 239, 0.88)',
   },
   discountBadge: {
     borderRadius: theme.radius.pill,
     backgroundColor: 'rgba(255, 255, 255, 0.12)',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
   },
-  discountText: {
+  discountBadgeText: {
     fontSize: theme.typography.eyebrow,
     fontWeight: '900',
     letterSpacing: 0.6,
     color: 'rgba(248, 244, 239, 0.96)',
   },
-  description: {
-    fontSize: theme.typography.body,
-    lineHeight: 21,
-    color: 'rgba(248, 244, 239, 0.86)',
+  copyBlock: {
+    gap: 8,
   },
-  discountHighlight: {
-    fontSize: 34,
+  title: {
+    fontSize: 22,
+    lineHeight: 27,
     fontWeight: '900',
-    color: 'rgba(255, 244, 238, 0.98)',
+    color: 'rgba(248, 244, 239, 0.98)',
   },
-  footerRow: {
-    marginTop: theme.spacing.sm,
+  description: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: 'rgba(248, 244, 239, 0.82)',
+  },
+  metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: theme.spacing.sm,
+    gap: theme.spacing.md,
+  },
+  valueBlock: {
+    flex: 1,
+    gap: 4,
+  },
+  valueText: {
+    fontSize: 30,
+    fontWeight: '900',
+    color: 'rgba(255, 244, 238, 0.98)',
+  },
+  valueSubtext: {
+    fontSize: theme.typography.caption,
+    color: 'rgba(248, 244, 239, 0.74)',
   },
   couponPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    borderRadius: 16,
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+    borderRadius: 18,
+    backgroundColor: 'rgba(12, 9, 8, 0.22)',
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
@@ -172,23 +178,24 @@ const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => StyleSheet
     textTransform: 'uppercase',
     color: 'rgba(248, 244, 239, 0.96)',
   },
-  applyButtonWrap: {
+  buttonWrap: {
     borderRadius: theme.radius.pill,
+    overflow: 'hidden',
   },
-  applyButton: {
+  button: {
+    minHeight: 48,
     borderRadius: theme.radius.pill,
-    backgroundColor: 'rgba(255, 255, 255, 0.14)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.16)',
     paddingHorizontal: 16,
-    paddingVertical: 10,
   },
-  applyButtonText: {
-    fontSize: theme.typography.eyebrow,
+  buttonApplied: {
+    backgroundColor: 'rgba(227, 191, 127, 0.2)',
+  },
+  buttonText: {
+    fontSize: 14,
     fontWeight: '800',
     color: 'rgba(248, 244, 239, 0.96)',
-  },
-  metaText: {
-    marginTop: 2,
-    fontSize: theme.typography.caption,
-    color: 'rgba(248, 244, 239, 0.72)',
   },
 });

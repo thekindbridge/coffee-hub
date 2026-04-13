@@ -18,7 +18,7 @@ export const AuthLoadingPage = () => (
           <Coffee className="coffee-icon-float text-[#ffbf80]" size={26} strokeWidth={1.8} />
         </div>
         <p className="mt-8 text-[11px] font-semibold uppercase tracking-[0.38em] text-[#efcfb3]">
-          COFFEE HUB
+          COFFEE-HUB
         </p>
         <h2 className="mt-3 font-display text-3xl font-semibold text-[#fff7ee]">
           Preparing your sign-in

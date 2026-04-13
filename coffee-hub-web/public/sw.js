@@ -88,7 +88,7 @@ const parsePushPayload = event => {
       ? rawPayload.data
       : rawPayload;
 
-    const title = `${data?.title || rawPayload?.notification?.title || 'Coffee HUB'}`.trim();
+    const title = `${data?.title || rawPayload?.notification?.title || 'COFFEE-HUB'}`.trim();
     const body = `${data?.body || rawPayload?.notification?.body || ''}`.trim();
     const url = `${data?.url || rawPayload?.fcmOptions?.link || '/'}`.trim() || '/';
     const tag = `${data?.tag || data?.collapseKey || 'coffee-hub-notification'}`.trim();

@@ -13,7 +13,7 @@ const buildDisplayNameFromEmail = (email: string) => {
     .split(/[._-]+/)
     .filter(Boolean)
     .map(segment => segment.charAt(0).toUpperCase() + segment.slice(1))
-    .join(' ') || 'Coffee Hub Guest';
+    .join(' ') || 'COFFEE-HUB Guest';
 };
 
 const getAuthErrorCode = (error: unknown) =>

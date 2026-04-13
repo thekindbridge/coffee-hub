@@ -1,8 +1,8 @@
 {
   "id": "/",
-  "name": "Coffee HUB Ordering",
-  "short_name": "Coffee HUB",
-  "description": "Order fresh coffee, snacks, and quick meals from Coffee HUB.",
+  "name": "COFFEE-HUB Ordering",
+  "short_name": "COFFEE-HUB",
+  "description": "Order fresh coffee, snacks, and quick meals from COFFEE-HUB.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

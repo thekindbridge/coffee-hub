@@ -1,6 +1,6 @@
-# Coffee HUB Web
+# COFFEE-HUB Web
 
-Coffee HUB Web is a React + Vite ordering application backed by Firebase and Vercel APIs.
+COFFEE-HUB Web is a React + Vite ordering application backed by Firebase and Vercel APIs.
 
 ## Stack
 

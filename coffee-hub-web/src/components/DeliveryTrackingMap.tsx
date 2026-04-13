@@ -398,7 +398,7 @@ export default function DeliveryTrackingMap({
     return (
       <MapMessage
         title="Customer location unavailable"
-        description="Coffee Hub needs customer coordinates (latitude and longitude) to render live delivery tracking."
+        description="COFFEE-HUB needs customer coordinates (latitude and longitude) to render live delivery tracking."
         className={className}
       />
     );

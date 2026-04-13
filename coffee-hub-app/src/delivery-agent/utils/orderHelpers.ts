@@ -13,6 +13,8 @@ export type DeliveryEarningsSummary = {
   totalAmount: number;
 };
 
+export type DeliveryOrderState = 'assigned' | 'picked' | 'delivering' | 'completed';
+
 const sortByCreatedAtDesc = (orders: Order[]) => [...orders].sort(
   (leftOrder, rightOrder) => (
     new Date(rightOrder.created_at).getTime() - new Date(leftOrder.created_at).getTime()
@@ -23,8 +25,53 @@ export const sortDeliveryOrders = (orders: Order[]) => sortByCreatedAtDesc(order
 
 export const getOrderAmount = (order: Order) => order.final_total ?? order.total_amount;
 
+export const getDeliveryPayoutAmount = (order: Order) => (
+  Number.isFinite(order.delivery_fee) ? order.delivery_fee ?? 0 : 0
+);
+
 export const formatCurrencyAmount = (amount: number) =>
   currencyFormatter.format(Number.isFinite(amount) ? amount : 0);
+
+export const getDeliveryOrderState = (
+  order: Order,
+  options?: {
+    isCurrentOrder?: boolean;
+    isTracking?: boolean;
+    sessionStatus?: 'assigned' | 'active' | 'completed' | null;
+  },
+): DeliveryOrderState => {
+  if (order.status_code === 'DELIVERED' || order.delivery_delivered_at) {
+    return 'completed';
+  }
+
+  if (
+    options?.isCurrentOrder &&
+    (options.isTracking || options.sessionStatus === 'active')
+  ) {
+    return 'delivering';
+  }
+
+  if (order.delivery_picked_at) {
+    return 'picked';
+  }
+
+  return 'assigned';
+};
+
+export const getDeliveryOrderStateRank = (state: DeliveryOrderState) => {
+  switch (state) {
+    case 'assigned':
+      return 0;
+    case 'picked':
+      return 1;
+    case 'delivering':
+      return 2;
+    case 'completed':
+      return 3;
+    default:
+      return 0;
+  }
+};
 
 export const getDeliveryEventTimestamp = (order: Order) =>
   order.delivery_delivered_at ||

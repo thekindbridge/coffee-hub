@@ -220,7 +220,7 @@ export const CustomerAppShell = ({
       ) : undefined}
       header={(
         <RoleHeader
-          eyebrow="Coffee HUB"
+          eyebrow="COFFEE-HUB"
           icon={Coffee}
           onBrandClick={() => customerExperience.setActiveTab('home')}
           onProfileClick={profileManager.handleOpenProfile}

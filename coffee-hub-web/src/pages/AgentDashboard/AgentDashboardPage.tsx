@@ -1,6 +1,1 @@
-import AgentDashboard from './components/AgentDashboard';
-import type { AgentDashboardPageProps } from './AgentDashboardPage.types';
-
-export const AgentDashboardPage = (props: AgentDashboardPageProps) => (
-  <AgentDashboard {...props} />
-);
+export { DashboardPage as AgentDashboardPage } from '../../delivery-agent/pages/DashboardPage';

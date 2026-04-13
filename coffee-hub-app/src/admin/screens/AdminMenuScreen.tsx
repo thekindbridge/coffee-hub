@@ -1,5 +1,4 @@
 import React, { useMemo, useState } from 'react';
-import { Ionicons } from '@expo/vector-icons';
 import {
   ActivityIndicator,
   Alert,
@@ -22,7 +21,6 @@ import { useProfileData } from '../../features/profile/hooks/useProfileData';
 import { useAdminMenuManager } from '../hooks';
 import { useAuth } from '../../hooks/useAuth';
 import { useMenu } from '../../hooks/useMenu';
-import type { MenuItem } from '../../types';
 import {
   AdminProductCard,
   AdminStatCard,

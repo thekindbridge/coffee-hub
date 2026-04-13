@@ -138,10 +138,20 @@ export const useDeliveryOrders = ({
     };
   }, [currentAgentId, isDeliveryAgent]);
 
-  const currentDeliveryOrder = useMemo(
-    () => activeOrders[0] || null,
-    [activeOrders],
-  );
+  const currentDeliveryOrder = useMemo(() => {
+    if (!activeOrders.length) {
+      return null;
+    }
+
+    const currentOrderId = currentDeliveryAgent?.current_order_id?.trim();
+    if (!currentOrderId) {
+      return activeOrders[0] || null;
+    }
+
+    return activeOrders.find(order => (
+      order.id === currentOrderId || order.doc_id === currentOrderId
+    )) || activeOrders[0] || null;
+  }, [activeOrders, currentDeliveryAgent?.current_order_id]);
 
   useEffect(() => {
     if (!currentDeliveryOrder?.id) {

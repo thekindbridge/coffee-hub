@@ -24,7 +24,7 @@ export const HomeFooter = ({ onNavigate }: HomeFooterProps) => (
       </div>
     </div>
     <p className="text-center text-[10px] font-bold uppercase tracking-widest text-ink-muted">
-      &copy; 2024 COFFEE HUB. All rights reserved.
+      &copy; 2024 COFFEE-HUB. All rights reserved.
     </p>
   </footer>
 );

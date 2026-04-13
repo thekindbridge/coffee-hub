@@ -1,11 +1,11 @@
-# Coffee Hub
+# COFFEE-HUB
 
-Coffee Hub is a web-only ordering platform built with React, Vite, Firebase, Firestore, and Vercel serverless APIs.
+COFFEE-HUB is a web-only ordering platform built with React, Vite, Firebase, Firestore, and Vercel serverless APIs.
 
 The repository now contains a single active application:
 
 ```text
-Coffee-Hub/
+COFFEE-HUB/
   coffee-hub-web/
 ```
 

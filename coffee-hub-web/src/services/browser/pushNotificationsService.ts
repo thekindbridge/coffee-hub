@@ -52,7 +52,7 @@ export const parseForegroundMessage = (
 
   return {
     id: `${Date.now()}`,
-    title: title || 'Coffee HUB',
+    title: title || 'COFFEE-HUB',
     body,
     url,
   };

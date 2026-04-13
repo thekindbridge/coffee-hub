@@ -3,6 +3,7 @@ import { DeliveryBottomTabs } from '../components/delivery/DeliveryBottomTabs';
 import { DELIVERY_ROUTES } from '../constants/routes';
 import { DeliveryDashboardScreen } from '../screens/delivery/DeliveryDashboardScreen';
 import { DeliveryEarningsScreen } from '../screens/delivery/DeliveryEarningsScreen';
+import { DeliveryMapTrackingScreen } from '../screens/delivery/DeliveryMapTrackingScreen';
 import { DeliveryOrdersScreen } from '../screens/delivery/DeliveryOrdersScreen';
 import { DeliveryProfileScreen } from '../screens/delivery/DeliveryProfileScreen';
 import { useTheme } from '../theme';
@@ -26,6 +27,10 @@ export function DeliveryTabNavigator() {
       <Tab.Screen
         name={DELIVERY_ROUTES.DASHBOARD}
         component={DeliveryDashboardScreen}
+      />
+      <Tab.Screen
+        name={DELIVERY_ROUTES.MAP}
+        component={DeliveryMapTrackingScreen}
       />
       <Tab.Screen
         name={DELIVERY_ROUTES.ORDERS}

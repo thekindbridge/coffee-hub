@@ -100,7 +100,7 @@ export const AdminAppShell = ({
           eyebrow="Admin console"
           icon={User}
           onProfileClick={profileManager.handleOpenStaffProfile}
-          title="Coffee HUB operations"
+          title="COFFEE-HUB operations"
         />
       )}
       overlays={hasLoadedStaffDrawer ? (

@@ -30,6 +30,7 @@ export type AdminStackParamList = {
 
 export type DeliveryTabParamList = {
   [DELIVERY_ROUTES.DASHBOARD]: undefined;
+  [DELIVERY_ROUTES.MAP]: { orderDocId?: string } | undefined;
   [DELIVERY_ROUTES.ORDERS]: undefined;
   [DELIVERY_ROUTES.EARNINGS]: undefined;
   [DELIVERY_ROUTES.PROFILE]: undefined;

@@ -30,7 +30,7 @@ export const ContactPage = () => (
           </div>
           <div>
             <p className="text-xs font-bold uppercase text-ink-muted">Location</p>
-            <p className="font-bold">Coffee Hub</p>
+            <p className="font-bold">COFFEE-HUB</p>
             <p className="text-sm text-ink-muted">R5CQ+CM Inkollu, Andhra Pradesh, India</p>
           </div>
         </div>
@@ -52,7 +52,7 @@ export const ContactPage = () => (
         <div className="relative aspect-[16/12] w-full sm:aspect-[16/9]">
           <iframe
             src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d506.35838004601595!2d80.18905782789219!3d15.82115881859916!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3a4a5989b6574b4b%3A0x586644323376bd00!2sCOFFEE%20HUB!5e1!3m2!1sen!2sin!4v1773126673652!5m2!1sen!2sin"
-            title="Coffee Hub Inkollu Map"
+            title="COFFEE-HUB Inkollu Map"
             className="absolute inset-0 h-full w-full"
             style={{ border: 0 }}
             allowFullScreen

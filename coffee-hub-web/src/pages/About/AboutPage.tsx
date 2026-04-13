@@ -11,7 +11,7 @@ export const AboutPage = () => (
     </div>
     <div className="space-y-6 leading-relaxed text-ink-muted">
       <p>
-        <span className="font-bold text-white">COFFEE HUB</span> serves hot Indo-Chinese street food made with fresh ingredients and authentic wok cooking style.
+        <span className="font-bold text-white">COFFEE-HUB</span> serves hot Indo-Chinese street food made with fresh ingredients and authentic wok cooking style.
       </p>
       <p>
         Born in the heart of Inkollu, we bring the fiery flavors of the wok to your doorstep. Our chefs specialize in the perfect balance of spices, textures, and that signature wok hei.

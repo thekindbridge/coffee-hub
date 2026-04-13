@@ -10,11 +10,12 @@ import {
   Text,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useCartState } from '../app/providers/CartProvider';
 import { OrderCard } from '../components/customer/OrderCard';
 import { GlassSurface } from '../components/ui/GlassSurface';
-import { ScalePressable } from '../components/ui/ScalePressable';
 import { PrimaryButton } from '../components/ui/PrimaryButton';
+import { ScalePressable } from '../components/ui/ScalePressable';
 import { ScreenTransition } from '../components/ui/ScreenTransition';
 import { TAB_ROUTES } from '../constants/routes';
 import { useOrders } from '../hooks/useOrders';
@@ -76,175 +77,143 @@ export function OrdersScreen() {
 
   const visibleOrders = activeTab === 'active' ? activeOrders : pastOrders;
   const emptyTitle = useMemo(
-    () => (isAuthReady ? 'No brews yet' : 'Loading your account'),
+    () => (isAuthReady ? 'No orders yet' : 'Loading your account'),
     [isAuthReady],
   );
   const emptySubtitle = useMemo(
     () => (
       isAuthReady
-        ? 'Let\'s craft your first coffee and stage every update in this room.'
-        : 'Once your account finishes loading, your order history will appear here.'
+        ? 'Your next coffee order will appear here with a clear status timeline.'
+        : 'Once the account is ready, your active and past orders will sync here.'
     ),
     [isAuthReady],
   );
 
   return (
-    <ScrollView
-      style={styles.screen}
-      contentContainerStyle={styles.content}
-      refreshControl={(
-        <RefreshControl
-          refreshing={isLoading}
-          onRefresh={() => {
-            void refreshOrders();
-          }}
-          tintColor={theme.colors.primary}
-        />
-      )}
-      showsVerticalScrollIndicator={false}
-    >
-      <ScreenTransition>
-        <View style={styles.header}>
-          <Text style={styles.eyebrow}>Order room</Text>
-          <Text style={styles.title}>Placed, brewing, couriered, and remembered.</Text>
-          <Text style={styles.subtitle}>
-            Follow the full coffee journey from checkout to doorstep without leaving the customer app.
-          </Text>
-        </View>
-
-        <View style={styles.summaryRow}>
-          <GlassSurface depth="section" intensity={54} overlayColor={palette.surfaceGlass} style={styles.summaryCard}>
-            <Text style={styles.summaryValue}>{activeOrders.length}</Text>
-            <Text style={styles.summaryLabel}>Active brews</Text>
-          </GlassSurface>
-          <GlassSurface depth="section" intensity={54} overlayColor={palette.surfaceGlass} style={styles.summaryCard}>
-            <Text style={styles.summaryValue}>{pastOrders.length}</Text>
-            <Text style={styles.summaryLabel}>Past rituals</Text>
-          </GlassSurface>
-        </View>
-
-        <GlassSurface depth="floating" intensity={58} overlayColor={palette.surfaceGlass} style={styles.segmentedControl}>
-          <ScalePressable
-            accessibilityRole="button"
-            onPress={() => setActiveTab('active')}
-            style={[
-              styles.segment,
-            ]}
-          >
-            {activeTab === 'active' ? (
-              <LinearGradient
-                colors={palette.ctaGradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={[styles.segmentFill, styles.segmentActive]}
-              >
-                <Text style={[styles.segmentText, styles.segmentTextActive]}>
-                  Active
-                </Text>
-                <Text style={[styles.segmentCount, styles.segmentTextActive]}>
-                  {activeOrders.length}
-                </Text>
-              </LinearGradient>
-            ) : (
-              <View style={styles.segmentFill}>
-                <Text style={styles.segmentText}>
-                  Active
-                </Text>
-                <Text style={styles.segmentCount}>
-                  {activeOrders.length}
-                </Text>
-              </View>
-            )}
-          </ScalePressable>
-
-          <ScalePressable
-            accessibilityRole="button"
-            onPress={() => setActiveTab('history')}
-            style={[
-              styles.segment,
-            ]}
-          >
-            {activeTab === 'history' ? (
-              <LinearGradient
-                colors={palette.ctaGradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={[styles.segmentFill, styles.segmentActive]}
-              >
-                <Text style={[styles.segmentText, styles.segmentTextActive]}>
-                  History
-                </Text>
-                <Text style={[styles.segmentCount, styles.segmentTextActive]}>
-                  {pastOrders.length}
-                </Text>
-              </LinearGradient>
-            ) : (
-              <View style={styles.segmentFill}>
-                <Text style={styles.segmentText}>
-                  History
-                </Text>
-                <Text style={styles.segmentCount}>
-                  {pastOrders.length}
-                </Text>
-              </View>
-            )}
-          </ScalePressable>
-        </GlassSurface>
-
-        {error ? (
-          <GlassSurface depth="section" intensity={52} overlayColor={palette.surfaceGlass} style={styles.messageCard}>
-            <Text style={styles.messageTitle}>Unable to load orders</Text>
-            <Text style={styles.messageText}>{error}</Text>
-          </GlassSurface>
-        ) : null}
-
-        {orders.length === 0 && !isLoading ? (
-          <GlassSurface depth="section" intensity={52} overlayColor={palette.surfaceGlass} style={styles.emptyCard}>
-            <GlassSurface depth="card" style={styles.emptyIconWrap}>
-              <Ionicons name="cafe-outline" size={26} color={palette.caramel} />
-            </GlassSurface>
-            <Text style={styles.emptyTitle}>{emptyTitle}</Text>
-            <Text style={styles.emptyText}>{emptySubtitle}</Text>
-            {isAuthReady ? (
-              <PrimaryButton
-                title="Browse Menu"
-                onPress={() => navigation.navigate(TAB_ROUTES.MENU)}
-                style={styles.emptyAction}
-              />
-            ) : null}
-          </GlassSurface>
-        ) : null}
-
-        {visibleOrders.length > 0 ? (
-          <View style={styles.list}>
-            {visibleOrders.map(order => (
-              <OrderCard
-                key={order.doc_id || order.id}
-                order={order}
-              />
-            ))}
+    <SafeAreaView style={styles.screen} edges={['bottom']}>
+      <ScrollView
+        style={styles.screen}
+        contentContainerStyle={styles.content}
+        refreshControl={(
+          <RefreshControl
+            refreshing={isLoading}
+            onRefresh={() => {
+              void refreshOrders();
+            }}
+            tintColor={theme.colors.primary}
+          />
+        )}
+        showsVerticalScrollIndicator={false}
+      >
+        <ScreenTransition>
+          <View style={styles.header}>
+            <Text style={styles.eyebrow}>Your Brews</Text>
+            <Text style={styles.title}>Track current cravings and past delights.</Text>
+            <Text style={styles.subtitle}>
+              Every order is grouped into a cleaner card with a simple progress timeline.
+            </Text>
           </View>
-        ) : orders.length > 0 ? (
-          <GlassSurface depth="section" intensity={52} overlayColor={palette.surfaceGlass} style={styles.emptyCard}>
-            <GlassSurface depth="card" style={styles.emptyIconWrap}>
-              <Ionicons
-                name={activeTab === 'active' ? 'time-outline' : 'archive-outline'}
-                size={24}
-                color={palette.caramel}
-              />
-            </GlassSurface>
-            <Text style={styles.emptyTitle}>
-              {activeTab === 'active' ? 'No active brews right now' : 'No ritual archive yet'}
-            </Text>
-            <Text style={styles.emptyText}>
-              {activeTab === 'active'
-                ? 'Once a new order starts moving, it will appear here with live progress.'
-                : 'Delivered, rejected, and cancelled orders will settle into this archive.'}
-            </Text>
+
+          <GlassSurface depth="floating" overlayColor={palette.surfaceGlass} style={styles.segmentedControl}>
+            <ScalePressable
+              accessibilityRole="button"
+              onPress={() => setActiveTab('active')}
+              style={styles.segment}
+            >
+              {activeTab === 'active' ? (
+                <LinearGradient
+                  colors={palette.ctaGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.segmentFill}
+                >
+                  <Text style={[styles.segmentText, styles.segmentTextActive]}>Active</Text>
+                  <Text style={[styles.segmentCount, styles.segmentTextActive]}>{activeOrders.length}</Text>
+                </LinearGradient>
+              ) : (
+                <View style={styles.segmentFill}>
+                  <Text style={styles.segmentText}>Active</Text>
+                  <Text style={styles.segmentCount}>{activeOrders.length}</Text>
+                </View>
+              )}
+            </ScalePressable>
+
+            <ScalePressable
+              accessibilityRole="button"
+              onPress={() => setActiveTab('history')}
+              style={styles.segment}
+            >
+              {activeTab === 'history' ? (
+                <LinearGradient
+                  colors={palette.ctaGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.segmentFill}
+                >
+                  <Text style={[styles.segmentText, styles.segmentTextActive]}>History</Text>
+                  <Text style={[styles.segmentCount, styles.segmentTextActive]}>{pastOrders.length}</Text>
+                </LinearGradient>
+              ) : (
+                <View style={styles.segmentFill}>
+                  <Text style={styles.segmentText}>History</Text>
+                  <Text style={styles.segmentCount}>{pastOrders.length}</Text>
+                </View>
+              )}
+            </ScalePressable>
           </GlassSurface>
-        ) : null}
-      </ScreenTransition>
-    </ScrollView>
+
+          {error ? (
+            <GlassSurface depth="section" overlayColor={palette.surfaceGlass} style={styles.messageCard}>
+              <Text style={styles.messageTitle}>Unable to load orders</Text>
+              <Text style={styles.messageText}>{error}</Text>
+            </GlassSurface>
+          ) : null}
+
+          {orders.length === 0 && !isLoading ? (
+            <GlassSurface depth="section" overlayColor={palette.surfaceGlass} style={styles.emptyCard}>
+              <View style={styles.emptyIconWrap}>
+                <Ionicons name="receipt-outline" size={24} color={palette.caramel} />
+              </View>
+              <Text style={styles.emptyTitle}>{emptyTitle}</Text>
+              <Text style={styles.emptyText}>{emptySubtitle}</Text>
+              {isAuthReady ? (
+                <PrimaryButton
+                  title="Browse Menu"
+                  onPress={() => navigation.navigate(TAB_ROUTES.MENU)}
+                  style={styles.emptyAction}
+                />
+              ) : null}
+            </GlassSurface>
+          ) : null}
+
+          {visibleOrders.length > 0 ? (
+            <View style={styles.list}>
+              {visibleOrders.map(order => (
+                <OrderCard key={order.doc_id || order.id} order={order} />
+              ))}
+            </View>
+          ) : orders.length > 0 ? (
+            <GlassSurface depth="section" overlayColor={palette.surfaceGlass} style={styles.emptyCard}>
+              <View style={styles.emptyIconWrap}>
+                <Ionicons
+                  name={activeTab === 'active' ? 'time-outline' : 'archive-outline'}
+                  size={24}
+                  color={palette.caramel}
+                />
+              </View>
+              <Text style={styles.emptyTitle}>
+                {activeTab === 'active' ? 'No active orders' : 'No past orders yet'}
+              </Text>
+              <Text style={styles.emptyText}>
+                {activeTab === 'active'
+                  ? 'Once a fresh order starts moving, it will appear here instantly.'
+                  : 'Delivered, rejected, and cancelled orders will settle into this history tab.'}
+              </Text>
+            </GlassSurface>
+          ) : null}
+        </ScreenTransition>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
@@ -257,85 +226,53 @@ const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => {
       backgroundColor: palette.background,
     },
     content: {
-      paddingLeft: theme.spacing.xl,
-      paddingRight: theme.spacing.lg,
+      paddingHorizontal: theme.spacing.lg,
       paddingTop: theme.spacing.xl,
       paddingBottom: 120,
+      gap: theme.spacing.xl,
     },
     header: {
-      gap: 6,
+      gap: 8,
     },
     eyebrow: {
       fontSize: theme.typography.eyebrow,
-      fontWeight: '700',
+      fontWeight: '800',
       letterSpacing: 1.2,
       textTransform: 'uppercase',
       color: palette.caramel,
     },
     title: {
       maxWidth: '92%',
-      fontSize: 35,
-      lineHeight: 41,
+      fontSize: 34,
+      lineHeight: 38,
       fontWeight: '900',
       color: palette.text,
     },
     subtitle: {
       maxWidth: '92%',
       fontSize: 15,
-      lineHeight: 23,
-      color: palette.textMuted,
-    },
-    summaryRow: {
-      marginTop: theme.spacing.lg,
-      flexDirection: 'row',
-      gap: theme.spacing.md,
-    },
-    summaryCard: {
-      flex: 1,
-      borderRadius: theme.radius.xl,
-      paddingHorizontal: theme.spacing.lg,
-      paddingVertical: theme.spacing.md,
-    },
-    summaryValue: {
-      fontSize: 26,
-      fontWeight: '900',
-      color: palette.text,
-    },
-    summaryLabel: {
-      marginTop: 4,
-      fontSize: theme.typography.caption,
-      fontWeight: '700',
-      letterSpacing: 0.8,
-      textTransform: 'uppercase',
+      lineHeight: 22,
       color: palette.textMuted,
     },
     segmentedControl: {
-      marginTop: theme.spacing.xl,
       flexDirection: 'row',
       gap: theme.spacing.sm,
-      borderRadius: theme.radius.hero,
+      borderRadius: theme.radius.xl,
       padding: 6,
     },
     segment: {
       flex: 1,
-      minHeight: 54,
+      minHeight: 52,
       borderRadius: theme.radius.pill,
       overflow: 'hidden',
     },
     segmentFill: {
-      minHeight: 54,
+      minHeight: 52,
       borderRadius: theme.radius.pill,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
       gap: 8,
-    },
-    segmentActive: {
-      shadowColor: theme.colors.shadowStrong,
-      shadowOffset: { width: 0, height: 10 },
-      shadowOpacity: theme.isDark ? 0.24 : 0.16,
-      shadowRadius: 18,
-      elevation: 6,
     },
     segmentText: {
       fontSize: theme.typography.body,
@@ -351,8 +288,7 @@ const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => {
       color: palette.textMuted,
     },
     messageCard: {
-      marginTop: theme.spacing.lg,
-      borderRadius: theme.radius.hero,
+      borderRadius: theme.radius.xl,
       padding: theme.spacing.lg,
       gap: theme.spacing.sm,
     },
@@ -367,18 +303,17 @@ const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => {
       color: palette.textMuted,
     },
     emptyCard: {
-      marginTop: theme.spacing.lg,
-      borderRadius: theme.radius.hero,
+      borderRadius: theme.radius.xl,
       padding: theme.spacing.xl,
       gap: theme.spacing.sm,
     },
     emptyIconWrap: {
-      width: 56,
-      height: 56,
-      borderRadius: 18,
+      width: 52,
+      height: 52,
+      borderRadius: 16,
       alignItems: 'center',
       justifyContent: 'center',
-      marginBottom: theme.spacing.xs,
+      backgroundColor: palette.surfaceHighest,
     },
     emptyTitle: {
       fontSize: 24,
@@ -394,7 +329,6 @@ const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => {
       marginTop: theme.spacing.sm,
     },
     list: {
-      marginTop: theme.spacing.lg,
       gap: theme.spacing.md,
     },
   });

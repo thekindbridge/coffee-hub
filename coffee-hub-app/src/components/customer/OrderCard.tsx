@@ -1,9 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useEffect, useRef } from 'react';
-import { Animated, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { useTheme, useThemedStyles } from '../../theme';
-import type { Order, OrderStatusCode } from '../../types';
+import type { Order } from '../../types';
 import { formatCurrency } from '../../utils/formatCurrency';
+import {
+  getOrderStatusLabel,
+  isTerminalOrderStatus,
+  normalizeOrderStatusCode,
+} from '../../shared/orderStatus';
 import { PrimaryButton } from '../ui/PrimaryButton';
 import { GlassSurface } from '../ui/GlassSurface';
 import { getCustomerPalette } from './designSystem';
@@ -14,13 +18,7 @@ type OrderCardProps = {
   onTrack?: () => void;
 };
 
-const ORDER_STEPS = ['Placed', 'Brewing', 'Courier', 'Arrived'] as const;
-const STEP_NOTES = [
-  'We locked in your coffee ritual and sent it to the bar.',
-  'Your order is on the grinder, pour-over, and plating line.',
-  'A delivery partner is carrying it through the final stretch.',
-  'Your order reached the destination and the session is complete.',
-] as const;
+const ORDER_STEPS = ['Placed', 'Brewing', 'Out', 'Delivered'] as const;
 
 const getHeadline = (order: Order) => {
   if (order.items?.[0]?.name) {
@@ -32,8 +30,10 @@ const getHeadline = (order: Order) => {
   return 'COFFEE-HUB order';
 };
 
-const getStepIndex = (status: OrderStatusCode) => {
-  switch (status) {
+const getStepIndex = (status: string) => {
+  const normalizedStatus = normalizeOrderStatusCode(status);
+
+  switch (normalizedStatus) {
     case 'PENDING':
       return 0;
     case 'ACCEPTED':
@@ -43,15 +43,15 @@ const getStepIndex = (status: OrderStatusCode) => {
       return 2;
     case 'DELIVERED':
       return 3;
-    case 'REJECTED':
-    case 'CANCELLED':
     default:
       return 0;
   }
 };
 
-const getStatusTone = (status: OrderStatusCode) => {
-  switch (status) {
+const getStatusTone = (status: string) => {
+  const normalizedStatus = normalizeOrderStatusCode(status);
+
+  switch (normalizedStatus) {
     case 'PENDING':
       return 'pending' as const;
     case 'ACCEPTED':
@@ -66,6 +66,28 @@ const getStatusTone = (status: OrderStatusCode) => {
       return 'danger' as const;
     default:
       return 'neutral' as const;
+  }
+};
+
+const getStageMessage = (status: string) => {
+  const normalizedStatus = normalizeOrderStatusCode(status);
+
+  switch (normalizedStatus) {
+    case 'PENDING':
+      return 'Waiting for cafe confirmation';
+    case 'ACCEPTED':
+    case 'PREPARING':
+      return 'Baristas are preparing your order';
+    case 'OUT_FOR_DELIVERY':
+      return 'Your order is on the way';
+    case 'DELIVERED':
+      return 'Delivered successfully';
+    case 'REJECTED':
+      return 'This order was rejected';
+    case 'CANCELLED':
+      return 'This order was cancelled';
+    default:
+      return 'Tracking your order';
   }
 };
 
@@ -90,207 +112,116 @@ export function OrderCard({
   const { theme } = useTheme();
   const palette = getCustomerPalette(theme);
   const styles = useThemedStyles(createStyles);
-  const stepIndex = getStepIndex(order.status_code);
-  const isDeliveryTrackable = order.status_code === 'OUT_FOR_DELIVERY' && typeof onTrack === 'function';
-  const dotScale = useRef(ORDER_STEPS.map(() => new Animated.Value(0.86))).current;
-  const dotOpacity = useRef(ORDER_STEPS.map(() => new Animated.Value(0.42))).current;
-  const lineFill = useRef(ORDER_STEPS.slice(0, -1).map(() => new Animated.Value(0))).current;
-  const activePulse = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    const animations = ORDER_STEPS.flatMap((_, index) => {
-      const isComplete = index <= stepIndex;
-      const isCurrent = index === stepIndex;
-      const stepAnimations: Animated.CompositeAnimation[] = [
-        Animated.parallel([
-          Animated.spring(dotScale[index], {
-            damping: 17,
-            mass: 0.7,
-            stiffness: 260,
-            toValue: isComplete ? (isCurrent ? 1.08 : 1) : 0.86,
-            useNativeDriver: true,
-          }),
-          Animated.timing(dotOpacity[index], {
-            duration: 220,
-            toValue: isComplete ? 1 : 0.42,
-            useNativeDriver: true,
-          }),
-        ]),
-      ];
-
-      if (index < lineFill.length) {
-        stepAnimations.push(
-          Animated.timing(lineFill[index], {
-            duration: 260,
-            toValue: index < stepIndex ? 1 : 0,
-            useNativeDriver: false,
-          }),
-        );
-      }
-
-      return stepAnimations;
-    });
-
-    Animated.stagger(85, animations).start();
-  }, [dotOpacity, dotScale, lineFill, stepIndex]);
-
-  useEffect(() => {
-    const pulseLoop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(activePulse, {
-          duration: 900,
-          toValue: 1,
-          useNativeDriver: true,
-        }),
-        Animated.timing(activePulse, {
-          duration: 900,
-          toValue: 0,
-          useNativeDriver: true,
-        }),
-      ]),
-    );
-
-    if (order.status_code !== 'DELIVERED' && order.status_code !== 'REJECTED' && order.status_code !== 'CANCELLED') {
-      pulseLoop.start();
-    }
-
-    return () => {
-      pulseLoop.stop();
-      activePulse.stopAnimation();
-    };
-  }, [activePulse, order.status_code]);
-
-  const activePulseScale = activePulse.interpolate({
-    inputRange: [0, 1],
-    outputRange: [1, 1.7],
-  });
-  const activePulseOpacity = activePulse.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.34, 0],
-  });
+  const normalizedStatus = normalizeOrderStatusCode(order.status_code);
+  const stepIndex = getStepIndex(normalizedStatus);
+  const isTerminal = isTerminalOrderStatus(normalizedStatus);
+  const totalAmount = order.total_amount || order.final_total || 0;
+  const canTrack = normalizedStatus === 'OUT_FOR_DELIVERY' && typeof onTrack === 'function';
+  const visibleItems = order.items?.slice(0, 2) ?? [];
+  const hiddenItemCount = Math.max((order.items?.length ?? 0) - visibleItems.length, 0);
+  const cancellationReason = order.rejection_reason || order.cancellation_reason || 'This order is no longer active.';
 
   return (
-    <GlassSurface depth="card" intensity={52} overlayColor={palette.surfaceGlass} style={[styles.card, theme.shadows.soft]}>
+    <GlassSurface
+      depth="card"
+      intensity={52}
+      overlayColor={palette.surfaceGlass}
+      style={[styles.card, theme.shadows.soft]}
+    >
       <View style={styles.header}>
         <View style={styles.headerCopy}>
           <Text style={styles.orderEyebrow}>Order #{order.id}</Text>
           <Text style={styles.orderTitle}>{getHeadline(order)}</Text>
           <Text style={styles.orderMeta}>{formatOrderDate(order.created_at)}</Text>
         </View>
-        <StatusBadge label={order.status} tone={getStatusTone(order.status_code)} />
+        <StatusBadge
+          label={getOrderStatusLabel(normalizedStatus)}
+          tone={getStatusTone(normalizedStatus)}
+        />
       </View>
 
-      <View style={styles.itemsWrap}>
-        {(order.items?.length ?? 0) > 0 ? (
-          order.items!.slice(0, 3).map(item => (
-            <View key={item.id} style={styles.itemRow}>
-              <Text style={styles.itemLabel}>{item.name}</Text>
-              <Text style={styles.itemQuantity}>x{item.quantity}</Text>
-            </View>
-          ))
-        ) : (
-          <Text style={styles.itemPlaceholder}>Item details will appear once the order syncs.</Text>
-        )}
-      </View>
-
-      <View style={styles.totalRow}>
-        <Text style={styles.totalLabel}>Total</Text>
-        <Text style={styles.totalValue}>
-          {formatCurrency(order.total_amount || order.final_total || 0)}
-        </Text>
-      </View>
-
-      {(order.status_code === 'REJECTED' || order.status_code === 'CANCELLED') && (
-        <View style={styles.notice}>
-          <Ionicons name="information-circle-outline" size={16} color={palette.danger} />
-          <Text style={styles.noticeText}>
-            {order.rejection_reason || order.cancellation_reason || 'This order is no longer active.'}
-          </Text>
+      <View style={styles.summaryRow}>
+        <View style={styles.summaryCopy}>
+          <Text style={styles.summaryLabel}>Items</Text>
+          <Text style={styles.summaryValue}>{order.items?.length ?? 0}</Text>
         </View>
-      )}
+        <View style={styles.summaryDivider} />
+        <View style={styles.summaryCopy}>
+          <Text style={styles.summaryLabel}>Stage</Text>
+          <Text style={styles.summaryValue}>{getStageMessage(normalizedStatus)}</Text>
+        </View>
+        <View style={styles.summaryDivider} />
+        <View style={styles.summaryCopy}>
+          <Text style={styles.summaryLabel}>Total</Text>
+          <Text style={styles.summaryValue}>{formatCurrency(totalAmount)}</Text>
+        </View>
+      </View>
 
-      {order.status_code !== 'REJECTED' && order.status_code !== 'CANCELLED' ? (
-        <View style={styles.progressWrap}>
-          {ORDER_STEPS.map((step, index) => {
-            const isComplete = index <= stepIndex;
-            const isCurrent = index === stepIndex;
-            const isLast = index === ORDER_STEPS.length - 1;
-            const animatedLineHeight = index < lineFill.length
-              ? lineFill[index].interpolate({
-                inputRange: [0, 1],
-                outputRange: [0, 34],
-              })
-              : 0;
+      {visibleItems.length > 0 ? (
+        <View style={styles.itemsWrap}>
+          {visibleItems.map((item, index) => (
+            <View key={`${item.id}-${index}`} style={styles.itemRow}>
+              <Text style={styles.itemName} numberOfLines={1}>
+                {item.name}
+              </Text>
+              <Text style={styles.itemMeta}>x{item.quantity}</Text>
+            </View>
+          ))}
 
-            return (
-              <View key={step} style={styles.progressStep}>
-                <View style={styles.progressRail}>
-                  <Animated.View
-                    style={[
-                      styles.progressDotWrap,
-                      isCurrent ? styles.progressDotWrapCurrent : null,
-                      {
-                        opacity: dotOpacity[index],
-                        transform: [{ scale: dotScale[index] }],
-                      },
-                    ]}
-                  >
-                    {isCurrent ? (
-                      <Animated.View
-                        pointerEvents="none"
+          {hiddenItemCount > 0 ? (
+            <Text style={styles.moreItemsText}>+{hiddenItemCount} more item{hiddenItemCount === 1 ? '' : 's'}</Text>
+          ) : null}
+        </View>
+      ) : null}
+
+      {!isTerminal ? (
+        <View style={styles.timelineCard}>
+          <View style={styles.timelineRow}>
+            {ORDER_STEPS.map((step, index) => {
+              const isComplete = index <= stepIndex;
+              const isCurrent = index === stepIndex;
+
+              return (
+                <View key={step} style={styles.timelineStep}>
+                  {index < ORDER_STEPS.length - 1 ? (
+                    <View style={styles.connectorTrack}>
+                      <View
                         style={[
-                          styles.progressPulse,
-                          {
-                            opacity: activePulseOpacity,
-                            transform: [{ scale: activePulseScale }],
-                          },
-                        ]}
-                      />
-                    ) : null}
-                    <View
-                      style={[
-                        styles.progressDot,
-                        isComplete ? styles.progressDotActive : null,
-                        isCurrent ? styles.progressDotCurrent : null,
-                      ]}
-                    />
-                  </Animated.View>
-                  {!isLast ? (
-                    <View style={styles.progressLineTrack}>
-                      <Animated.View
-                        style={[
-                          styles.progressLineFill,
-                          index < stepIndex ? styles.progressLineFillActive : null,
-                          { height: animatedLineHeight },
+                          styles.connectorFill,
+                          index < stepIndex ? styles.connectorFillActive : null,
                         ]}
                       />
                     </View>
                   ) : null}
-                </View>
 
-                <View style={styles.progressCopy}>
-                  <Text style={[styles.progressLabel, isComplete ? styles.progressLabelActive : null]}>
+                  <View
+                    style={[
+                      styles.timelineDot,
+                      isComplete ? styles.timelineDotComplete : null,
+                      isCurrent ? styles.timelineDotCurrent : null,
+                    ]}
+                  />
+                  <Text
+                    style={[
+                      styles.timelineLabel,
+                      isComplete ? styles.timelineLabelActive : null,
+                    ]}
+                  >
                     {step}
                   </Text>
-                  <Text style={[styles.progressNote, isComplete ? styles.progressNoteActive : null]}>
-                    {STEP_NOTES[index]}
-                  </Text>
                 </View>
-
-                {isCurrent ? (
-                  <View style={styles.progressLivePill}>
-                    <Text style={styles.progressLiveText}>Live</Text>
-                  </View>
-                ) : (
-                  <View style={styles.progressGhostSpacer} />
-                )}
-              </View>
-            );
-          })}
+              );
+            })}
+          </View>
         </View>
-      ) : null}
+      ) : (
+        <View style={styles.notice}>
+          <Ionicons name="information-circle-outline" size={16} color={palette.danger} />
+          <Text style={styles.noticeText}>{cancellationReason}</Text>
+        </View>
+      )}
 
-      {order.status_code !== 'DELIVERED' ? (
+      {canTrack ? (
         <PrimaryButton
           title="Track Live Location"
           onPress={() => {
@@ -298,7 +229,6 @@ export function OrderCard({
               onTrack();
             }
           }}
-          disabled={!isDeliveryTrackable}
           style={styles.trackButton}
           variant="secondary"
         />
@@ -312,7 +242,7 @@ const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => {
 
   return StyleSheet.create({
     card: {
-      borderRadius: theme.radius.hero,
+      borderRadius: theme.radius.xl,
       padding: theme.spacing.lg,
       gap: theme.spacing.md,
     },
@@ -324,24 +254,54 @@ const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => {
     },
     headerCopy: {
       flex: 1,
+      gap: 4,
     },
     orderEyebrow: {
       fontSize: theme.typography.eyebrow,
-      fontWeight: '700',
-      letterSpacing: 1.2,
+      fontWeight: '800',
+      letterSpacing: 1,
       textTransform: 'uppercase',
       color: palette.textMuted,
     },
     orderTitle: {
-      marginTop: 6,
-      fontSize: 20,
+      fontSize: 21,
+      lineHeight: 25,
       fontWeight: '900',
       color: palette.text,
     },
     orderMeta: {
-      marginTop: 4,
       fontSize: theme.typography.caption,
       color: palette.textMuted,
+    },
+    summaryRow: {
+      flexDirection: 'row',
+      alignItems: 'stretch',
+      borderRadius: theme.radius.lg,
+      backgroundColor: palette.surfaceLow,
+      paddingHorizontal: theme.spacing.md,
+      paddingVertical: theme.spacing.sm,
+    },
+    summaryCopy: {
+      flex: 1,
+      gap: 4,
+    },
+    summaryDivider: {
+      width: 1,
+      marginHorizontal: theme.spacing.sm,
+      backgroundColor: palette.outlineGhost,
+    },
+    summaryLabel: {
+      fontSize: theme.typography.eyebrow,
+      fontWeight: '800',
+      letterSpacing: 0.8,
+      textTransform: 'uppercase',
+      color: palette.textMuted,
+    },
+    summaryValue: {
+      fontSize: 14,
+      lineHeight: 18,
+      fontWeight: '800',
+      color: palette.text,
     },
     itemsWrap: {
       gap: 8,
@@ -352,33 +312,76 @@ const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => {
       justifyContent: 'space-between',
       gap: theme.spacing.sm,
     },
-    itemLabel: {
+    itemName: {
       flex: 1,
-      fontSize: theme.typography.body,
+      fontSize: 15,
       color: palette.textSoft,
     },
-    itemQuantity: {
-      fontSize: theme.typography.body,
+    itemMeta: {
+      fontSize: 13,
       fontWeight: '700',
       color: palette.textMuted,
     },
-    itemPlaceholder: {
-      fontSize: theme.typography.body,
+    moreItemsText: {
+      fontSize: theme.typography.caption,
       color: palette.textMuted,
     },
-    totalRow: {
+    timelineCard: {
+      borderRadius: theme.radius.lg,
+      backgroundColor: palette.surfaceLow,
+      paddingHorizontal: theme.spacing.md,
+      paddingVertical: theme.spacing.md,
+    },
+    timelineRow: {
       flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
+      alignItems: 'flex-start',
     },
-    totalLabel: {
-      fontSize: theme.typography.body,
+    timelineStep: {
+      flex: 1,
+      alignItems: 'center',
+      position: 'relative',
+      gap: 10,
+    },
+    connectorTrack: {
+      position: 'absolute',
+      top: 5,
+      left: '50%',
+      width: '100%',
+      height: 2,
+      backgroundColor: palette.outlineGhost,
+    },
+    connectorFill: {
+      width: '100%',
+      height: 2,
+      backgroundColor: palette.outlineGhost,
+    },
+    connectorFillActive: {
+      backgroundColor: palette.blush,
+    },
+    timelineDot: {
+      width: 12,
+      height: 12,
+      borderRadius: 6,
+      backgroundColor: palette.outlineGhost,
+      zIndex: 1,
+    },
+    timelineDotComplete: {
+      backgroundColor: palette.blush,
+    },
+    timelineDotCurrent: {
+      width: 14,
+      height: 14,
+      borderRadius: 7,
+      backgroundColor: palette.gold,
+    },
+    timelineLabel: {
+      fontSize: 11,
+      fontWeight: '800',
+      textAlign: 'center',
       color: palette.textMuted,
     },
-    totalValue: {
-      fontSize: 21,
-      fontWeight: '900',
-      color: palette.caramel,
+    timelineLabelActive: {
+      color: palette.text,
     },
     notice: {
       flexDirection: 'row',
@@ -390,113 +393,9 @@ const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => {
     },
     noticeText: {
       flex: 1,
-      fontSize: theme.typography.body,
+      fontSize: 14,
       lineHeight: 20,
       color: palette.danger,
-    },
-    progressWrap: {
-      gap: theme.spacing.sm,
-    },
-    progressStep: {
-      flexDirection: 'row',
-      alignItems: 'flex-start',
-      gap: theme.spacing.sm,
-    },
-    progressRail: {
-      alignItems: 'center',
-      width: 20,
-    },
-    progressDotWrap: {
-      position: 'relative',
-      width: 18,
-      height: 18,
-      borderRadius: 9,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    },
-    progressDotWrapCurrent: {
-      shadowColor: palette.gold,
-      shadowOffset: { width: 0, height: 0 },
-      shadowOpacity: theme.isDark ? 0.36 : 0.2,
-      shadowRadius: 14,
-      elevation: 6,
-    },
-    progressPulse: {
-      position: 'absolute',
-      width: 18,
-      height: 18,
-      borderRadius: 9,
-      backgroundColor: 'rgba(227, 191, 127, 0.28)',
-    },
-    progressDot: {
-      width: 10,
-      height: 10,
-      borderRadius: 5,
-      backgroundColor: palette.ghost,
-    },
-    progressDotActive: {
-      backgroundColor: palette.blush,
-    },
-    progressDotCurrent: {
-      width: 12,
-      height: 12,
-      borderRadius: 6,
-      backgroundColor: palette.gold,
-    },
-    progressLineTrack: {
-      width: 2,
-      height: 34,
-      marginTop: 6,
-      borderRadius: 1,
-      overflow: 'hidden',
-      backgroundColor: palette.outlineGhost,
-    },
-    progressLineFill: {
-      width: 2,
-      height: 0,
-      borderRadius: 1,
-      backgroundColor: 'rgba(232, 188, 183, 0.48)',
-    },
-    progressLineFillActive: {
-      backgroundColor: palette.blush,
-    },
-    progressCopy: {
-      flex: 1,
-      paddingBottom: 4,
-    },
-    progressLabel: {
-      fontSize: theme.typography.body,
-      fontWeight: '800',
-      color: palette.textMuted,
-    },
-    progressLabelActive: {
-      color: palette.text,
-    },
-    progressNote: {
-      marginTop: 4,
-      fontSize: theme.typography.caption,
-      lineHeight: 18,
-      color: palette.textMuted,
-    },
-    progressNoteActive: {
-      color: palette.textSoft,
-    },
-    progressLivePill: {
-      borderRadius: theme.radius.pill,
-      backgroundColor: 'rgba(227, 191, 127, 0.16)',
-      paddingHorizontal: 10,
-      paddingVertical: 6,
-    },
-    progressLiveText: {
-      fontSize: theme.typography.eyebrow,
-      fontWeight: '800',
-      letterSpacing: 0.8,
-      textTransform: 'uppercase',
-      color: palette.gold,
-    },
-    progressGhostSpacer: {
-      width: 40,
     },
     trackButton: {
       marginTop: theme.spacing.xs,

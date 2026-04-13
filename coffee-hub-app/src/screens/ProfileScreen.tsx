@@ -9,13 +9,15 @@ import {
   Modal,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthContext } from '../auth/context/AuthContext';
-import { useCartState } from '../app/providers/CartProvider';
+import { GlassSurface } from '../components/ui/GlassSurface';
+import { PrimaryButton } from '../components/ui/PrimaryButton';
+import { ScalePressable } from '../components/ui/ScalePressable';
+import { ScreenTransition } from '../components/ui/ScreenTransition';
 import { AddressManager } from '../features/profile/components/AddressManager';
 import { ProfileInfoForm } from '../features/profile/components/ProfileInfoForm';
 import { useProfileActions } from '../features/profile/hooks/useProfileActions';
@@ -24,14 +26,10 @@ import { getProfileInitials } from '../features/profile/lib/profileMappers';
 import { useOffers } from '../hooks/useOffers';
 import { useOrders } from '../hooks/useOrders';
 import { TAB_ROUTES } from '../constants/routes';
-import { formatShopTime } from '../shared/shopTiming';
 import { useTheme, useThemedStyles } from '../theme';
 import type { CustomerProfile } from '../types';
 import { getCustomerPalette } from '../components/customer/designSystem';
 import { StatusBadge } from '../components/customer/StatusBadge';
-import { PrimaryButton } from '../components/ui/PrimaryButton';
-import { ScalePressable } from '../components/ui/ScalePressable';
-import { ScreenTransition } from '../components/ui/ScreenTransition';
 
 type ProfileNavigation = NavigationProp<ParamListBase>;
 type ProfileRoute = RouteProp<Record<string, { openEdit?: boolean } | undefined>, string>;
@@ -78,9 +76,9 @@ function ProfileOptionRow({
         </View>
       </View>
 
-      {trailing ?? (onPress ? (
-        <Ionicons name="chevron-forward" size={18} color={palette.textMuted} />
-      ) : null)}
+      {trailing ?? (
+        onPress ? <Ionicons name="chevron-forward" size={18} color={palette.textMuted} /> : null
+      )}
     </ScalePressable>
   );
 }
@@ -88,16 +86,10 @@ function ProfileOptionRow({
 export function ProfileScreen() {
   const navigation = useNavigation<ProfileNavigation>();
   const route = useRoute<ProfileRoute>();
-  const { theme, toggleTheme } = useTheme();
+  const { theme } = useTheme();
   const palette = getCustomerPalette(theme);
   const styles = useThemedStyles(createStyles);
   const { logout } = useAuthContext();
-  const {
-    currentTime,
-    isShopOpen,
-    isShopTimingLoading,
-    shopTiming,
-  } = useCartState();
   const { activeOffers } = useOffers();
   const {
     authPhotoUrl,
@@ -147,22 +139,17 @@ export function ProfileScreen() {
   );
   const profileInitials = getProfileInitials(profileDisplayName);
   const membershipLabel = orders.length >= 6 ? 'Gold' : 'Member';
-  const statusTitle = isShopTimingLoading
-    ? 'Checking store timing'
-    : isShopOpen
-      ? `Currently Open until ${formatShopTime(shopTiming.closeTime)}`
-      : `Currently Closed until ${formatShopTime(shopTiming.openTime)}`;
-  const statusSubtitle = isShopTimingLoading
-    ? 'We are syncing operating hours now.'
-    : isShopOpen
-      ? `Accepting orders now • closes at ${formatShopTime(shopTiming.closeTime)}`
-      : `Fresh orders reopen at ${formatShopTime(shopTiming.openTime)}`;
 
   const handleSaveProfile = async () => {
     const didSave = await saveProfile(draftProfile);
     if (didSave) {
       setIsEditorOpen(false);
     }
+  };
+
+  const handleOpenEditor = () => {
+    setDraftProfile(profile);
+    setIsEditorOpen(true);
   };
 
   return (
@@ -173,25 +160,21 @@ export function ProfileScreen() {
         showsVerticalScrollIndicator={false}
       >
         <ScreenTransition>
-          <View style={styles.statusBanner}>
-            <View>
-              <Text style={styles.statusEyebrow}>Store status</Text>
-              <Text style={styles.statusTitle}>{statusTitle}</Text>
-              <Text style={styles.statusSubtitle}>{statusSubtitle}</Text>
-            </View>
-            <StatusBadge
-              label={isShopOpen ? 'Open' : 'Closed'}
-              tone={isShopOpen ? 'success' : 'pending'}
-            />
+          <View style={styles.headerBlock}>
+            <Text style={styles.eyebrow}>Account</Text>
+            <Text style={styles.title}>Everything important, without the clutter.</Text>
+            <Text style={styles.subtitle}>
+              Keep profile details, rewards, orders, and addresses in one premium customer space.
+            </Text>
           </View>
 
           <LinearGradient
             colors={palette.offerGradient}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
-            style={[styles.userCard, theme.shadows.card]}
+            style={[styles.profileCard, theme.shadows.card]}
           >
-            <View style={styles.userCardTopRow}>
+            <View style={styles.profileTopRow}>
               <View style={styles.avatarWrap}>
                 {authPhotoUrl ? (
                   <Image source={{ uri: authPhotoUrl }} style={styles.avatarImage} />
@@ -203,18 +186,15 @@ export function ProfileScreen() {
               <StatusBadge label={membershipLabel} tone="member" />
             </View>
 
-            <Text style={styles.userName}>{profileDisplayName}</Text>
-            <Text style={styles.userEmail}>{profile.email || 'coffeehub@guest.com'}</Text>
-            <Text style={styles.userAddress}>
-              {primaryAddress?.address || 'Add your main delivery address to speed up checkout.'}
+            <Text style={styles.profileName}>{profileDisplayName}</Text>
+            <Text style={styles.profileEmail}>{profile.email || 'coffeehub@guest.com'}</Text>
+            <Text style={styles.profileAddress}>
+              {primaryAddress?.address || 'Add a delivery address to make checkout faster.'}
             </Text>
 
             <ScalePressable
               accessibilityRole="button"
-              onPress={() => {
-                setDraftProfile(profile);
-                setIsEditorOpen(true);
-              }}
+              onPress={handleOpenEditor}
               style={styles.inlineEditAction}
             >
               <Text style={styles.inlineEditText}>Edit profile</Text>
@@ -222,55 +202,54 @@ export function ProfileScreen() {
           </LinearGradient>
 
           {isLoading ? (
-            <View style={styles.messageCard}>
+            <GlassSurface depth="section" overlayColor={palette.surfaceGlass} style={styles.messageCard}>
               <ActivityIndicator color={theme.colors.primary} />
               <Text style={styles.messageText}>Loading your profile...</Text>
-            </View>
+            </GlassSurface>
           ) : null}
 
           {error ? (
-            <View style={styles.messageCard}>
+            <GlassSurface depth="section" overlayColor={palette.surfaceGlass} style={styles.messageCard}>
               <Text style={styles.messageTitle}>Profile issue</Text>
               <Text style={styles.messageText}>{error}</Text>
-            </View>
+            </GlassSurface>
           ) : null}
 
           {!isProfileComplete ? (
-            <View style={styles.messageCard}>
+            <GlassSurface depth="section" overlayColor={palette.surfaceGlass} style={styles.messageCard}>
               <Text style={styles.messageTitle}>Complete your profile</Text>
               <Text style={styles.messageText}>
-                Add {missingSummary} so checkout and delivery details stay beautifully prefilled.
+                Add {missingSummary} so delivery and checkout stay ready to go.
               </Text>
               <PrimaryButton
-                title="Finish profile"
-                onPress={() => {
-                  setDraftProfile(profile);
-                  setIsEditorOpen(true);
-                }}
+                title="Finish Profile"
+                onPress={handleOpenEditor}
                 style={styles.sectionAction}
               />
-            </View>
+            </GlassSurface>
           ) : null}
 
           <View style={styles.statsRow}>
-            <View style={styles.statCard}>
-              <Text style={styles.statLabel}>Total Beans</Text>
-              <Text style={styles.statValue}>{orders.length}</Text>
-              <Text style={styles.statMeta}>Orders brewed</Text>
-            </View>
-            <View style={styles.statCard}>
+            <GlassSurface depth="section" overlayColor={palette.surfaceGlass} style={styles.statCard}>
               <Text style={styles.statLabel}>Rewards</Text>
               <Text style={styles.statValue}>{activeOffers.length}</Text>
               <Text style={styles.statMeta}>Active offers</Text>
-            </View>
+            </GlassSurface>
+
+            <GlassSurface depth="section" overlayColor={palette.surfaceGlass} style={styles.statCard}>
+              <Text style={styles.statLabel}>Orders</Text>
+              <Text style={styles.statValue}>{orders.length}</Text>
+              <Text style={styles.statMeta}>Total orders</Text>
+            </GlassSurface>
           </View>
 
-          <View style={styles.sectionCard}>
+          <GlassSurface depth="section" overlayColor={palette.surfaceGlass} style={styles.sectionCard}>
             <View style={styles.sectionHeader}>
-              <View>
-                <Text style={styles.sectionTitle}>Active orders</Text>
-                <Text style={styles.sectionSubtitle}>A preview of what is still moving.</Text>
+              <View style={styles.sectionCopy}>
+                <Text style={styles.sectionTitle}>Orders</Text>
+                <Text style={styles.sectionSubtitle}>Quick access to your latest coffee activity.</Text>
               </View>
+
               <ScalePressable
                 accessibilityRole="button"
                 onPress={() => navigation.navigate(TAB_ROUTES.ORDERS)}
@@ -281,87 +260,71 @@ export function ProfileScreen() {
             </View>
 
             {activeOrders.length > 0 ? (
-              <ScalePressable
-                accessibilityRole="button"
-                onPress={() => navigation.navigate(TAB_ROUTES.ORDERS)}
-                style={styles.previewCard}
-              >
+              <View style={styles.previewCard}>
                 <View style={styles.previewHeader}>
                   <View style={styles.previewCopy}>
-                    <Text style={styles.previewEyebrow}>Order #{activeOrders[0].id}</Text>
+                    <Text style={styles.previewEyebrow}>Active now</Text>
                     <Text style={styles.previewTitle}>
                       {activeOrders[0].items?.[0]?.name || 'COFFEE-HUB order'}
+                    </Text>
+                    <Text style={styles.previewText}>
+                      {activeOrders[0].items?.length ?? 0} item(s) in progress
                     </Text>
                   </View>
                   <StatusBadge label={activeOrders[0].status} tone="progress" />
                 </View>
-                <Text style={styles.previewText}>
-                  {activeOrders[0].items?.length ?? 0} item(s) • currently {activeOrders[0].status.toLowerCase()}.
-                </Text>
-              </ScalePressable>
+              </View>
             ) : (
               <View style={styles.previewCard}>
                 <Text style={styles.previewTitle}>No active orders right now</Text>
                 <Text style={styles.previewText}>
-                  Your next checkout will appear here with status and progress.
+                  Your next checkout will appear here with a cleaner order status summary.
                 </Text>
               </View>
             )}
-          </View>
 
-          <View style={styles.sectionCard}>
-            <View style={styles.sectionHeader}>
-              <View>
-                <Text style={styles.sectionTitle}>Options</Text>
-                <Text style={styles.sectionSubtitle}>Addresses, settings, and account actions.</Text>
-              </View>
+            <PrimaryButton
+              title={isOrdersLoading ? 'Refreshing...' : 'Open Orders'}
+              onPress={() => navigation.navigate(TAB_ROUTES.ORDERS)}
+              variant="secondary"
+            />
+          </GlassSurface>
+
+          <GlassSurface depth="section" overlayColor={palette.surfaceGlass} style={styles.sectionCard}>
+            <View style={styles.sectionCopy}>
+              <Text style={styles.sectionTitle}>Settings</Text>
+              <Text style={styles.sectionSubtitle}>Manage the details that power your checkout flow.</Text>
             </View>
 
             <ProfileOptionRow
+              icon="person-outline"
+              onPress={handleOpenEditor}
+              title="Profile details"
+              subtitle={isProfileComplete
+                ? 'Edit your name, phone, and account details'
+                : 'Complete your name, phone, and delivery details'}
+            />
+
+            <ProfileOptionRow
               icon="location-outline"
-              onPress={() => {
-                setDraftProfile(profile);
-                setIsEditorOpen(true);
-              }}
-              title="Addresses"
-              subtitle={primaryAddress?.address || 'Manage your saved delivery places'}
+              onPress={handleOpenEditor}
+              title="Saved addresses"
+              subtitle={primaryAddress?.address || 'Add your main delivery address'}
             />
+          </GlassSurface>
 
-            <ProfileOptionRow
-              icon={theme.isDark ? 'moon-outline' : 'sunny-outline'}
-              title="Appearance"
-              subtitle={theme.isDark ? 'Warm dark mode enabled' : 'Soft light mode enabled'}
-              trailing={(
-                <Switch
-                  trackColor={{ false: palette.surfaceHighest, true: palette.caramel }}
-                  thumbColor={palette.surfaceHigh}
-                  value={theme.isDark}
-                  onValueChange={() => {
-                    toggleTheme();
-                  }}
-                />
-              )}
-            />
-
-            <ProfileOptionRow
-              icon="log-out-outline"
-              onPress={() => {
-                void logout().catch(logoutError => {
-                  console.error('[ProfileScreen] logout:error', logoutError);
-                });
-              }}
-              title="Log out"
-              subtitle="Switch the current account"
-            />
-          </View>
-
-          {isOrdersLoading ? (
-            <Text style={styles.footerMeta}>Refreshing your account preview…</Text>
-          ) : (
-            <Text style={styles.footerMeta}>
-              Current time: {currentTime} minutes into the day • {orders.length} order(s) connected to this account.
-            </Text>
-          )}
+          <ScalePressable
+            accessibilityRole="button"
+            onPress={() => {
+              void logout().catch(logoutError => {
+                console.error('[ProfileScreen] logout:error', logoutError);
+              });
+            }}
+            style={styles.logoutButton}
+          >
+            <Ionicons name="log-out-outline" size={18} color="#FFF3EE" />
+            <Text style={styles.logoutButtonText}>Logout</Text>
+          </ScalePressable>
         </ScreenTransition>
       </ScrollView>
 
@@ -415,10 +378,10 @@ export function ProfileScreen() {
             />
 
             {saveError ? (
-              <View style={styles.messageCard}>
+              <GlassSurface depth="section" overlayColor={palette.surfaceGlass} style={styles.messageCard}>
                 <Text style={styles.messageTitle}>Save issue</Text>
                 <Text style={styles.messageText}>{saveError}</Text>
-              </View>
+              </GlassSurface>
             ) : null}
           </ScrollView>
 
@@ -453,55 +416,48 @@ const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => {
       backgroundColor: palette.background,
     },
     content: {
-      paddingLeft: theme.spacing.xl,
-      paddingRight: theme.spacing.lg,
+      paddingHorizontal: theme.spacing.lg,
       paddingTop: theme.spacing.xl,
       paddingBottom: 120,
-      gap: theme.spacing.lg,
+      gap: theme.spacing.xl,
     },
-    statusBanner: {
-      borderRadius: theme.radius.hero,
-      backgroundColor: palette.surfaceHigh,
-      padding: theme.spacing.lg,
-      flexDirection: 'row',
-      alignItems: 'flex-start',
-      justifyContent: 'space-between',
-      gap: theme.spacing.md,
+    headerBlock: {
+      gap: 8,
     },
-    statusEyebrow: {
+    eyebrow: {
       fontSize: theme.typography.eyebrow,
-      fontWeight: '700',
+      fontWeight: '800',
       letterSpacing: 1.2,
       textTransform: 'uppercase',
       color: palette.caramel,
     },
-    statusTitle: {
-      marginTop: 6,
-      fontSize: theme.typography.subheading,
-      fontWeight: '800',
+    title: {
+      maxWidth: '92%',
+      fontSize: 32,
+      lineHeight: 36,
+      fontWeight: '900',
       color: palette.text,
     },
-    statusSubtitle: {
-      marginTop: 4,
+    subtitle: {
       maxWidth: '92%',
-      fontSize: theme.typography.body,
-      lineHeight: 20,
+      fontSize: 15,
+      lineHeight: 22,
       color: palette.textMuted,
     },
-    userCard: {
-      borderRadius: theme.radius.hero,
+    profileCard: {
+      borderRadius: theme.radius.xl,
       padding: theme.spacing.lg,
       gap: theme.spacing.sm,
     },
-    userCardTopRow: {
+    profileTopRow: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       gap: theme.spacing.md,
     },
     avatarWrap: {
-      width: 76,
-      height: 76,
+      width: 78,
+      height: 78,
       borderRadius: 24,
       backgroundColor: 'rgba(255, 255, 255, 0.14)',
       alignItems: 'center',
@@ -517,17 +473,17 @@ const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => {
       fontWeight: '900',
       color: 'rgba(248, 244, 239, 0.96)',
     },
-    userName: {
+    profileName: {
       marginTop: theme.spacing.sm,
       fontSize: 28,
       fontWeight: '900',
       color: 'rgba(248, 244, 239, 0.98)',
     },
-    userEmail: {
+    profileEmail: {
       fontSize: theme.typography.body,
-      color: 'rgba(248, 244, 239, 0.86)',
+      color: 'rgba(248, 244, 239, 0.88)',
     },
-    userAddress: {
+    profileAddress: {
       fontSize: theme.typography.body,
       lineHeight: 20,
       color: 'rgba(248, 244, 239, 0.78)',
@@ -546,8 +502,7 @@ const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => {
       color: 'rgba(248, 244, 239, 0.96)',
     },
     messageCard: {
-      borderRadius: theme.radius.hero,
-      backgroundColor: palette.surfaceHigh,
+      borderRadius: theme.radius.xl,
       padding: theme.spacing.lg,
       gap: theme.spacing.sm,
     },
@@ -571,19 +526,18 @@ const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => {
     statCard: {
       flex: 1,
       borderRadius: theme.radius.xl,
-      backgroundColor: palette.surfaceHigh,
       padding: theme.spacing.lg,
       gap: 6,
     },
     statLabel: {
       fontSize: theme.typography.eyebrow,
-      fontWeight: '700',
+      fontWeight: '800',
       letterSpacing: 1,
       textTransform: 'uppercase',
       color: palette.textMuted,
     },
     statValue: {
-      fontSize: 30,
+      fontSize: 28,
       fontWeight: '900',
       color: palette.caramel,
     },
@@ -592,10 +546,9 @@ const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => {
       color: palette.textMuted,
     },
     sectionCard: {
-      borderRadius: theme.radius.hero,
-      backgroundColor: palette.surfaceHigh,
+      borderRadius: theme.radius.xl,
       padding: theme.spacing.lg,
-      gap: theme.spacing.sm,
+      gap: theme.spacing.md,
     },
     sectionHeader: {
       flexDirection: 'row',
@@ -603,13 +556,16 @@ const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => {
       justifyContent: 'space-between',
       gap: theme.spacing.md,
     },
+    sectionCopy: {
+      flex: 1,
+      gap: 4,
+    },
     sectionTitle: {
       fontSize: theme.typography.subheading,
       fontWeight: '800',
       color: palette.text,
     },
     sectionSubtitle: {
-      marginTop: 4,
       fontSize: theme.typography.body,
       lineHeight: 20,
       color: palette.textMuted,
@@ -623,11 +579,10 @@ const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => {
       color: palette.caramel,
     },
     previewCard: {
-      marginTop: theme.spacing.sm,
-      borderRadius: theme.radius.xl,
+      borderRadius: theme.radius.lg,
       backgroundColor: palette.surfaceHighest,
       padding: theme.spacing.md,
-      gap: 8,
+      gap: theme.spacing.sm,
     },
     previewHeader: {
       flexDirection: 'row',
@@ -637,10 +592,11 @@ const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => {
     },
     previewCopy: {
       flex: 1,
+      gap: 4,
     },
     previewEyebrow: {
       fontSize: theme.typography.eyebrow,
-      fontWeight: '700',
+      fontWeight: '800',
       letterSpacing: 1,
       textTransform: 'uppercase',
       color: palette.textMuted,
@@ -661,7 +617,6 @@ const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => {
       alignItems: 'center',
       justifyContent: 'space-between',
       gap: theme.spacing.md,
-      paddingVertical: theme.spacing.xs,
     },
     optionLead: {
       flex: 1,
@@ -691,9 +646,19 @@ const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => {
       lineHeight: 20,
       color: palette.textMuted,
     },
-    footerMeta: {
-      fontSize: theme.typography.caption,
-      color: palette.textMuted,
+    logoutButton: {
+      minHeight: 56,
+      borderRadius: 20,
+      backgroundColor: '#4F1212',
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 10,
+    },
+    logoutButtonText: {
+      fontSize: 16,
+      fontWeight: '800',
+      color: '#FFF3EE',
     },
     modalScreen: {
       flex: 1,
@@ -710,6 +675,7 @@ const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => {
     },
     modalCopy: {
       flex: 1,
+      gap: 4,
     },
     modalEyebrow: {
       fontSize: theme.typography.eyebrow,
@@ -719,7 +685,6 @@ const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => {
       color: palette.caramel,
     },
     modalTitle: {
-      marginTop: 4,
       fontSize: theme.typography.heading,
       fontWeight: '800',
       color: palette.text,

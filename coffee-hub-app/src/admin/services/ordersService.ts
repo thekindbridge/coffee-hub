@@ -5,7 +5,6 @@ import {
   orderBy,
   query,
   serverTimestamp,
-  updateDoc,
   writeBatch,
 } from 'firebase/firestore';
 import type { QueryDocumentSnapshot, Timestamp } from 'firebase/firestore';

@@ -37,7 +37,7 @@ export const HeroBanner = ({
       <div className="absolute inset-0">
         <img
           src="https://res.cloudinary.com/ddfhaqeme/image/upload/v1772699634/e0818545-8027-4b28-8a1f-d521f79fdb6a_plei96.jpg"
-          alt="Coffee HUB hero"
+          alt="COFFEE-HUB hero"
           className="h-full w-full object-cover opacity-30"
           referrerPolicy="no-referrer"
         />

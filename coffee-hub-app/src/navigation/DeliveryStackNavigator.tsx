@@ -35,7 +35,7 @@ export function DeliveryStackNavigator() {
       <Stack.Screen
         name={DELIVERY_ROUTES.ORDER_DETAILS}
         component={DeliveryOrderDetailsScreen}
-        options={{ title: 'Order details' }}
+        options={{ headerShown: false }}
       />
     </Stack.Navigator>
   );

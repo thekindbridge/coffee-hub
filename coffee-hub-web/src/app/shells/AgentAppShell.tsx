@@ -11,9 +11,9 @@ const StaffProfileDrawer = lazyNamed(
   () => import('../../features/staff/components/StaffProfileDrawer'),
   'StaffProfileDrawer',
 );
-const AgentDashboardPage = lazyNamed(
-  () => import('../../pages/AgentDashboard/AgentDashboardPage'),
-  'AgentDashboardPage',
+const DeliveryDashboardPage = lazyNamed(
+  () => import('../../delivery-agent/pages/DashboardPage'),
+  'DashboardPage',
 );
 
 export const AgentAppShell = ({
@@ -129,7 +129,7 @@ export const AgentAppShell = ({
       )}
 
       <Suspense fallback={<Loader label="Loading delivery dashboard..." minHeightClassName="min-h-[420px]" />}>
-        <AgentDashboardPage
+        <DeliveryDashboardPage
           activeOrder={session.currentDeliveryOrder}
           deliveryAgent={session.currentDeliveryAgent}
           deliverySession={session.currentDeliverySession}

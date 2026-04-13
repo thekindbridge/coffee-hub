@@ -23,6 +23,7 @@ export const ADMIN_ROUTES = {
 export const DELIVERY_ROUTES = {
   TABS: 'DeliveryTabs',
   DASHBOARD: 'DeliveryDashboard',
+  MAP: 'DeliveryMap',
   ORDERS: 'DeliveryOrders',
   ORDER_DETAILS: 'DeliveryOrderDetails',
   EARNINGS: 'DeliveryEarnings',

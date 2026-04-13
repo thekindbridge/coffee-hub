@@ -138,8 +138,6 @@ export function MainTabNavigator() {
   const { theme } = useTheme();
   const palette = getCustomerPalette(theme);
 
-  console.log('[MainTabNavigator] render');
-
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
