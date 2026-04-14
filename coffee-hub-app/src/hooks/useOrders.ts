@@ -37,16 +37,26 @@ export const useOrders = ({
   const refreshOrders = useCallback(async () => {
     const userEmail = user?.email?.trim().toLowerCase() || currentUserId.trim().toLowerCase();
     if (!userEmail) {
+      console.log('[useOrders] refresh:skipped-no-user');
       setOrders(mergeOrders([], optimisticOrder));
       setError('');
       setIsLoading(false);
       return;
     }
 
+    console.log('[useOrders] refresh:start', {
+      currentUserId,
+      hasOptimisticOrder: Boolean(optimisticOrder),
+      userEmail,
+    });
     setIsLoading(true);
 
     try {
       const response = await getOrdersRequest({ userId: userEmail });
+      console.log('[useOrders] refresh:success', {
+        orderCount: response.orders.length,
+        userEmail,
+      });
       setOrders(mergeOrders(response.orders, optimisticOrder));
       setError('');
     } catch (requestError) {
@@ -55,9 +65,14 @@ export const useOrders = ({
         'Unable to load your orders right now.',
         'network',
       );
+      console.error('[useOrders] refresh:error', {
+        rawError: requestError,
+        userEmail,
+      });
       setError(typedError.message);
       setOrders(previousOrders => mergeOrders(previousOrders, optimisticOrder));
     } finally {
+      console.log('[useOrders] refresh:complete', { userEmail });
       setIsLoading(false);
     }
   }, [currentUserId, optimisticOrder, user]);

@@ -48,8 +48,14 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }, []);
 
   useEffect(() => {
-    console.log('[AuthContext] user:', user);
-  }, [user]);
+    console.log('[AuthContext] state', {
+      email: user?.email || '',
+      error,
+      isAuthenticated: Boolean(user),
+      isReady,
+      role: user?.role || '',
+    });
+  }, [error, isReady, user]);
 
   const login = useCallback(async (email: string) => {
     setError('');
@@ -66,6 +72,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
       const message = authError instanceof Error
         ? authError.message
         : 'Unable to sign in right now.';
+      console.log('[AuthContext] login:state-reset', {
+        email,
+        message,
+      });
       setError(message);
       throw authError;
     }

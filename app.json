@@ -1,5 +1,10 @@
 {
   "android": {
     "package": "com.pavankumar3232.coffeehub"
+  },
+  "extra": {
+    "eas": {
+      "projectId": "032d839f-9cc2-4c7d-a1a7-53f4f87aa8b9"
+    }
   }
 }

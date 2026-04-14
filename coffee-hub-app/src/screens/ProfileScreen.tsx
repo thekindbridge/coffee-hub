@@ -1,10 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { NavigationProp, ParamListBase, RouteProp } from '@react-navigation/native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   Image,
   Modal,
   ScrollView,
@@ -14,47 +12,41 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthContext } from '../auth/context/AuthContext';
-import { GlassSurface } from '../components/ui/GlassSurface';
 import { PrimaryButton } from '../components/ui/PrimaryButton';
 import { ScalePressable } from '../components/ui/ScalePressable';
 import { ScreenTransition } from '../components/ui/ScreenTransition';
+import { TAB_ROUTES } from '../constants/routes';
 import { AddressManager } from '../features/profile/components/AddressManager';
 import { ProfileInfoForm } from '../features/profile/components/ProfileInfoForm';
 import { useProfileActions } from '../features/profile/hooks/useProfileActions';
 import { useProfileData } from '../features/profile/hooks/useProfileData';
 import { getProfileInitials } from '../features/profile/lib/profileMappers';
-import { useOffers } from '../hooks/useOffers';
 import { useOrders } from '../hooks/useOrders';
-import { TAB_ROUTES } from '../constants/routes';
 import { useTheme, useThemedStyles } from '../theme';
 import type { CustomerProfile } from '../types';
-import { getCustomerPalette } from '../components/customer/designSystem';
-import { StatusBadge } from '../components/customer/StatusBadge';
 
 type ProfileNavigation = NavigationProp<ParamListBase>;
 type ProfileRoute = RouteProp<Record<string, { openEdit?: boolean } | undefined>, string>;
 
-const FIELD_LABELS: Record<string, string> = {
-  address: 'a primary address',
-  name: 'your name',
-  phone: 'your phone number',
+const sensory = {
+  background: '#151311',
+  caramel: '#f2be8c',
+  muted: '#9f928a',
+  onCaramel: '#482904',
+  surfaceContainer: '#221f1d',
+  surfaceContainerHigh: '#2c2927',
+  text: '#f7eee8',
 };
 
 function ProfileOptionRow({
   icon,
   onPress,
-  subtitle,
   title,
-  trailing,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   onPress?: () => void;
-  subtitle?: string;
   title: string;
-  trailing?: ReactNode;
 }) {
-  const { theme } = useTheme();
-  const palette = getCustomerPalette(theme);
   const styles = useThemedStyles(createStyles);
 
   return (
@@ -65,20 +57,10 @@ function ProfileOptionRow({
       style={styles.optionRow}
     >
       <View style={styles.optionLead}>
-        <View style={styles.optionIconWrap}>
-          <Ionicons name={icon} size={18} color={palette.caramel} />
-        </View>
-        <View style={styles.optionCopy}>
-          <Text style={styles.optionTitle}>{title}</Text>
-          {subtitle ? (
-            <Text style={styles.optionSubtitle}>{subtitle}</Text>
-          ) : null}
-        </View>
+        <Ionicons name={icon} size={19} color="rgba(247, 238, 232, 0.78)" />
+        <Text style={styles.optionTitle}>{title}</Text>
       </View>
-
-      {trailing ?? (
-        onPress ? <Ionicons name="chevron-forward" size={18} color={palette.textMuted} /> : null
-      )}
+      <Ionicons name="chevron-forward" size={16} color="rgba(159, 146, 138, 0.7)" />
     </ScalePressable>
   );
 }
@@ -87,18 +69,14 @@ export function ProfileScreen() {
   const navigation = useNavigation<ProfileNavigation>();
   const route = useRoute<ProfileRoute>();
   const { theme } = useTheme();
-  const palette = getCustomerPalette(theme);
   const styles = useThemedStyles(createStyles);
   const { logout } = useAuthContext();
-  const { activeOffers } = useOffers();
   const {
     authPhotoUrl,
+    currentUserEmail,
     currentUserId,
     error,
     isLoading,
-    isProfileComplete,
-    missingFields,
-    primaryAddress,
     profile,
     profileDisplayName,
   } = useProfileData();
@@ -111,9 +89,7 @@ export function ProfileScreen() {
     setPrimaryAddress,
     updateAddress,
   } = useProfileActions();
-  const { activeOrders, isLoading: isOrdersLoading, orders } = useOrders({
-    currentUserId,
-  });
+  const { orders } = useOrders({ currentUserId });
   const [draftProfile, setDraftProfile] = useState<CustomerProfile>(profile);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
 
@@ -133,12 +109,15 @@ export function ProfileScreen() {
     navigation.setParams({ openEdit: undefined });
   }, [currentUserId, navigation, profile, route.params?.openEdit]);
 
-  const missingSummary = useMemo(
-    () => missingFields.map(field => FIELD_LABELS[field] || field).join(', '),
-    [missingFields],
-  );
   const profileInitials = getProfileInitials(profileDisplayName);
-  const membershipLabel = orders.length >= 6 ? 'Gold' : 'Member';
+  const profileEmail = profile.email || currentUserEmail || 'No email added';
+  const rewardPoints = useMemo(
+    () => orders.reduce((total, order) => {
+      const amount = order.final_total ?? order.total_amount ?? 0;
+      return total + Math.max(0, Math.floor(amount / 10));
+    }, 0),
+    [orders],
+  );
 
   const handleSaveProfile = async () => {
     const didSave = await saveProfile(draftProfile);
@@ -152,6 +131,19 @@ export function ProfileScreen() {
     setIsEditorOpen(true);
   };
 
+  const renderAvatar = (size: 'header' | 'profile') => (
+    authPhotoUrl ? (
+      <Image
+        source={{ uri: authPhotoUrl }}
+        style={size === 'header' ? styles.headerAvatarImage : styles.profileAvatarImage}
+      />
+    ) : (
+      <Text style={size === 'header' ? styles.headerAvatarText : styles.profileAvatarText}>
+        {profileInitials}
+      </Text>
+    )
+  );
+
   return (
     <SafeAreaView style={styles.screen} edges={['bottom']}>
       <ScrollView
@@ -160,158 +152,82 @@ export function ProfileScreen() {
         showsVerticalScrollIndicator={false}
       >
         <ScreenTransition>
-          <View style={styles.headerBlock}>
-            <Text style={styles.eyebrow}>Account</Text>
-            <Text style={styles.title}>Everything important, without the clutter.</Text>
-            <Text style={styles.subtitle}>
-              Keep profile details, rewards, orders, and addresses in one premium customer space.
-            </Text>
-          </View>
-
-          <LinearGradient
-            colors={palette.offerGradient}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={[styles.profileCard, theme.shadows.card]}
-          >
-            <View style={styles.profileTopRow}>
-              <View style={styles.avatarWrap}>
-                {authPhotoUrl ? (
-                  <Image source={{ uri: authPhotoUrl }} style={styles.avatarImage} />
-                ) : (
-                  <Text style={styles.avatarText}>{profileInitials}</Text>
-                )}
-              </View>
-
-              <StatusBadge label={membershipLabel} tone="member" />
+          <View style={styles.headerRow}>
+            <View style={styles.brandRow}>
+              <Ionicons name="cafe" size={17} color={sensory.caramel} />
+              <Text style={styles.brandText}>Coffee Hub</Text>
             </View>
-
-            <Text style={styles.profileName}>{profileDisplayName}</Text>
-            <Text style={styles.profileEmail}>{profile.email || 'coffeehub@guest.com'}</Text>
-            <Text style={styles.profileAddress}>
-              {primaryAddress?.address || 'Add a delivery address to make checkout faster.'}
-            </Text>
 
             <ScalePressable
               accessibilityRole="button"
               onPress={handleOpenEditor}
-              style={styles.inlineEditAction}
+              style={styles.headerAvatarWrap}
             >
-              <Text style={styles.inlineEditText}>Edit profile</Text>
+              {renderAvatar('header')}
             </ScalePressable>
-          </LinearGradient>
-
-          {isLoading ? (
-            <GlassSurface depth="section" overlayColor={palette.surfaceGlass} style={styles.messageCard}>
-              <ActivityIndicator color={theme.colors.primary} />
-              <Text style={styles.messageText}>Loading your profile...</Text>
-            </GlassSurface>
-          ) : null}
-
-          {error ? (
-            <GlassSurface depth="section" overlayColor={palette.surfaceGlass} style={styles.messageCard}>
-              <Text style={styles.messageTitle}>Profile issue</Text>
-              <Text style={styles.messageText}>{error}</Text>
-            </GlassSurface>
-          ) : null}
-
-          {!isProfileComplete ? (
-            <GlassSurface depth="section" overlayColor={palette.surfaceGlass} style={styles.messageCard}>
-              <Text style={styles.messageTitle}>Complete your profile</Text>
-              <Text style={styles.messageText}>
-                Add {missingSummary} so delivery and checkout stay ready to go.
-              </Text>
-              <PrimaryButton
-                title="Finish Profile"
-                onPress={handleOpenEditor}
-                style={styles.sectionAction}
-              />
-            </GlassSurface>
-          ) : null}
-
-          <View style={styles.statsRow}>
-            <GlassSurface depth="section" overlayColor={palette.surfaceGlass} style={styles.statCard}>
-              <Text style={styles.statLabel}>Rewards</Text>
-              <Text style={styles.statValue}>{activeOffers.length}</Text>
-              <Text style={styles.statMeta}>Active offers</Text>
-            </GlassSurface>
-
-            <GlassSurface depth="section" overlayColor={palette.surfaceGlass} style={styles.statCard}>
-              <Text style={styles.statLabel}>Orders</Text>
-              <Text style={styles.statValue}>{orders.length}</Text>
-              <Text style={styles.statMeta}>Total orders</Text>
-            </GlassSurface>
           </View>
 
-          <GlassSurface depth="section" overlayColor={palette.surfaceGlass} style={styles.sectionCard}>
-            <View style={styles.sectionHeader}>
-              <View style={styles.sectionCopy}>
-                <Text style={styles.sectionTitle}>Orders</Text>
-                <Text style={styles.sectionSubtitle}>Quick access to your latest coffee activity.</Text>
+          <View style={[styles.profileCard, theme.shadows.card]}>
+            <View style={styles.profileAvatarFrame}>
+              <View style={styles.profileAvatarWrap}>
+                {renderAvatar('profile')}
               </View>
-
               <ScalePressable
                 accessibilityRole="button"
-                onPress={() => navigation.navigate(TAB_ROUTES.ORDERS)}
-                style={styles.inlineAction}
+                onPress={handleOpenEditor}
+                style={styles.editBadge}
               >
-                <Text style={styles.inlineActionText}>View all</Text>
+                <Ionicons name="create-outline" size={16} color={sensory.onCaramel} />
               </ScalePressable>
             </View>
 
-            {activeOrders.length > 0 ? (
-              <View style={styles.previewCard}>
-                <View style={styles.previewHeader}>
-                  <View style={styles.previewCopy}>
-                    <Text style={styles.previewEyebrow}>Active now</Text>
-                    <Text style={styles.previewTitle}>
-                      {activeOrders[0].items?.[0]?.name || 'COFFEE-HUB order'}
-                    </Text>
-                    <Text style={styles.previewText}>
-                      {activeOrders[0].items?.length ?? 0} item(s) in progress
-                    </Text>
-                  </View>
-                  <StatusBadge label={activeOrders[0].status} tone="progress" />
-                </View>
-              </View>
-            ) : (
-              <View style={styles.previewCard}>
-                <Text style={styles.previewTitle}>No active orders right now</Text>
-                <Text style={styles.previewText}>
-                  Your next checkout will appear here with a cleaner order status summary.
-                </Text>
-              </View>
-            )}
+            <Text style={styles.profileName}>{profileDisplayName}</Text>
+            <Text style={styles.profileEmail}>{profileEmail}</Text>
 
-            <PrimaryButton
-              title={isOrdersLoading ? 'Refreshing...' : 'Open Orders'}
-              onPress={() => navigation.navigate(TAB_ROUTES.ORDERS)}
-              variant="secondary"
-            />
-          </GlassSurface>
+            {isLoading ? (
+              <Text style={styles.profileStatus}>Loading profile...</Text>
+            ) : null}
+            {error ? (
+              <Text style={styles.profileStatus}>{error}</Text>
+            ) : null}
+          </View>
 
-          <GlassSurface depth="section" overlayColor={palette.surfaceGlass} style={styles.sectionCard}>
-            <View style={styles.sectionCopy}>
-              <Text style={styles.sectionTitle}>Settings</Text>
-              <Text style={styles.sectionSubtitle}>Manage the details that power your checkout flow.</Text>
+          <View style={styles.statsRow}>
+            <View style={[styles.statCard, theme.shadows.soft]}>
+              <Ionicons name="bag-handle" size={20} color={sensory.caramel} />
+              <Text style={styles.statValue}>{orders.length}</Text>
+              <Text style={styles.statLabel}>Orders</Text>
             </View>
 
-            <ProfileOptionRow
-              icon="person-outline"
-              onPress={handleOpenEditor}
-              title="Profile details"
-              subtitle={isProfileComplete
-                ? 'Edit your name, phone, and account details'
-                : 'Complete your name, phone, and delivery details'}
-            />
+            <View style={[styles.statCard, theme.shadows.soft]}>
+              <Ionicons name="star" size={20} color={sensory.caramel} />
+              <Text style={styles.statValue}>{rewardPoints.toLocaleString('en-IN')}</Text>
+              <Text style={styles.statLabel}>Reward Points</Text>
+            </View>
+          </View>
 
+          <View style={styles.settingsBlock}>
+            <Text style={styles.settingsLabel}>Account Settings</Text>
             <ProfileOptionRow
-              icon="location-outline"
-              onPress={handleOpenEditor}
-              title="Saved addresses"
-              subtitle={primaryAddress?.address || 'Add your main delivery address'}
+              icon="receipt-outline"
+              onPress={() => navigation.navigate(TAB_ROUTES.ORDERS)}
+              title="My Orders"
             />
-          </GlassSurface>
+            <ProfileOptionRow
+              icon="location"
+              onPress={handleOpenEditor}
+              title="Addresses"
+            />
+            <ProfileOptionRow
+              icon="card-outline"
+              title="Payment Methods"
+            />
+            <ProfileOptionRow
+              icon="settings-sharp"
+              onPress={handleOpenEditor}
+              title="Settings"
+            />
+          </View>
 
           <ScalePressable
             accessibilityRole="button"
@@ -322,8 +238,8 @@ export function ProfileScreen() {
             }}
             style={styles.logoutButton}
           >
-            <Ionicons name="log-out-outline" size={18} color="#FFF3EE" />
-            <Text style={styles.logoutButtonText}>Logout</Text>
+            <Ionicons name="log-out-outline" size={18} color="#f3aaa1" />
+            <Text style={styles.logoutButtonText}>LOGOUT</Text>
           </ScalePressable>
         </ScreenTransition>
       </ScrollView>
@@ -345,7 +261,7 @@ export function ProfileScreen() {
               onPress={() => setIsEditorOpen(false)}
               style={styles.closeButton}
             >
-              <Ionicons name="close" size={20} color={palette.text} />
+              <Ionicons name="close" size={20} color={sensory.text} />
             </ScalePressable>
           </View>
 
@@ -378,10 +294,10 @@ export function ProfileScreen() {
             />
 
             {saveError ? (
-              <GlassSurface depth="section" overlayColor={palette.surfaceGlass} style={styles.messageCard}>
+              <View style={styles.messageCard}>
                 <Text style={styles.messageTitle}>Save issue</Text>
                 <Text style={styles.messageText}>{saveError}</Text>
-              </GlassSurface>
+              </View>
             ) : null}
           </ScrollView>
 
@@ -407,313 +323,258 @@ export function ProfileScreen() {
   );
 }
 
-const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => {
-  const palette = getCustomerPalette(theme);
-
-  return StyleSheet.create({
-    screen: {
-      flex: 1,
-      backgroundColor: palette.background,
-    },
-    content: {
-      paddingHorizontal: theme.spacing.lg,
-      paddingTop: theme.spacing.xl,
-      paddingBottom: 120,
-      gap: theme.spacing.xl,
-    },
-    headerBlock: {
-      gap: 8,
-    },
-    eyebrow: {
-      fontSize: theme.typography.eyebrow,
-      fontWeight: '800',
-      letterSpacing: 1.2,
-      textTransform: 'uppercase',
-      color: palette.caramel,
-    },
-    title: {
-      maxWidth: '92%',
-      fontSize: 32,
-      lineHeight: 36,
-      fontWeight: '900',
-      color: palette.text,
-    },
-    subtitle: {
-      maxWidth: '92%',
-      fontSize: 15,
-      lineHeight: 22,
-      color: palette.textMuted,
-    },
-    profileCard: {
-      borderRadius: theme.radius.xl,
-      padding: theme.spacing.lg,
-      gap: theme.spacing.sm,
-    },
-    profileTopRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      gap: theme.spacing.md,
-    },
-    avatarWrap: {
-      width: 78,
-      height: 78,
-      borderRadius: 24,
-      backgroundColor: 'rgba(255, 255, 255, 0.14)',
-      alignItems: 'center',
-      justifyContent: 'center',
-      overflow: 'hidden',
-    },
-    avatarImage: {
-      width: '100%',
-      height: '100%',
-    },
-    avatarText: {
-      fontSize: 24,
-      fontWeight: '900',
-      color: 'rgba(248, 244, 239, 0.96)',
-    },
-    profileName: {
-      marginTop: theme.spacing.sm,
-      fontSize: 28,
-      fontWeight: '900',
-      color: 'rgba(248, 244, 239, 0.98)',
-    },
-    profileEmail: {
-      fontSize: theme.typography.body,
-      color: 'rgba(248, 244, 239, 0.88)',
-    },
-    profileAddress: {
-      fontSize: theme.typography.body,
-      lineHeight: 20,
-      color: 'rgba(248, 244, 239, 0.78)',
-    },
-    inlineEditAction: {
-      alignSelf: 'flex-start',
-      marginTop: theme.spacing.sm,
-      borderRadius: theme.radius.pill,
-      backgroundColor: 'rgba(255, 255, 255, 0.14)',
-      paddingHorizontal: 14,
-      paddingVertical: 10,
-    },
-    inlineEditText: {
-      fontSize: theme.typography.caption,
-      fontWeight: '800',
-      color: 'rgba(248, 244, 239, 0.96)',
-    },
-    messageCard: {
-      borderRadius: theme.radius.xl,
-      padding: theme.spacing.lg,
-      gap: theme.spacing.sm,
-    },
-    messageTitle: {
-      fontSize: theme.typography.subheading,
-      fontWeight: '800',
-      color: palette.text,
-    },
-    messageText: {
-      fontSize: theme.typography.body,
-      lineHeight: 20,
-      color: palette.textMuted,
-    },
-    sectionAction: {
-      marginTop: theme.spacing.sm,
-    },
-    statsRow: {
-      flexDirection: 'row',
-      gap: theme.spacing.md,
-    },
-    statCard: {
-      flex: 1,
-      borderRadius: theme.radius.xl,
-      padding: theme.spacing.lg,
-      gap: 6,
-    },
-    statLabel: {
-      fontSize: theme.typography.eyebrow,
-      fontWeight: '800',
-      letterSpacing: 1,
-      textTransform: 'uppercase',
-      color: palette.textMuted,
-    },
-    statValue: {
-      fontSize: 28,
-      fontWeight: '900',
-      color: palette.caramel,
-    },
-    statMeta: {
-      fontSize: theme.typography.caption,
-      color: palette.textMuted,
-    },
-    sectionCard: {
-      borderRadius: theme.radius.xl,
-      padding: theme.spacing.lg,
-      gap: theme.spacing.md,
-    },
-    sectionHeader: {
-      flexDirection: 'row',
-      alignItems: 'flex-start',
-      justifyContent: 'space-between',
-      gap: theme.spacing.md,
-    },
-    sectionCopy: {
-      flex: 1,
-      gap: 4,
-    },
-    sectionTitle: {
-      fontSize: theme.typography.subheading,
-      fontWeight: '800',
-      color: palette.text,
-    },
-    sectionSubtitle: {
-      fontSize: theme.typography.body,
-      lineHeight: 20,
-      color: palette.textMuted,
-    },
-    inlineAction: {
-      paddingVertical: 6,
-    },
-    inlineActionText: {
-      fontSize: theme.typography.caption,
-      fontWeight: '800',
-      color: palette.caramel,
-    },
-    previewCard: {
-      borderRadius: theme.radius.lg,
-      backgroundColor: palette.surfaceHighest,
-      padding: theme.spacing.md,
-      gap: theme.spacing.sm,
-    },
-    previewHeader: {
-      flexDirection: 'row',
-      alignItems: 'flex-start',
-      justifyContent: 'space-between',
-      gap: theme.spacing.md,
-    },
-    previewCopy: {
-      flex: 1,
-      gap: 4,
-    },
-    previewEyebrow: {
-      fontSize: theme.typography.eyebrow,
-      fontWeight: '800',
-      letterSpacing: 1,
-      textTransform: 'uppercase',
-      color: palette.textMuted,
-    },
-    previewTitle: {
-      fontSize: theme.typography.body,
-      fontWeight: '800',
-      color: palette.text,
-    },
-    previewText: {
-      fontSize: theme.typography.body,
-      lineHeight: 20,
-      color: palette.textMuted,
-    },
-    optionRow: {
-      minHeight: 68,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      gap: theme.spacing.md,
-    },
-    optionLead: {
-      flex: 1,
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: theme.spacing.sm,
-    },
-    optionIconWrap: {
-      width: 42,
-      height: 42,
-      borderRadius: 16,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: palette.surfaceHighest,
-    },
-    optionCopy: {
-      flex: 1,
-    },
-    optionTitle: {
-      fontSize: theme.typography.body,
-      fontWeight: '800',
-      color: palette.text,
-    },
-    optionSubtitle: {
-      marginTop: 4,
-      fontSize: theme.typography.body,
-      lineHeight: 20,
-      color: palette.textMuted,
-    },
-    logoutButton: {
-      minHeight: 56,
-      borderRadius: 20,
-      backgroundColor: '#4F1212',
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: 10,
-    },
-    logoutButtonText: {
-      fontSize: 16,
-      fontWeight: '800',
-      color: '#FFF3EE',
-    },
-    modalScreen: {
-      flex: 1,
-      backgroundColor: palette.background,
-    },
-    modalHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      gap: theme.spacing.md,
-      paddingHorizontal: theme.spacing.lg,
-      paddingTop: theme.spacing.sm,
-      paddingBottom: theme.spacing.md,
-    },
-    modalCopy: {
-      flex: 1,
-      gap: 4,
-    },
-    modalEyebrow: {
-      fontSize: theme.typography.eyebrow,
-      fontWeight: '800',
-      letterSpacing: 1,
-      textTransform: 'uppercase',
-      color: palette.caramel,
-    },
-    modalTitle: {
-      fontSize: theme.typography.heading,
-      fontWeight: '800',
-      color: palette.text,
-    },
-    closeButton: {
-      width: 42,
-      height: 42,
-      borderRadius: 21,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: palette.surfaceHigh,
-    },
-    modalContent: {
-      paddingHorizontal: theme.spacing.lg,
-      paddingBottom: theme.spacing.xl,
-      gap: theme.spacing.lg,
-    },
-    modalFooter: {
-      flexDirection: 'row',
-      gap: theme.spacing.md,
-      backgroundColor: palette.surfaceHigh,
-      paddingHorizontal: theme.spacing.lg,
-      paddingVertical: theme.spacing.md,
-    },
-    cancelAction: {
-      flex: 0.4,
-    },
-    saveAction: {
-      flex: 0.6,
-    },
-  });
-};
+const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: sensory.background,
+  },
+  content: {
+    paddingHorizontal: 24,
+    paddingTop: 18,
+    paddingBottom: 120,
+    gap: 32,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 16,
+  },
+  brandRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+  },
+  brandText: {
+    fontSize: 22,
+    lineHeight: 27,
+    fontWeight: '900',
+    color: sensory.caramel,
+  },
+  headerAvatarWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: sensory.surfaceContainerHigh,
+  },
+  headerAvatarImage: {
+    width: '100%',
+    height: '100%',
+  },
+  headerAvatarText: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: sensory.text,
+  },
+  profileCard: {
+    alignItems: 'center',
+    borderRadius: 24,
+    backgroundColor: sensory.surfaceContainer,
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    paddingBottom: 28,
+    gap: 10,
+  },
+  profileAvatarFrame: {
+    width: 116,
+    height: 116,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  profileAvatarWrap: {
+    width: 106,
+    height: 106,
+    borderRadius: 53,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: sensory.surfaceContainerHigh,
+  },
+  profileAvatarImage: {
+    width: '100%',
+    height: '100%',
+  },
+  profileAvatarText: {
+    fontSize: 34,
+    fontWeight: '900',
+    color: sensory.text,
+  },
+  editBadge: {
+    position: 'absolute',
+    right: 4,
+    bottom: 8,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: sensory.caramel,
+  },
+  profileName: {
+    fontSize: 28,
+    lineHeight: 34,
+    fontWeight: '900',
+    color: sensory.text,
+    textAlign: 'center',
+  },
+  profileEmail: {
+    fontSize: 14,
+    lineHeight: 21,
+    color: sensory.muted,
+    textAlign: 'center',
+  },
+  profileStatus: {
+    fontSize: 12,
+    lineHeight: 18,
+    color: 'rgba(242, 190, 140, 0.86)',
+    textAlign: 'center',
+  },
+  statsRow: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  statCard: {
+    flex: 1,
+    minHeight: 116,
+    borderRadius: 24,
+    backgroundColor: sensory.surfaceContainer,
+    padding: 20,
+    justifyContent: 'space-between',
+  },
+  statValue: {
+    marginTop: 10,
+    fontSize: 25,
+    lineHeight: 31,
+    fontWeight: '900',
+    color: sensory.caramel,
+  },
+  statLabel: {
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 1.3,
+    textTransform: 'uppercase',
+    color: 'rgba(247, 238, 232, 0.72)',
+  },
+  settingsBlock: {
+    gap: 14,
+  },
+  settingsLabel: {
+    marginBottom: 2,
+    paddingLeft: 8,
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 1.3,
+    textTransform: 'uppercase',
+    color: 'rgba(159, 146, 138, 0.78)',
+  },
+  optionRow: {
+    minHeight: 58,
+    borderRadius: 24,
+    backgroundColor: sensory.surfaceContainerHigh,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    gap: 16,
+  },
+  optionLead: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 18,
+  },
+  optionTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: sensory.text,
+  },
+  logoutButton: {
+    minHeight: 58,
+    borderRadius: 24,
+    backgroundColor: 'rgba(242, 190, 140, 0.06)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  logoutButtonText: {
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: 1.5,
+    color: '#f3aaa1',
+  },
+  modalScreen: {
+    flex: 1,
+    backgroundColor: sensory.background,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 16,
+    paddingHorizontal: 24,
+    paddingTop: 12,
+    paddingBottom: 18,
+  },
+  modalCopy: {
+    flex: 1,
+    gap: 4,
+  },
+  modalEyebrow: {
+    fontSize: theme.typography.eyebrow,
+    fontWeight: '900',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    color: sensory.caramel,
+  },
+  modalTitle: {
+    fontSize: theme.typography.heading,
+    fontWeight: '900',
+    color: sensory.text,
+  },
+  closeButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: sensory.surfaceContainerHigh,
+  },
+  modalContent: {
+    paddingHorizontal: 24,
+    paddingBottom: 32,
+    gap: 20,
+  },
+  messageCard: {
+    borderRadius: 24,
+    backgroundColor: sensory.surfaceContainer,
+    padding: 20,
+    gap: 8,
+  },
+  messageTitle: {
+    fontSize: theme.typography.subheading,
+    fontWeight: '900',
+    color: sensory.text,
+  },
+  messageText: {
+    fontSize: theme.typography.body,
+    lineHeight: 21,
+    color: sensory.muted,
+  },
+  modalFooter: {
+    flexDirection: 'row',
+    gap: 16,
+    backgroundColor: sensory.surfaceContainer,
+    paddingHorizontal: 24,
+    paddingVertical: 16,
+  },
+  cancelAction: {
+    flex: 0.4,
+  },
+  saveAction: {
+    flex: 0.6,
+  },
+});

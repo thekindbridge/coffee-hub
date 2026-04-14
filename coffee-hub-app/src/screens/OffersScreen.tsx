@@ -1,8 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import {
   ScrollView,
   StyleSheet,
@@ -12,35 +11,37 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useCartState } from '../app/providers/CartProvider';
 import { OfferCard } from '../components/offers/OfferCard';
-import { GlassSurface } from '../components/ui/GlassSurface';
-import { PrimaryButton } from '../components/ui/PrimaryButton';
+import { ScalePressable } from '../components/ui/ScalePressable';
 import { ScreenTransition } from '../components/ui/ScreenTransition';
 import { ROOT_ROUTES, TAB_ROUTES } from '../constants/routes';
 import { useOffers } from '../hooks/useOffers';
 import type { RootStackParamList } from '../navigation/types';
 import { useTheme, useThemedStyles } from '../theme';
-import { getCustomerPalette } from '../components/customer/designSystem';
 
 type OffersNavigation = NativeStackNavigationProp<RootStackParamList>;
 
-const OFFER_TAGS = ['Limited', 'Member', 'Seasonal'] as const;
+const OFFER_IMAGES = [
+  'https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&w=900&q=85',
+  'https://images.unsplash.com/photo-1447933601403-0c6688de566e?auto=format&fit=crop&w=900&q=85',
+  'https://images.unsplash.com/photo-1517668808822-9ebb02f2a0e6?auto=format&fit=crop&w=900&q=85',
+] as const;
+
+const sensory = {
+  background: '#151311',
+  caramel: '#f2be8c',
+  muted: '#9f928a',
+  onCaramel: '#482904',
+  surfaceContainer: '#221f1d',
+  text: '#f7eee8',
+};
 
 export function OffersScreen() {
   const navigation = useNavigation<OffersNavigation>();
   const { theme } = useTheme();
-  const palette = getCustomerPalette(theme);
   const styles = useThemedStyles(createStyles);
   const { activeOffers, error, isLoading } = useOffers();
   const { cartCount, handleApplyCouponCode } = useCartState();
   const [selectedCouponCode, setSelectedCouponCode] = useState('');
-
-  const rewardCopy = useMemo(() => {
-    if (activeOffers.length === 0) {
-      return 'No active drops right now';
-    }
-
-    return `${activeOffers.length} live offer${activeOffers.length === 1 ? '' : 's'} today`;
-  }, [activeOffers.length]);
 
   return (
     <SafeAreaView style={styles.screen} edges={['bottom']}>
@@ -51,62 +52,45 @@ export function OffersScreen() {
       >
         <ScreenTransition>
           <View style={styles.headerBlock}>
-            <Text style={styles.eyebrow}>Rewards & Offers</Text>
-            <Text style={styles.title}>Save more on every coffee ritual.</Text>
-            <Text style={styles.subtitle}>
-              Claim clean, readable offer cards with one clear action for checkout.
-            </Text>
+            <View style={styles.brandRow}>
+              <Ionicons name="cafe" size={15} color={sensory.caramel} />
+              <Text style={styles.brandText}>Coffee Hub</Text>
+            </View>
+            <Text style={styles.title}>Offers & Rewards</Text>
+            <Text style={styles.subtitle}>Exclusive treats just for you, brewed to perfection.</Text>
           </View>
 
-          <LinearGradient
-            colors={palette.offerGradient}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={[styles.heroBanner, theme.shadows.card]}
-          >
-            <View style={styles.heroTopRow}>
-              <View style={styles.heroChip}>
-                <Ionicons name="sparkles-outline" size={14} color="rgba(248, 244, 239, 0.92)" />
-                <Text style={styles.heroChipText}>Sensory Rewards</Text>
-              </View>
-              <Text style={styles.heroCount}>{rewardCopy}</Text>
-            </View>
-
-            <Text style={styles.heroTitle}>Limited drops, member perks, and seasonal savings.</Text>
-            <Text style={styles.heroSubtitle}>
-              Pick an offer, apply it in one tap, and move back into the menu or cart without noise.
-            </Text>
-          </LinearGradient>
-
           {error ? (
-            <GlassSurface depth="section" overlayColor={palette.surfaceGlass} style={styles.messageCard}>
+            <View style={[styles.messageCard, theme.shadows.card]}>
               <Text style={styles.messageTitle}>Offers unavailable</Text>
               <Text style={styles.messageText}>{error}</Text>
-            </GlassSurface>
+            </View>
           ) : null}
 
           {!error && activeOffers.length === 0 && !isLoading ? (
-            <GlassSurface depth="section" overlayColor={palette.surfaceGlass} style={styles.messageCard}>
+            <View style={[styles.messageCard, theme.shadows.card]}>
               <Text style={styles.messageTitle}>No active offers right now</Text>
               <Text style={styles.messageText}>
-                Browse the menu and check back soon for the next coffee reward drop.
+                Browse the menu and check back soon for the next premium reward drop.
               </Text>
-              <PrimaryButton
-                title="Browse Menu"
+              <ScalePressable
+                accessibilityRole="button"
                 onPress={() => navigation.navigate(ROOT_ROUTES.MAIN_TABS, { screen: TAB_ROUTES.MENU })}
                 style={styles.emptyAction}
-              />
-            </GlassSurface>
+              >
+                <Text style={styles.emptyActionText}>Browse Menu</Text>
+              </ScalePressable>
+            </View>
           ) : null}
 
           <View style={styles.list}>
             {activeOffers.map((offer, index) => (
               <OfferCard
+                imageUrl={OFFER_IMAGES[index % OFFER_IMAGES.length]}
                 key={offer.id}
                 offer={offer}
-                tagLabel={OFFER_TAGS[index % OFFER_TAGS.length]}
                 isApplied={selectedCouponCode === offer.couponCode}
-                actionLabel={cartCount > 0 ? 'Apply to Cart' : 'Save Code'}
+                actionLabel="Claim Offer"
                 onApply={async nextOffer => {
                   await handleApplyCouponCode(nextOffer.couponCode);
                   setSelectedCouponCode(nextOffer.couponCode);
@@ -128,106 +112,73 @@ export function OffersScreen() {
 }
 
 const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => {
-  const palette = getCustomerPalette(theme);
-
   return StyleSheet.create({
     screen: {
       flex: 1,
-      backgroundColor: palette.background,
+      backgroundColor: sensory.background,
     },
     content: {
-      paddingHorizontal: theme.spacing.lg,
-      paddingTop: theme.spacing.xl,
+      paddingHorizontal: 24,
+      paddingTop: 24,
       paddingBottom: 120,
-      gap: theme.spacing.xl,
+      gap: 24,
     },
     headerBlock: {
+      gap: 7,
+    },
+    brandRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
       gap: 8,
     },
-    eyebrow: {
-      fontSize: theme.typography.eyebrow,
-      fontWeight: '800',
-      letterSpacing: 1.2,
-      textTransform: 'uppercase',
-      color: palette.caramel,
+    brandText: {
+      fontSize: 13,
+      fontWeight: '900',
+      color: sensory.caramel,
     },
     title: {
-      maxWidth: '92%',
-      fontSize: 32,
-      lineHeight: 36,
+      marginTop: 2,
+      fontSize: 28,
+      lineHeight: 34,
       fontWeight: '900',
-      color: palette.text,
+      color: sensory.text,
     },
     subtitle: {
-      maxWidth: '92%',
-      fontSize: 15,
-      lineHeight: 22,
-      color: palette.textMuted,
-    },
-    heroBanner: {
-      borderRadius: theme.radius.xl,
-      padding: theme.spacing.lg,
-      gap: theme.spacing.sm,
-    },
-    heroTopRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      gap: theme.spacing.md,
-    },
-    heroChip: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 6,
-      borderRadius: theme.radius.pill,
-      backgroundColor: 'rgba(255, 255, 255, 0.12)',
-      paddingHorizontal: 10,
-      paddingVertical: 7,
-    },
-    heroChipText: {
-      fontSize: theme.typography.eyebrow,
-      fontWeight: '800',
-      letterSpacing: 0.8,
-      textTransform: 'uppercase',
-      color: 'rgba(248, 244, 239, 0.92)',
-    },
-    heroCount: {
-      fontSize: theme.typography.caption,
-      color: 'rgba(248, 244, 239, 0.82)',
-    },
-    heroTitle: {
-      maxWidth: '88%',
-      fontSize: 28,
-      lineHeight: 32,
-      fontWeight: '900',
-      color: 'rgba(248, 244, 239, 0.98)',
-    },
-    heroSubtitle: {
-      maxWidth: '92%',
       fontSize: 14,
-      lineHeight: 20,
-      color: 'rgba(248, 244, 239, 0.84)',
+      lineHeight: 21,
+      color: sensory.muted,
     },
     messageCard: {
-      borderRadius: theme.radius.xl,
-      padding: theme.spacing.lg,
-      gap: theme.spacing.sm,
+      borderRadius: 24,
+      backgroundColor: sensory.surfaceContainer,
+      padding: 24,
+      gap: 12,
     },
     messageTitle: {
       fontSize: theme.typography.subheading,
-      fontWeight: '800',
-      color: palette.text,
+      fontWeight: '900',
+      color: sensory.text,
     },
     messageText: {
       fontSize: theme.typography.body,
-      lineHeight: 20,
-      color: palette.textMuted,
+      lineHeight: 21,
+      color: sensory.muted,
     },
     emptyAction: {
-      marginTop: theme.spacing.sm,
+      minHeight: 50,
+      marginTop: 8,
+      borderRadius: 24,
+      backgroundColor: sensory.caramel,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    emptyActionText: {
+      fontSize: 14,
+      fontWeight: '900',
+      color: sensory.onCaramel,
     },
     list: {
-      gap: theme.spacing.md,
+      gap: 24,
     },
   });
 };

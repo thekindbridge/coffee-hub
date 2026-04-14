@@ -1,17 +1,25 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { StyleSheet, Text, View } from 'react-native';
+import { ImageBackground, StyleSheet, Text, View } from 'react-native';
 import { useTheme, useThemedStyles } from '../../theme';
 import type { Offer } from '../../types';
 import { ScalePressable } from '../ui/ScalePressable';
-import { getCustomerPalette } from '../customer/designSystem';
 
 type OfferCardProps = {
   actionLabel?: string;
+  imageUrl: string;
   isApplied?: boolean;
   onApply?: (offer: Offer) => void;
   offer: Offer;
-  tagLabel?: string;
+};
+
+const sensory = {
+  caramel: '#f2be8c',
+  muted: '#d4c4b7',
+  onCaramel: '#482904',
+  surfaceContainer: '#221f1d',
+  surfaceContainerHigh: '#2c2927',
+  text: '#f7eee8',
 };
 
 const getDiscountLabel = (offer: Offer) => (
@@ -21,181 +29,182 @@ const getDiscountLabel = (offer: Offer) => (
 );
 
 export function OfferCard({
-  actionLabel = 'Apply',
+  actionLabel = 'Claim Offer',
+  imageUrl,
   isApplied = false,
   onApply,
   offer,
-  tagLabel = 'Limited',
 }: OfferCardProps) {
   const { theme } = useTheme();
-  const palette = getCustomerPalette(theme);
   const styles = useThemedStyles(createStyles);
 
   return (
-    <LinearGradient
-      colors={palette.offerGradient}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={[styles.card, theme.shadows.card]}
-    >
-      <View style={styles.headerRow}>
-        <View style={styles.tagPill}>
-          <Text style={styles.tagText}>{tagLabel}</Text>
-        </View>
-
-        <View style={styles.discountBadge}>
-          <Text style={styles.discountBadgeText}>{getDiscountLabel(offer)}</Text>
-        </View>
+    <View style={[styles.card, theme.shadows.card]}>
+      <View style={styles.imageWrap}>
+        <ImageBackground
+          source={{ uri: imageUrl }}
+          resizeMode="cover"
+          style={styles.image}
+          imageStyle={styles.image}
+        >
+          <LinearGradient
+            colors={['rgba(21, 19, 17, 0.04)', 'rgba(21, 19, 17, 0.78)']}
+            locations={[0.18, 1]}
+            style={styles.imageShade}
+          >
+            <View style={styles.imageTopRow}>
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>{getDiscountLabel(offer)}</Text>
+              </View>
+            </View>
+          </LinearGradient>
+        </ImageBackground>
       </View>
 
       <View style={styles.copyBlock}>
-        <Text style={styles.title}>{offer.title}</Text>
-        <Text style={styles.description} numberOfLines={3}>
+        <Text style={styles.title} numberOfLines={1}>
+          {offer.title}
+        </Text>
+
+        <Text style={styles.description} numberOfLines={2}>
           {offer.description}
         </Text>
-      </View>
 
-      <View style={styles.metaRow}>
-        <View style={styles.valueBlock}>
-          <Text style={styles.valueText}>
-            {offer.discountType === 'percentage'
-              ? `${offer.discountValue}%`
-              : `Rs ${offer.discountValue}`}
-          </Text>
-          <Text style={styles.valueSubtext}>
-            Minimum order {offer.minOrderAmount > 0 ? `Rs ${offer.minOrderAmount}` : 'not required'}
+        <View style={styles.metaRow}>
+          <View style={styles.couponPill}>
+            <Ionicons name="ticket-outline" size={14} color={sensory.caramel} />
+            <Text style={styles.couponText} numberOfLines={1}>{offer.couponCode}</Text>
+          </View>
+          <Text style={styles.minimumText}>
+            {offer.minOrderAmount > 0 ? `Min Rs ${offer.minOrderAmount}` : 'No minimum'}
           </Text>
         </View>
 
-        <View style={styles.couponPill}>
-          <Ionicons name="ticket-outline" size={14} color="rgba(248, 244, 239, 0.82)" />
-          <Text style={styles.couponText}>{offer.couponCode}</Text>
-        </View>
+        <ScalePressable
+          accessibilityRole={onApply ? 'button' : undefined}
+          disabled={!onApply}
+          onPress={() => {
+            if (onApply) {
+              onApply(offer);
+            }
+          }}
+          style={styles.buttonWrap}
+        >
+          <View style={[styles.button, isApplied ? styles.buttonApplied : null]}>
+            <Text style={[styles.buttonText, isApplied ? styles.buttonTextApplied : null]}>
+              {isApplied ? 'Offer Claimed' : actionLabel}
+            </Text>
+            {!isApplied ? (
+              <Ionicons name="arrow-forward" size={15} color={sensory.onCaramel} />
+            ) : null}
+          </View>
+        </ScalePressable>
       </View>
-
-      <ScalePressable
-        accessibilityRole={onApply ? 'button' : undefined}
-        disabled={!onApply}
-        onPress={() => {
-          if (onApply) {
-            onApply(offer);
-          }
-        }}
-        style={styles.buttonWrap}
-      >
-        <View style={[styles.button, isApplied ? styles.buttonApplied : null]}>
-          <Text style={styles.buttonText}>{isApplied ? 'Applied' : actionLabel}</Text>
-        </View>
-      </ScalePressable>
-    </LinearGradient>
+    </View>
   );
 }
 
 const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => StyleSheet.create({
   card: {
-    borderRadius: theme.radius.xl,
-    padding: theme.spacing.lg,
-    gap: theme.spacing.md,
+    overflow: 'hidden',
+    borderRadius: 24,
+    backgroundColor: sensory.surfaceContainer,
   },
-  headerRow: {
+  imageWrap: {
+    height: 176,
+    backgroundColor: sensory.surfaceContainerHigh,
+  },
+  image: {
+    flex: 1,
+  },
+  imageShade: {
+    flex: 1,
+    justifyContent: 'flex-start',
+    padding: theme.spacing.md,
+  },
+  imageTopRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: theme.spacing.sm,
+    justifyContent: 'flex-end',
   },
-  tagPill: {
-    alignSelf: 'flex-start',
-    borderRadius: theme.radius.pill,
-    backgroundColor: 'rgba(255, 255, 255, 0.14)',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  tagText: {
-    fontSize: theme.typography.eyebrow,
-    fontWeight: '900',
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
-    color: 'rgba(248, 244, 239, 0.88)',
-  },
-  discountBadge: {
-    borderRadius: theme.radius.pill,
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+  badge: {
+    borderRadius: 24,
+    backgroundColor: sensory.caramel,
     paddingHorizontal: 12,
     paddingVertical: 7,
   },
-  discountBadgeText: {
+  badgeText: {
     fontSize: theme.typography.eyebrow,
     fontWeight: '900',
-    letterSpacing: 0.6,
-    color: 'rgba(248, 244, 239, 0.96)',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    color: sensory.onCaramel,
   },
   copyBlock: {
-    gap: 8,
+    padding: theme.spacing.lg,
+    gap: theme.spacing.md,
   },
   title: {
-    fontSize: 22,
-    lineHeight: 27,
+    fontSize: 21,
+    lineHeight: 26,
     fontWeight: '900',
-    color: 'rgba(248, 244, 239, 0.98)',
+    color: sensory.text,
   },
   description: {
     fontSize: 14,
-    lineHeight: 20,
-    color: 'rgba(248, 244, 239, 0.82)',
+    lineHeight: 21,
+    color: sensory.muted,
   },
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: theme.spacing.md,
-  },
-  valueBlock: {
-    flex: 1,
-    gap: 4,
-  },
-  valueText: {
-    fontSize: 30,
-    fontWeight: '900',
-    color: 'rgba(255, 244, 238, 0.98)',
-  },
-  valueSubtext: {
-    fontSize: theme.typography.caption,
-    color: 'rgba(248, 244, 239, 0.74)',
+    gap: theme.spacing.sm,
   },
   couponPill: {
+    flexShrink: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    borderRadius: 18,
-    backgroundColor: 'rgba(12, 9, 8, 0.22)',
+    borderRadius: 24,
+    backgroundColor: sensory.surfaceContainerHigh,
     paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingVertical: 9,
   },
   couponText: {
+    flexShrink: 1,
     fontSize: theme.typography.eyebrow,
     fontWeight: '900',
-    letterSpacing: 1,
+    letterSpacing: 0.8,
     textTransform: 'uppercase',
-    color: 'rgba(248, 244, 239, 0.96)',
+    color: sensory.text,
+  },
+  minimumText: {
+    fontSize: theme.typography.caption,
+    color: 'rgba(212, 196, 183, 0.72)',
   },
   buttonWrap: {
-    borderRadius: theme.radius.pill,
+    borderRadius: 24,
     overflow: 'hidden',
   },
   button: {
-    minHeight: 48,
-    borderRadius: theme.radius.pill,
+    minHeight: 50,
+    borderRadius: 24,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.16)',
+    gap: 8,
+    backgroundColor: sensory.caramel,
     paddingHorizontal: 16,
   },
   buttonApplied: {
-    backgroundColor: 'rgba(227, 191, 127, 0.2)',
+    backgroundColor: sensory.surfaceContainerHigh,
   },
   buttonText: {
     fontSize: 14,
-    fontWeight: '800',
-    color: 'rgba(248, 244, 239, 0.96)',
+    fontWeight: '900',
+    color: sensory.onCaramel,
+  },
+  buttonTextApplied: {
+    color: sensory.caramel,
   },
 });
