@@ -8,6 +8,7 @@ import {
 } from 'firebase/firestore';
 import type { AccessEntry } from '../types';
 import { getFirebaseDb } from '../../services/firebase';
+import { sanitizeFirestoreData } from '../../utils/sanitizeFirestoreData';
 
 const mapAccessEntries = (
   entries: AccessEntry[],
@@ -17,12 +18,12 @@ export const seedMainAdminAccess = async (adminEmail: string) => {
   try {
     await setDoc(
       doc(getFirebaseDb(), 'admin_access', adminEmail),
-      {
+      sanitizeFirestoreData({
         email: adminEmail,
         role: 'admin',
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-      },
+      }),
       { merge: true },
     );
   } catch (error) {
@@ -119,12 +120,12 @@ export const addAdminAccessEntry = async (normalizedEmail: string) => {
   try {
     await setDoc(
       doc(getFirebaseDb(), 'admin_access', normalizedEmail),
-      {
+      sanitizeFirestoreData({
         email: normalizedEmail,
         role: 'admin',
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-      },
+      }),
       { merge: true },
     );
   } catch (error) {
@@ -144,7 +145,7 @@ export const addDeliveryAccessEntry = async (normalizedEmail: string) => {
   try {
     await setDoc(
       doc(getFirebaseDb(), 'agents', normalizedEmail),
-      {
+      sanitizeFirestoreData({
         email: normalizedEmail,
         role: 'delivery',
         accessOnly: true,
@@ -152,7 +153,7 @@ export const addDeliveryAccessEntry = async (normalizedEmail: string) => {
         status: 'OFFLINE',
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-      },
+      }),
       { merge: true },
     );
   } catch (error) {

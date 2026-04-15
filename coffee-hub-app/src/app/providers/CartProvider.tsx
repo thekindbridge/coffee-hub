@@ -39,7 +39,6 @@ export function CartProvider({ auth, children }: CartProviderProps) {
       return;
     }
 
-    console.log('User:', auth.user);
     setAuthError('');
   }, [auth.user]);
 

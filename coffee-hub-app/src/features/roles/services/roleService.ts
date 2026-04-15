@@ -8,6 +8,7 @@ import {
 } from 'firebase/firestore';
 import { getFirebaseDb } from '../../../services/firebase';
 import { toAppServiceError } from '../../../services/serviceError';
+import { sanitizeFirestoreData } from '../../../utils/sanitizeFirestoreData';
 import { normalizeEmail } from '../lib/normalizeEmail';
 import type { RoleAccessEntry } from '../types';
 
@@ -61,12 +62,12 @@ export const seedOwnerAdmin = async (email: string) => {
 
     await setDoc(
       doc(getFirebaseDb(), 'admin_access', normalizedEmail),
-      {
+      sanitizeFirestoreData({
         createdAt: serverTimestamp(),
         email: normalizedEmail,
         role: 'admin',
         updatedAt: serverTimestamp(),
-      },
+      }),
       { merge: true },
     );
   } catch (error) {

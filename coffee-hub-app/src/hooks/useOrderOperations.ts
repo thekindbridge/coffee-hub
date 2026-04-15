@@ -14,6 +14,8 @@ import {
   type AgentTrackerPermissionState,
   type AgentTrackerStatus,
 } from '../delivery-agent/tracking/agentTracker';
+import { getOrderStatusFirestoreValue } from '../shared/orderStatus';
+import { sanitizeFirestoreData } from '../utils/sanitizeFirestoreData';
 import type {
   DeliveryAgent,
   DeliveryLocation,
@@ -40,6 +42,8 @@ const toFirestoreLocation = (location: DeliveryLocation) => ({
   lng: location.lng,
   updatedAt: serverTimestamp(),
 });
+
+const normalizeAgentId = (value: string) => value.trim().toLowerCase();
 
 export const useOrderOperations = ({
   agentLastTrackedLocation,
@@ -78,15 +82,21 @@ export const useOrderOperations = ({
       return;
     }
 
-    const agentId =
+    const assignedAgentId = (
       orderToAccept.delivery_agent_id ||
+      orderToAccept.assigned_agent_id ||
+      ''
+    ).trim();
+    const agentId = normalizeAgentId(
+      assignedAgentId ||
       currentDeliveryAgent?.id ||
-      normalizedCurrentEmail;
+      normalizedCurrentEmail,
+    );
 
-    if (!agentId) {
+    if (!assignedAgentId || !agentId) {
       Alert.alert(
         'Missing agent',
-        'Unable to identify the assigned delivery agent for this order.',
+        'This order must be assigned to a delivery agent before delivery can begin.',
       );
       return;
     }
@@ -108,30 +118,33 @@ export const useOrderOperations = ({
 
       batch.set(
         doc(db, 'orders', orderToAccept.doc_id),
-        {
+        sanitizeFirestoreData({
           deliveryPickedAt: serverTimestamp(),
+          delivery_picked_at: serverTimestamp(),
           orderStatus: 'OUT_FOR_DELIVERY',
           pickedAt: serverTimestamp(),
-          status: 'OUT_FOR_DELIVERY',
+          status: getOrderStatusFirestoreValue('OUT_FOR_DELIVERY'),
+          status_code: 'OUT_FOR_DELIVERY',
           updatedAt: serverTimestamp(),
-        },
+          updated_at: serverTimestamp(),
+        }),
         { merge: true },
       );
 
       batch.set(
         doc(db, 'agents', agentId),
-        {
+        sanitizeFirestoreData({
           currentOrderId: orderToAccept.id,
           isActive: true,
-          status: 'BUSY',
+          status: 'busy',
           updatedAt: serverTimestamp(),
-        },
+        }),
         { merge: true },
       );
 
       batch.set(
         doc(db, 'delivery_sessions', orderToAccept.id),
-        {
+        sanitizeFirestoreData({
           agentId,
           agentName:
             currentDeliveryAgent?.name ||
@@ -141,7 +154,7 @@ export const useOrderOperations = ({
           orderId: orderToAccept.id,
           status: 'assigned',
           updatedAt: serverTimestamp(),
-        },
+        }),
         { merge: true },
       );
       await batch.commit();
@@ -171,9 +184,12 @@ export const useOrderOperations = ({
     }
 
     const agentId =
-      currentDeliveryOrder.delivery_agent_id ||
-      currentDeliveryAgent?.id ||
-      normalizedCurrentEmail;
+      normalizeAgentId(
+        currentDeliveryOrder.delivery_agent_id ||
+        currentDeliveryOrder.assigned_agent_id ||
+        currentDeliveryAgent?.id ||
+        normalizedCurrentEmail,
+      );
 
     if (!agentId) {
       Alert.alert(
@@ -238,12 +254,12 @@ export const useOrderOperations = ({
         }),
         setDoc(
           doc(getFirebaseDb(), 'agents', agentId),
-          {
+          sanitizeFirestoreData({
             currentOrderId: currentDeliveryOrder.id,
             isActive: true,
-            status: 'BUSY',
+            status: 'busy',
             updatedAt: serverTimestamp(),
-          },
+          }),
           { merge: true },
         ),
       ]);
@@ -275,14 +291,28 @@ export const useOrderOperations = ({
       return;
     }
 
+    const assignedAgentId = normalizeAgentId(
+      orderToComplete.delivery_agent_id ||
+      orderToComplete.assigned_agent_id ||
+      '',
+    );
+    if (!assignedAgentId) {
+      Alert.alert(
+        'Missing assignment',
+        'This order cannot be marked delivered until it has an assigned delivery agent.',
+      );
+      return;
+    }
+
     setIsEndingDelivery(true);
 
     try {
       const db = getFirebaseDb();
-      const agentId =
-        orderToComplete.delivery_agent_id ||
+      const agentId = normalizeAgentId(
+        assignedAgentId ||
         currentDeliveryAgent?.id ||
-        normalizedCurrentEmail;
+        normalizedCurrentEmail,
+      );
       const batch = writeBatch(db);
       const finalLocation = agentLastTrackedLocation
         ? toFirestoreLocation(agentLastTrackedLocation)
@@ -290,55 +320,61 @@ export const useOrderOperations = ({
 
       batch.set(
         doc(db, 'orders', orderToComplete.doc_id),
-        {
+        sanitizeFirestoreData({
           deliveryDeliveredAt: serverTimestamp(),
+          delivery_delivered_at: serverTimestamp(),
           deliveredAt: serverTimestamp(),
           orderStatus: 'DELIVERED',
-          status: 'DELIVERED',
+          status: getOrderStatusFirestoreValue('DELIVERED'),
+          status_code: 'DELIVERED',
           updatedAt: serverTimestamp(),
+          updated_at: serverTimestamp(),
+          'timestamps.deliveredAt': serverTimestamp(),
+          ...(finalLocation ? { delivery_location: finalLocation } : {}),
           ...(finalLocation ? { deliveryLocation: finalLocation } : {}),
-        },
+        }),
         { merge: true },
       );
 
       if (agentId) {
         batch.set(
           doc(db, 'agents', agentId),
-          {
+          sanitizeFirestoreData({
             currentOrderId: '',
             isActive: true,
-            status: 'AVAILABLE',
+            status: 'active',
             updatedAt: serverTimestamp(),
+            ...(finalLocation ? { currentLocation: finalLocation } : {}),
             ...(finalLocation ? { lastLocation: finalLocation } : {}),
-          },
+          }),
           { merge: true },
         );
       }
 
       batch.set(
         doc(db, 'delivery_sessions', orderToComplete.id),
-        {
+        sanitizeFirestoreData({
           completedAt: serverTimestamp(),
           orderDocId: orderToComplete.doc_id,
           orderId: orderToComplete.id,
           status: 'completed',
           updatedAt: serverTimestamp(),
           ...(finalLocation ? { lastLocation: finalLocation } : {}),
-        },
+        }),
         { merge: true },
       );
 
       if (finalLocation && agentId) {
         batch.set(
           doc(db, 'agent_locations', orderToComplete.id),
-          {
+          sanitizeFirestoreData({
             accuracy: agentLastTrackedLocation?.accuracy ?? null,
             agentId,
             lat: agentLastTrackedLocation?.lat,
             lng: agentLastTrackedLocation?.lng,
             orderDocId: orderToComplete.doc_id,
             updatedAt: serverTimestamp(),
-          },
+          }),
           { merge: true },
         );
       }
@@ -362,7 +398,7 @@ export const useOrderOperations = ({
   };
 
   const updateAvailability = async (isOnline: boolean) => {
-    const agentId = currentDeliveryAgent?.id || normalizedCurrentEmail;
+    const agentId = normalizeAgentId(currentDeliveryAgent?.id || normalizedCurrentEmail);
     if (!agentId) {
       Alert.alert('Missing agent', 'Unable to update the delivery availability right now.');
       return;
@@ -381,14 +417,14 @@ export const useOrderOperations = ({
     try {
       await setDoc(
         doc(getFirebaseDb(), 'agents', agentId),
-        {
+        sanitizeFirestoreData({
           currentOrderId: currentDeliveryOrder?.id || '',
           isActive: isOnline,
           status: isOnline
-            ? (currentDeliveryOrder ? 'BUSY' : 'AVAILABLE')
-            : 'OFFLINE',
+            ? (currentDeliveryOrder ? 'busy' : 'active')
+            : 'offline',
           updatedAt: serverTimestamp(),
-        },
+        }),
         { merge: true },
       );
 

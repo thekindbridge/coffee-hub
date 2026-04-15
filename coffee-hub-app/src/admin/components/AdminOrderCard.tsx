@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import {
   Animated,
@@ -10,37 +10,30 @@ import { StatusBadge as SharedStatusBadge } from '../../components/customer/Stat
 import { GlassSurface } from '../../components/ui/GlassSurface';
 import { PrimaryButton } from '../../components/ui/PrimaryButton';
 import { ScalePressable } from '../../components/ui/ScalePressable';
+import {
+  getOrderStatusCustomerCopy,
+  getOrderStatusLabel,
+} from '../../shared/orderStatus';
 import { useFadeIn } from '../../theme';
 import { formatCurrency } from '../../utils/formatCurrency';
 import {
   adminPalette,
   adminRadius,
   adminShadow,
-  canCancelAdminOrder,
-  canNotifyAdminOrder,
-  getAdminOrderStage,
-  getAdminOrderStageOptions,
   getAdminStatusTone,
   getAdminSurfaceColor,
-  type AdminOrderStage,
 } from '../utils/designSystem';
 import type { Order } from '../types';
 
 type AdminOrderCardProps = {
-  order: Order;
-  selectedStage: AdminOrderStage;
-  onStageChange: (stage: AdminOrderStage) => void;
-  onUpdate: () => void;
-  onCancel: () => void;
-  onNotify: () => void;
   isUpdating?: boolean;
-};
-
-type SecondaryActionProps = {
-  icon: keyof typeof Ionicons.glyphMap;
-  label: string;
-  tone?: 'default' | 'danger';
-  onPress: () => void;
+  onPrimaryAction?: () => void;
+  onSecondaryAction?: () => void;
+  order: Order;
+  primaryActionDisabled?: boolean;
+  primaryActionLabel?: string;
+  secondaryActionLabel?: string;
+  secondaryActionTone?: 'default' | 'danger';
 };
 
 const formatOrderTime = (value: string) => {
@@ -62,7 +55,12 @@ function SecondaryAction({
   label,
   tone = 'default',
   onPress,
-}: SecondaryActionProps) {
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  onPress: () => void;
+  tone?: 'default' | 'danger';
+}) {
   const isDanger = tone === 'danger';
 
   return (
@@ -92,29 +90,21 @@ function SecondaryAction({
 }
 
 export function AdminOrderCard({
-  order,
-  selectedStage,
-  onStageChange,
-  onUpdate,
-  onCancel,
-  onNotify,
   isUpdating = false,
+  onPrimaryAction,
+  onSecondaryAction,
+  order,
+  primaryActionDisabled = false,
+  primaryActionLabel,
+  secondaryActionLabel,
+  secondaryActionTone = 'default',
 }: AdminOrderCardProps) {
   const animatedStyle = useFadeIn();
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const stageOptions = getAdminOrderStageOptions(order.status_code);
+  const statusLabel = getOrderStatusLabel(order.status_code);
   const statusTone = getAdminStatusTone(order.status_code);
-  const canCancel = canCancelAdminOrder(order.status_code);
-  const canNotify = canNotifyAdminOrder(order.status_code);
-  const currentStage = getAdminOrderStage(order.status_code);
-
-  const toggleDropdown = () => {
-    if (stageOptions.length <= 1) {
-      return;
-    }
-
-    setIsDropdownOpen(current => !current);
-  };
+  const hasAssignedAgent = Boolean(order.delivery_agent_name || order.delivery_agent_id);
+  const stageSummary = getOrderStatusCustomerCopy(order.status_code);
+  const rejectionReason = order.rejection_reason?.trim();
 
   return (
     <Animated.View style={animatedStyle}>
@@ -131,17 +121,41 @@ export function AdminOrderCard({
                 {order.customer_name || 'Walk-in Customer'}
               </Text>
               <Text style={styles.orderMeta}>
-                #{order.id} · {formatOrderTime(order.created_at)}
+                #{order.id} · {formatOrderTime(order.timestamps.createdAt || order.created_at)}
               </Text>
             </View>
 
             <View style={styles.headerRight}>
-              <SharedStatusBadge label={currentStage} tone={statusTone} />
+              <SharedStatusBadge label={statusLabel} tone={statusTone} />
               <Text style={styles.total}>{formatCurrency(order.total_amount)}</Text>
             </View>
           </View>
 
-          <View style={styles.itemsWrap}>
+          <View style={styles.summaryStrip}>
+            <View style={styles.summaryBlock}>
+              <Text style={styles.summaryLabel}>Lifecycle</Text>
+              <Text style={styles.summaryValue}>{stageSummary}</Text>
+            </View>
+            <View style={styles.summaryDivider} />
+            <View style={styles.summaryBlock}>
+              <Text style={styles.summaryLabel}>Items</Text>
+              <Text style={styles.summaryValue}>{order.items?.length ?? 0}</Text>
+            </View>
+            <View style={styles.summaryDivider} />
+            <View style={styles.summaryBlock}>
+              <Text style={styles.summaryLabel}>Phone</Text>
+              <Text numberOfLines={1} style={styles.summaryValue}>{order.phone || 'Not shared'}</Text>
+            </View>
+          </View>
+
+          <View style={styles.detailsSection}>
+            <Text style={styles.sectionLabel}>Address</Text>
+            <Text style={styles.detailValue}>
+              {order.address || 'Address is still syncing from Firestore.'}
+            </Text>
+          </View>
+
+          <View style={styles.detailsSection}>
             <Text style={styles.sectionLabel}>Items</Text>
             {order.items?.length ? (
               order.items.map(item => (
@@ -154,100 +168,52 @@ export function AdminOrderCard({
             )}
           </View>
 
-          <View style={styles.stageWrap}>
-            <Text style={styles.sectionLabel}>Kitchen stage</Text>
-            <ScalePressable
-              accessibilityRole="button"
-              disabled={stageOptions.length <= 1}
-              onPress={toggleDropdown}
-              scaleTo={0.98}
-              style={styles.dropdownWrap}
-            >
-              <GlassSurface
-                depth="floating"
-                intensity={60}
-                overlayColor={getAdminSurfaceColor('floating')}
-                style={styles.dropdown}
-              >
-                <View>
-                  <Text style={styles.dropdownValue}>{selectedStage}</Text>
-                  <Text style={styles.dropdownHint}>
-                    {stageOptions.length > 1
-                      ? 'Select the next visible stage'
-                      : 'No alternate stage available'}
-                  </Text>
-                </View>
+          {hasAssignedAgent ? (
+            <View style={styles.assignmentCard}>
+              <View style={styles.assignmentHeader}>
+                <Ionicons color={adminPalette.caramelSoft} name="bicycle-outline" size={16} />
+                <Text style={styles.assignmentLabel}>Assigned Delivery Agent</Text>
+              </View>
+              <Text style={styles.assignmentValue}>
+                {order.delivery_agent_name || order.delivery_agent_id}
+              </Text>
+              <Text style={styles.assignmentMeta}>
+                {order.delivery_agent_phone || order.delivery_agent_vehicle || 'Dispatch ready'}
+              </Text>
+            </View>
+          ) : null}
 
-                <Ionicons
-                  color={adminPalette.textMuted}
-                  name={isDropdownOpen ? 'chevron-up' : 'chevron-down'}
-                  size={18}
+          {rejectionReason ? (
+            <View style={styles.noticeCard}>
+              <Ionicons color={adminPalette.danger} name="alert-circle-outline" size={16} />
+              <Text style={styles.noticeText}>{rejectionReason}</Text>
+            </View>
+          ) : null}
+
+          {(primaryActionLabel || secondaryActionLabel) ? (
+            <View style={styles.actionsColumn}>
+              {primaryActionLabel && onPrimaryAction ? (
+                <PrimaryButton
+                  title={isUpdating ? 'Updating...' : primaryActionLabel}
+                  onPress={onPrimaryAction}
+                  loading={isUpdating}
+                  disabled={isUpdating || primaryActionDisabled}
+                  style={styles.updateButton}
                 />
-              </GlassSurface>
-            </ScalePressable>
+              ) : null}
 
-            {isDropdownOpen ? (
-              <View style={styles.optionWrap}>
-                {stageOptions.map(option => {
-                  const isActive = option === selectedStage;
-
-                  return (
-                    <ScalePressable
-                      key={`${order.doc_id}-${option}`}
-                      accessibilityRole="button"
-                      onPress={() => {
-                        onStageChange(option);
-                        setIsDropdownOpen(false);
-                      }}
-                      scaleTo={0.98}
-                      style={styles.optionPressable}
-                    >
-                      <GlassSurface
-                        depth="floating"
-                        intensity={58}
-                        overlayColor={isActive ? 'rgba(200, 146, 99, 0.24)' : getAdminSurfaceColor('floating')}
-                        style={[styles.optionCard, isActive ? styles.optionCardActive : null]}
-                      >
-                        <Text style={[styles.optionLabel, isActive ? styles.optionLabelActive : null]}>
-                          {option}
-                        </Text>
-                      </GlassSurface>
-                    </ScalePressable>
-                  );
-                })}
-              </View>
-            ) : null}
-          </View>
-
-          <View style={styles.actionsColumn}>
-            <PrimaryButton
-              title={isUpdating ? 'Updating...' : 'Update'}
-              onPress={onUpdate}
-              loading={isUpdating}
-              disabled={isUpdating}
-              style={styles.updateButton}
-            />
-
-            {(canCancel || canNotify) ? (
-              <View style={styles.secondaryRow}>
-                {canCancel ? (
+              {secondaryActionLabel && onSecondaryAction ? (
+                <View style={styles.secondaryRow}>
                   <SecondaryAction
-                    icon="close-outline"
-                    label="Cancel"
-                    tone="danger"
-                    onPress={onCancel}
+                    icon={secondaryActionTone === 'danger' ? 'close-outline' : 'ellipsis-horizontal-outline'}
+                    label={secondaryActionLabel}
+                    tone={secondaryActionTone}
+                    onPress={onSecondaryAction}
                   />
-                ) : null}
-                {canNotify ? (
-                  <SecondaryAction
-                    icon="notifications-outline"
-                    label="Notify Customer"
-                    onPress={onNotify}
-                  />
-                ) : null}
-              </View>
-            ) : null}
-          </View>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
         </GlassSurface>
       </View>
     </Animated.View>
@@ -266,10 +232,10 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 14,
     alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: 14,
+    justifyContent: 'space-between',
   },
   headerCopy: {
     flex: 1,
@@ -277,14 +243,14 @@ const styles = StyleSheet.create({
   customerName: {
     color: adminPalette.text,
     fontSize: 19,
-    lineHeight: 24,
     fontWeight: '800',
+    lineHeight: 24,
   },
   orderMeta: {
-    marginTop: 6,
     color: adminPalette.textMuted,
     fontSize: 13,
     fontWeight: '600',
+    marginTop: 6,
   },
   headerRight: {
     alignItems: 'flex-end',
@@ -295,7 +261,36 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '900',
   },
-  itemsWrap: {
+  summaryStrip: {
+    alignItems: 'stretch',
+    backgroundColor: 'rgba(242, 231, 225, 0.04)',
+    borderRadius: adminRadius.control,
+    flexDirection: 'row',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  summaryBlock: {
+    flex: 1,
+    gap: 4,
+  },
+  summaryDivider: {
+    backgroundColor: adminPalette.ghostStrong,
+    marginHorizontal: 10,
+    width: 1,
+  },
+  summaryLabel: {
+    color: adminPalette.textMuted,
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.9,
+    textTransform: 'uppercase',
+  },
+  summaryValue: {
+    color: adminPalette.text,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  detailsSection: {
     gap: 8,
   },
   sectionLabel: {
@@ -305,59 +300,56 @@ const styles = StyleSheet.create({
     letterSpacing: 0.9,
     textTransform: 'uppercase',
   },
+  detailValue: {
+    color: adminPalette.textSoft,
+    fontSize: 14,
+    lineHeight: 20,
+  },
   itemLine: {
     color: adminPalette.textSoft,
     fontSize: 14,
     lineHeight: 20,
   },
-  stageWrap: {
-    gap: 10,
-  },
-  dropdownWrap: {
+  assignmentCard: {
+    backgroundColor: 'rgba(200, 146, 99, 0.12)',
     borderRadius: adminRadius.control,
+    gap: 6,
+    padding: 14,
   },
-  dropdown: {
-    borderRadius: adminRadius.control,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  assignmentHeader: {
     alignItems: 'center',
-    gap: 12,
+    flexDirection: 'row',
+    gap: 8,
   },
-  dropdownValue: {
+  assignmentLabel: {
+    color: adminPalette.textMuted,
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+  },
+  assignmentValue: {
     color: adminPalette.text,
     fontSize: 15,
     fontWeight: '800',
   },
-  dropdownHint: {
-    marginTop: 4,
-    color: adminPalette.textMuted,
-    fontSize: 12,
-  },
-  optionWrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  optionPressable: {
-    borderRadius: adminRadius.pill,
-  },
-  optionCard: {
-    borderRadius: adminRadius.pill,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  optionCardActive: {
-    backgroundColor: 'rgba(200, 146, 99, 0.18)',
-  },
-  optionLabel: {
+  assignmentMeta: {
     color: adminPalette.textSoft,
-    fontSize: 12,
-    fontWeight: '800',
+    fontSize: 13,
   },
-  optionLabelActive: {
-    color: adminPalette.caramelSoft,
+  noticeCard: {
+    alignItems: 'flex-start',
+    backgroundColor: adminPalette.dangerSurface,
+    borderRadius: adminRadius.control,
+    flexDirection: 'row',
+    gap: 8,
+    padding: 14,
+  },
+  noticeText: {
+    color: adminPalette.danger,
+    flex: 1,
+    fontSize: 14,
+    lineHeight: 20,
   },
   actionsColumn: {
     gap: 10,
@@ -370,17 +362,17 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   secondaryActionWrap: {
-    flex: 1,
     borderRadius: adminRadius.pill,
+    flex: 1,
   },
   secondaryAction: {
-    minHeight: 44,
-    borderRadius: adminRadius.pill,
-    paddingHorizontal: 14,
-    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    borderRadius: adminRadius.pill,
+    flexDirection: 'row',
     gap: 8,
+    justifyContent: 'center',
+    minHeight: 44,
+    paddingHorizontal: 14,
   },
   secondaryActionLabel: {
     color: adminPalette.text,

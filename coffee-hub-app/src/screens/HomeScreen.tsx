@@ -7,18 +7,23 @@ import {
   Alert,
   Image,
   Linking,
+  Platform,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCartState } from '../app/providers/CartProvider';
 import { CartFloatingButton } from '../components/cart/CartFloatingButton';
-import { CategoryTabs } from '../components/customer/CategoryTabs';
-import { getAmbientShadow, getCustomerPalette } from '../components/customer/designSystem';
+import {
+  CUSTOMER_SCREEN_BOTTOM_PADDING,
+  CUSTOMER_SCREEN_BOTTOM_PADDING_WITH_CART,
+  getAmbientShadow,
+  getCustomerPalette,
+} from '../components/customer/designSystem';
+import { HomeHeroCarousel, type HomeHeroSlide } from '../components/home/HomeHeroCarousel';
 import { GlassSurface } from '../components/ui/GlassSurface';
 import { ScalePressable } from '../components/ui/ScalePressable';
 import { ScreenTransition } from '../components/ui/ScreenTransition';
@@ -26,130 +31,216 @@ import { ROOT_ROUTES, TAB_ROUTES } from '../constants/routes';
 import { buildMapsSearchUrl, normalizePhoneForTel } from '../delivery-agent/utils/orderHelpers';
 import { useProfileData } from '../features/profile/hooks/useProfileData';
 import { getProfileInitials } from '../features/profile/lib/profileMappers';
-import { useMenuExperience } from '../hooks/useMenuExperience';
+import { useMenu } from '../hooks/useMenu';
 import { useOffers } from '../hooks/useOffers';
 import type { RootStackParamList } from '../navigation/types';
 import { SHOP_LOCATION } from '../shared/shopLocation';
 import { useTheme, useThemedStyles } from '../theme';
-import { formatCurrency } from '../utils/formatCurrency';
+import type { MenuItem, Offer } from '../types';
 
 type HomeNavigation = NativeStackNavigationProp<RootStackParamList>;
 
-const ACCENT_COLOR = '#F2BE8C';
+const LOGO_URI = 'https://res.cloudinary.com/ddfhaqeme/image/upload/v1774339708/logo_d9kcyr.jpg';
 const SHOP_PHONE = '+91 7893504892';
-const DEFAULT_HERO_IMAGE = 'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?auto=format&fit=crop&w=900&q=80';
-const DEFAULT_CATEGORIES = ['Coffee', 'Tea', 'Snacks', 'Shakes'];
-const HERO_GRADIENT = ['#2D1A15', '#4F2D23', '#774A37'] as const;
+const HERO_QUOTE_TEXT = 'Fresh brews.\nCalm moments.';
+const SERIF_FONT_FAMILY = Platform.select({
+  android: 'serif',
+  default: 'serif',
+  ios: 'Georgia',
+});
+const BACKGROUND_GLOW_TOP = ['rgba(235, 228, 183, 0.1)', 'rgba(235, 228, 183, 0.02)', 'transparent'] as const;
+const BACKGROUND_GLOW_SIDE = ['rgba(87, 66, 56, 0.22)', 'rgba(87, 66, 56, 0.03)', 'transparent'] as const;
+const ABOUT_CARD_GRADIENT = ['rgba(87, 66, 56, 0.18)', 'rgba(20, 13, 6, 0.03)'] as const;
+const CONTACT_CARD_GRADIENT = ['rgba(235, 228, 183, 0.14)', 'rgba(20, 13, 6, 0.02)'] as const;
 
-const isPreferredPreviewImage = (url: string) => {
-  const normalized = url.trim().toLowerCase();
+const HIGHLIGHT_CARDS = [
+  {
+    colors: ['rgba(235, 228, 183, 0.16)', 'rgba(50, 40, 32, 0.02)'] as const,
+    icon: 'time-outline' as const,
+    title: 'Open\nHours',
+  },
+  {
+    colors: ['rgba(222, 193, 179, 0.16)', 'rgba(50, 40, 32, 0.02)'] as const,
+    icon: 'rocket-outline' as const,
+    title: 'Fast\nDelivery',
+  },
+  {
+    colors: ['rgba(206, 199, 157, 0.14)', 'rgba(50, 40, 32, 0.02)'] as const,
+    icon: 'cafe-outline' as const,
+    title: 'Fresh\nCoffee',
+  },
+] as const;
 
-  return normalized.length > 0
-    && !normalized.includes('chatgpt_image')
-    && !normalized.endsWith('.png');
-};
+const FALLBACK_HERO_VISUALS = [
+  {
+    id: 'fallback-espresso',
+    imageUrl: 'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?auto=format&fit=crop&w=1200&q=80',
+    visualTag: 'Signature brews',
+  },
+  {
+    id: 'fallback-shake',
+    imageUrl: 'https://images.unsplash.com/photo-1572490122747-3968b75cc699?auto=format&fit=crop&w=1200&q=80',
+    visualTag: 'Creamy shakes',
+  },
+  {
+    id: 'fallback-latte',
+    imageUrl: 'https://images.unsplash.com/photo-1517701550927-30cf4ba1fceb?auto=format&fit=crop&w=1200&q=80',
+    visualTag: 'Daily comfort',
+  },
+  {
+    id: 'fallback-cafe',
+    imageUrl: 'https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&w=1200&q=80',
+    visualTag: 'Calm cafe',
+  },
+] as const;
 
-const pickHomeCategories = (categories: string[]) => {
-  const preferred = DEFAULT_CATEGORIES.filter(category => categories.includes(category));
+const FALLBACK_HERO_COPY = [
+  {
+    subtitle: 'Signature coffees, creamy shakes, and calm cafe energy in every pour.',
+    supportingText: 'Crafted to feel warm, polished, and easy to come back to.',
+    title: 'Fresh brews ready',
+  },
+  {
+    subtitle: 'Smooth classics and slow-roasted favorites built for familiar comfort.',
+    supportingText: 'Made for easy mornings and a softer cafe pause.',
+    title: 'Start your day right',
+  },
+  {
+    subtitle: 'A refined local coffee stop with richer textures, aroma, and balance.',
+    supportingText: 'Premium handcrafted drinks inspired by everyday rituals.',
+    title: 'Handcrafted coffee',
+  },
+  {
+    subtitle: 'Premium drinks and familiar comfort, served with a calmer visual rhythm.',
+    supportingText: 'Built for repeat visits, easy browsing, and better coffee breaks.',
+    title: 'Coffee Hub moments',
+  },
+] as const;
 
-  if (preferred.length > 0) {
-    return preferred;
-  }
-
-  return categories.filter(category => category !== 'All').slice(0, 4);
-};
+const ABOUT_POINTS = [
+  {
+    icon: 'cafe-outline',
+    title: 'Fresh daily',
+  },
+  {
+    icon: 'sparkles-outline',
+    title: 'Premium feel',
+  },
+  {
+    icon: 'heart-outline',
+    title: 'Locally loved',
+  },
+] as const;
 
 const formatFirstName = (label: string) => {
   const firstName = label.trim().split(/\s+/)[0] || 'Pavan';
-
   return firstName.charAt(0).toUpperCase() + firstName.slice(1);
+};
+
+const getGreetingLabel = () => {
+  const hour = new Date().getHours();
+
+  if (hour < 12) {
+    return 'Good Morning';
+  }
+
+  if (hour < 17) {
+    return 'Good Afternoon';
+  }
+
+  return 'Good Evening';
+};
+
+const buildHeroSlides = (
+  menu: MenuItem[],
+  activeOffers: Offer[],
+  availabilityLabel: string,
+): HomeHeroSlide[] => {
+  const uniqueVisuals = menu
+    .filter(item => item.image_url.trim().length > 0)
+    .sort((left, right) => right.rating - left.rating)
+    .reduce<Array<{
+      eyebrow: string;
+      id: string;
+      imageUrl: string;
+      visualTag: string;
+    }>>((result, item) => {
+      const imageUrl = item.image_url.trim();
+
+      if (result.some(visual => visual.imageUrl === imageUrl)) {
+        return result;
+      }
+
+      result.push({
+        eyebrow: `${item.category || 'Coffee Hub'} picks`,
+        id: item.id,
+        imageUrl,
+        visualTag: item.name,
+      });
+
+      return result;
+    }, []);
+
+  const menuPool = uniqueVisuals.slice(0, 4);
+  const fallbackPool = FALLBACK_HERO_VISUALS.filter(fallback => (
+    !menuPool.some(item => item.imageUrl === fallback.imageUrl)
+  )).map(fallback => ({
+    eyebrow: 'Coffee Hub signatures',
+    id: fallback.id,
+    imageUrl: fallback.imageUrl,
+    visualTag: fallback.visualTag,
+  }));
+
+  const visualPool = [...menuPool, ...fallbackPool].slice(0, 4);
+
+  return visualPool.map((visual, index) => {
+    const liveOffer = activeOffers[index] ?? null;
+    const fallbackCopy = FALLBACK_HERO_COPY[index % FALLBACK_HERO_COPY.length];
+    const couponCode = liveOffer?.couponCode?.trim();
+
+    return {
+      couponCode: couponCode || undefined,
+      eyebrow: liveOffer ? 'Offer live' : visual.eyebrow,
+      id: `${visual.id}-${liveOffer?.id ?? index}`,
+      imageUrl: visual.imageUrl,
+      subtitle: liveOffer?.description?.trim() || fallbackCopy.subtitle,
+      supportingText: couponCode
+        ? `${couponCode} available now - ${availabilityLabel}`
+        : `${fallbackCopy.supportingText} - ${availabilityLabel}`,
+      title: liveOffer?.title?.trim() || fallbackCopy.title,
+      visualTag: visual.visualTag,
+    };
+  });
 };
 
 export function HomeScreen() {
   const navigation = useNavigation<HomeNavigation>();
+  const insets = useSafeAreaInsets();
   const { theme } = useTheme();
   const palette = getCustomerPalette(theme);
   const styles = useThemedStyles(createStyles);
   const { activeOffers } = useOffers();
-  const {
-    authPhotoUrl,
-    primaryAddress,
-    profileDisplayName,
-  } = useProfileData();
-  const {
-    categories,
-    error,
-    filteredMenu,
-    isMenuLoading,
-    isShopOpen,
-    refreshMenu,
-    searchQuery,
-    selectedCategory,
-    setSearchQuery,
-    setSelectedCategory,
-    shopAvailabilityMessage,
-  } = useMenuExperience();
+  const { authPhotoUrl, profileDisplayName } = useProfileData();
+  const { isLoading: isMenuLoading, menu, refreshMenu } = useMenu();
   const {
     cartCount,
-    cartQuantityById,
-    handleAddToCart,
+    isShopOpen,
     payableCartTotal,
+    shopStatusMessage,
+    shopTimingRangeLabel,
   } = useCartState();
 
-  const homeCategories = useMemo(
-    () => pickHomeCategories(categories),
-    [categories],
-  );
-
-  const activeCategory = useMemo(() => {
-    if (selectedCategory !== 'All') {
-      return selectedCategory;
-    }
-
-    if (searchQuery.trim().length === 0 && homeCategories.includes('Coffee')) {
-      return 'Coffee';
-    }
-
-    return homeCategories[0] || 'All';
-  }, [homeCategories, searchQuery, selectedCategory]);
-
-  const popularSource = useMemo(
-    () => (selectedCategory === 'All'
-      ? filteredMenu.filter(item => item.category === activeCategory)
-      : filteredMenu),
-    [activeCategory, filteredMenu, selectedCategory],
-  );
-
-  const popularItems = useMemo(() => {
-    const source = popularSource.length > 0 ? popularSource : filteredMenu;
-
-    return [...source]
-      .sort((left, right) => right.rating - left.rating)
-      .slice(0, 4);
-  }, [filteredMenu, popularSource]);
-
-  const menuPreviewItems = useMemo(() => {
-    const excludedIds = new Set(popularItems.map(item => item.id));
-    const previewPool = filteredMenu.filter(item => !excludedIds.has(item.id));
-    const preferred = previewPool.filter(item => isPreferredPreviewImage(item.image_url));
-    const fallback = previewPool.filter(item => !isPreferredPreviewImage(item.image_url));
-    const initialSelection = [...preferred, ...fallback].slice(0, 6);
-
-    if (initialSelection.length === 6) {
-      return initialSelection;
-    }
-
-    const selectedIds = new Set(initialSelection.map(item => item.id));
-    const topUpItems = filteredMenu.filter(item => !selectedIds.has(item.id));
-
-    return [...initialSelection, ...topUpItems].slice(0, 6);
-  }, [filteredMenu, popularItems]);
-
-  const heroImage = popularItems.find(item => item.image_url.trim())?.image_url || DEFAULT_HERO_IMAGE;
-  const heroCoupon = activeOffers[0]?.couponCode?.trim() || 'BREW25';
   const greetingName = formatFirstName(profileDisplayName);
+  const greetingLabel = getGreetingLabel();
   const profileInitials = getProfileInitials(profileDisplayName);
-  const menuCountLabel = `${menuPreviewItems.length} items`;
+  const availabilityLabel = isShopOpen
+    ? `Open now - ${shopTimingRangeLabel}`
+    : shopStatusMessage;
+
+  const heroSlides = useMemo(
+    () => buildHeroSlides(menu, activeOffers, availabilityLabel),
+    [activeOffers, availabilityLabel, menu],
+  );
 
   const navigateToTab = (screen: typeof TAB_ROUTES[keyof typeof TAB_ROUTES]) => {
     navigation.navigate(ROOT_ROUTES.MAIN_TABS, { screen });
@@ -177,76 +268,74 @@ export function HomeScreen() {
     );
   };
 
-  const renderStateCard = (title: string, message: string) => (
-    <GlassSurface
-      depth="section"
-      overlayColor={palette.surfaceGlass}
-      style={[styles.stateCard, styles.ambientShadow]}
-    >
-      <Text style={styles.stateTitle}>{title}</Text>
-      <Text style={styles.stateText}>{message}</Text>
-    </GlassSurface>
-  );
-
-  const renderShopInfoCard = ({
-    ctaLabel,
+  const renderActionCard = ({
     icon,
     onPress,
-    subtitle,
     title,
   }: {
-    ctaLabel?: string;
     icon: keyof typeof Ionicons.glyphMap;
-    onPress?: () => void;
-    subtitle: string;
+    onPress: () => void;
     title: string;
-  }) => {
-    const card = (
+  }) => (
+    <ScalePressable
+      accessibilityRole="button"
+      hitSlop={4}
+      onPress={onPress}
+      scaleTo={0.975}
+      style={styles.actionCardWrap}
+    >
       <GlassSurface
         depth="section"
+        intensity={74}
         overlayColor={palette.surfaceGlass}
-        style={[styles.infoCard, styles.ambientShadow]}
+        style={[styles.actionCard, styles.ambientShadow]}
       >
-        <View style={styles.infoCardIconWrap}>
-          <Ionicons name={icon} size={18} color={ACCENT_COLOR} />
+        <LinearGradient
+          colors={CONTACT_CARD_GRADIENT}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
+
+        <View style={styles.actionIconWrap}>
+          <Ionicons name={icon} size={20} color={palette.gold} />
         </View>
 
-        <View style={styles.infoCardCopy}>
-          <Text style={styles.infoCardTitle}>{title}</Text>
-          <Text style={styles.infoCardSubtitle}>{subtitle}</Text>
-        </View>
-
-        {ctaLabel ? (
-          <View style={styles.infoCardCta}>
-            <Text style={styles.infoCardCtaText}>{ctaLabel}</Text>
-          </View>
-        ) : null}
+        <Text style={styles.actionTitle}>{title}</Text>
       </GlassSurface>
-    );
-
-    if (!onPress) {
-      return card;
-    }
-
-    return (
-      <ScalePressable
-        accessibilityRole="button"
-        onPress={onPress}
-        scaleTo={0.98}
-      >
-        {card}
-      </ScalePressable>
-    );
-  };
+    </ScalePressable>
+  );
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
+      <View pointerEvents="none" style={styles.backgroundLayer}>
+        <LinearGradient
+          colors={BACKGROUND_GLOW_TOP}
+          start={{ x: 0.15, y: 0 }}
+          end={{ x: 0.85, y: 1 }}
+          style={styles.topGlow}
+        />
+        <LinearGradient
+          colors={BACKGROUND_GLOW_SIDE}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.sideGlow}
+        />
+      </View>
+
       <ScrollView
         style={styles.container}
         contentContainerStyle={[
           styles.content,
-          cartCount > 0 ? styles.contentWithCartButton : null,
+          {
+            paddingBottom: insets.bottom + (
+              cartCount > 0 ? CUSTOMER_SCREEN_BOTTOM_PADDING_WITH_CART : CUSTOMER_SCREEN_BOTTOM_PADDING
+            ),
+          },
         ]}
+        decelerationRate="normal"
+        overScrollMode="never"
+        removeClippedSubviews={Platform.OS === 'android'}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         refreshControl={(
@@ -255,38 +344,36 @@ export function HomeScreen() {
             onRefresh={() => {
               void refreshMenu();
             }}
-            tintColor={theme.colors.primary}
+            tintColor={palette.gold}
           />
         )}
       >
         <ScreenTransition style={styles.flow}>
           <View style={styles.headerRow}>
-            <View style={styles.headerLeft}>
-              <View style={[styles.headerIconWrap, styles.ambientShadow]}>
-                <GlassSurface
-                  depth="card"
-                  intensity={74}
-                  overlayColor={palette.surfaceGlassStrong}
-                  style={styles.headerIconSurface}
-                >
-                  <Ionicons name="cafe" size={20} color={ACCENT_COLOR} />
-                </GlassSurface>
-              </View>
-
-              <View style={styles.greetingBlock}>
-                <Text style={styles.greetingLabel}>Good Morning,</Text>
-                <Text style={styles.greetingName}>
-                  {greetingName} <Text style={styles.greetingWave}>{'\u{1F44B}'}</Text>
-                </Text>
-              </View>
+            <View style={styles.headerSideRail}>
+              <GlassSurface
+                depth="card"
+                intensity={78}
+                overlayColor={palette.surfaceGlassStrong}
+                style={[styles.logoSurface, styles.ambientShadow]}
+              >
+                <Image source={{ uri: LOGO_URI }} style={styles.logoImage} resizeMode="contain" />
+              </GlassSurface>
             </View>
 
-            <View style={styles.headerActions}>
+            <View pointerEvents="none" style={styles.headerCenter}>
+              <Text numberOfLines={1} style={styles.greetingText}>
+                {greetingLabel}, {greetingName}{' '}
+                <Text style={styles.waveText}>{'\u{1F44B}'}</Text>
+              </Text>
+            </View>
+
+            <View style={[styles.headerSideRail, styles.headerActions]}>
               <ScalePressable
                 accessibilityRole="button"
                 onPress={() => navigateToTab(TAB_ROUTES.OFFERS)}
                 scaleTo={0.96}
-                style={styles.headerActionButton}
+                style={styles.headerActionWrap}
               >
                 <GlassSurface
                   depth="card"
@@ -295,6 +382,7 @@ export function HomeScreen() {
                   style={styles.headerActionSurface}
                 >
                   <Ionicons name="notifications-outline" size={18} color={palette.text} />
+                  {activeOffers.length > 0 ? <View style={styles.notificationDot} /> : null}
                 </GlassSurface>
               </ScalePressable>
 
@@ -302,11 +390,11 @@ export function HomeScreen() {
                 accessibilityRole="button"
                 onPress={() => navigateToTab(TAB_ROUTES.PROFILE)}
                 scaleTo={0.96}
-                style={styles.avatarButton}
+                style={styles.headerActionWrap}
               >
                 <GlassSurface
                   depth="card"
-                  intensity={74}
+                  intensity={76}
                   overlayColor={palette.surfaceGlassStrong}
                   style={styles.avatarSurface}
                 >
@@ -320,276 +408,93 @@ export function HomeScreen() {
             </View>
           </View>
 
+          <HomeHeroCarousel
+            quoteText={HERO_QUOTE_TEXT}
+            slides={heroSlides}
+            onPressSlide={slide => {
+              navigateToTab(slide.couponCode ? TAB_ROUTES.OFFERS : TAB_ROUTES.MENU);
+            }}
+          />
+
+          <View style={styles.highlightGrid}>
+            {HIGHLIGHT_CARDS.map((highlight, index) => (
+              <ScalePressable
+                key={highlight.title}
+                accessible={false}
+                hitSlop={2}
+                scaleTo={0.982}
+                style={styles.highlightCardWrap}
+              >
+                <GlassSurface
+                  depth="section"
+                  intensity={70}
+                  overlayColor={palette.surfaceGlass}
+                  style={[styles.highlightCard, styles.ambientShadow]}
+                >
+                  <LinearGradient
+                    colors={highlight.colors}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={StyleSheet.absoluteFill}
+                  />
+
+                  <View style={styles.highlightIconWrap}>
+                    <Ionicons
+                      name={highlight.icon}
+                      size={18}
+                      color={index === 0 ? palette.gold : palette.caramel}
+                    />
+                  </View>
+
+                  <Text style={styles.highlightTitle}>{highlight.title}</Text>
+                </GlassSurface>
+              </ScalePressable>
+            ))}
+          </View>
+
           <GlassSurface
             depth="section"
-            intensity={72}
+            intensity={76}
             overlayColor={palette.surfaceGlass}
-            style={[styles.searchShell, styles.ambientShadow]}
+            style={[styles.aboutCard, styles.ambientShadow]}
           >
-            <Ionicons name="search-outline" size={18} color={palette.textMuted} />
-            <TextInput
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              placeholder="Find your perfect brew..."
-              placeholderTextColor={palette.textMuted}
-              returnKeyType="search"
-              style={styles.searchInput}
+            <LinearGradient
+              colors={ABOUT_CARD_GRADIENT}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={StyleSheet.absoluteFill}
             />
-            <View style={styles.filterIconWrap}>
-              <Ionicons name="options-outline" size={18} color={ACCENT_COLOR} />
+
+            <Text style={styles.aboutTitle}>About Coffee Hub</Text>
+            <Text style={styles.aboutDescription}>
+              Handcrafted coffee with a calm and premium experience.
+            </Text>
+
+            <View style={styles.aboutPoints}>
+              {ABOUT_POINTS.map(point => (
+                <View key={point.title} style={styles.aboutPointRow}>
+                  <View style={styles.aboutPointIconWrap}>
+                    <Ionicons name={point.icon} size={16} color={palette.gold} />
+                  </View>
+
+                  <Text style={styles.aboutPointTitle}>{point.title}</Text>
+                </View>
+              ))}
             </View>
           </GlassSurface>
 
-          <ScalePressable
-            accessibilityRole="button"
-            onPress={() => navigateToTab(TAB_ROUTES.OFFERS)}
-            scaleTo={0.99}
-            style={styles.heroPressable}
-          >
-            <LinearGradient
-              colors={HERO_GRADIENT}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={[styles.heroCard, styles.ambientShadow]}
-            >
-              <View style={styles.heroContent}>
-                <View style={styles.heroCopy}>
-                  <Text style={styles.heroEyebrow}>Special Offer</Text>
-                  <Text style={styles.heroTitle}>25% OFF on Brewed Classics</Text>
-                  <Text style={styles.heroSubtitle}>
-                    Start your morning with our premium selection.
-                  </Text>
+          <View style={styles.actionGrid}>
+            {renderActionCard({
+              icon: 'location-outline',
+              onPress: openMaps,
+              title: 'Find Us',
+            })}
 
-                  <View style={styles.heroMetaRow}>
-                    <View style={styles.heroCouponPill}>
-                      <Text style={styles.heroCouponText}>Use {heroCoupon}</Text>
-                    </View>
-                    <Text style={styles.heroStatusText} numberOfLines={1}>
-                      {isShopOpen ? 'Fresh brews ready now' : shopAvailabilityMessage}
-                    </Text>
-                  </View>
-                </View>
-
-                <View style={styles.heroImageWrap}>
-                  <Image
-                    source={{ uri: heroImage }}
-                    style={styles.heroImage}
-                    resizeMode="cover"
-                  />
-                  <LinearGradient
-                    colors={['rgba(23, 18, 16, 0)', 'rgba(23, 18, 16, 0.36)', 'rgba(23, 18, 16, 0.64)']}
-                    locations={[0, 0.6, 1]}
-                    start={{ x: 0.5, y: 0 }}
-                    end={{ x: 0.5, y: 1 }}
-                    style={styles.heroImageShade}
-                  />
-                </View>
-              </View>
-            </LinearGradient>
-          </ScalePressable>
-
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Categories</Text>
-              <ScalePressable
-                accessibilityRole="button"
-                onPress={() => navigateToTab(TAB_ROUTES.MENU)}
-                scaleTo={0.97}
-              >
-                <Text style={styles.sectionAction}>See all</Text>
-              </ScalePressable>
-            </View>
-
-            <CategoryTabs
-              categories={homeCategories}
-              onSelect={setSelectedCategory}
-              selectedCategory={activeCategory}
-            />
-          </View>
-
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Popular for You</Text>
-              <Text style={styles.sectionMeta}>{popularItems.length} picks</Text>
-            </View>
-
-            {error ? (
-              renderStateCard('Menu unavailable', error)
-            ) : popularItems.length === 0 && !isMenuLoading ? (
-              renderStateCard(
-                'Nothing featured yet',
-                'Popular drinks will appear here once menu items are available.',
-              )
-            ) : (
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.popularScrollContent}
-              >
-                {popularItems.map(item => {
-                  const quantity = cartQuantityById.get(item.id) ?? 0;
-                  const canOrder = isShopOpen && item.is_available !== false;
-                  const hasImage = item.image_url.trim().length > 0;
-
-                  return (
-                    <GlassSurface
-                      key={item.id}
-                      depth="card"
-                      intensity={64}
-                      overlayColor={palette.surfaceGlass}
-                      style={[styles.popularCard, styles.ambientShadow]}
-                    >
-                      <View style={styles.popularImageWrap}>
-                        {hasImage ? (
-                          <Image
-                            source={{ uri: item.image_url }}
-                            style={styles.popularImage}
-                            resizeMode="cover"
-                          />
-                        ) : (
-                          <View style={[styles.popularImage, styles.popularImageFallback]}>
-                            <Ionicons name="cafe-outline" size={24} color={palette.textMuted} />
-                          </View>
-                        )}
-
-                        <View style={styles.popularRatingBadge}>
-                          <Ionicons name="star" size={12} color={palette.gold} />
-                          <Text style={styles.popularRatingText}>{item.rating.toFixed(1)}</Text>
-                        </View>
-                      </View>
-
-                      <View style={styles.popularBody}>
-                        <Text style={styles.popularName} numberOfLines={1}>
-                          {item.name}
-                        </Text>
-                        <Text style={styles.popularDescription} numberOfLines={2}>
-                          {item.description || 'Handcrafted coffee, balanced and smooth.'}
-                        </Text>
-
-                        <View style={styles.popularFooter}>
-                          <View style={styles.popularPriceBlock}>
-                            <Text style={styles.popularPrice}>{formatCurrency(item.price)}</Text>
-                            {quantity > 0 ? (
-                              <Text style={styles.popularCartHint}>{quantity} in cart</Text>
-                            ) : null}
-                          </View>
-
-                          <ScalePressable
-                            accessibilityRole="button"
-                            disabled={!canOrder}
-                            onPress={() => handleAddToCart(item, 1)}
-                            scaleTo={0.94}
-                            style={[
-                              styles.popularAddButtonWrap,
-                              !canOrder ? styles.disabled : null,
-                            ]}
-                          >
-                            <LinearGradient
-                              colors={canOrder ? palette.ctaGradient : palette.ctaGradientDisabled}
-                              start={{ x: 0, y: 0 }}
-                              end={{ x: 1, y: 1 }}
-                              style={styles.popularAddButton}
-                            >
-                              <Ionicons
-                                name={canOrder ? 'add' : 'time-outline'}
-                                size={16}
-                                color={palette.background}
-                              />
-                            </LinearGradient>
-                          </ScalePressable>
-                        </View>
-                      </View>
-                    </GlassSurface>
-                  );
-                })}
-              </ScrollView>
-            )}
-          </View>
-
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>About Coffee Hub</Text>
-              <Text style={styles.sectionMeta}>Visit us anytime</Text>
-            </View>
-
-            <View style={styles.infoStack}>
-              {renderShopInfoCard({
-                icon: 'location-outline',
-                title: 'Find us',
-                subtitle: primaryAddress?.address?.trim() || SHOP_LOCATION.address,
-                ctaLabel: 'Open in Maps',
-                onPress: openMaps,
-              })}
-
-              {renderShopInfoCard({
-                icon: 'call-outline',
-                title: 'Contact Us',
-                subtitle: SHOP_PHONE,
-                ctaLabel: 'Call',
-                onPress: callShop,
-              })}
-
-              {renderShopInfoCard({
-                icon: 'cafe-outline',
-                title: 'Coffee Hub',
-                subtitle: 'Coffee Hub serves premium handcrafted coffee with a cozy experience.',
-              })}
-            </View>
-          </View>
-
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Today&apos;s Menu</Text>
-              <Text style={styles.sectionMeta}>{menuCountLabel.toUpperCase()}</Text>
-            </View>
-
-            {error ? (
-              renderStateCard('Menu unavailable', error)
-            ) : menuPreviewItems.length === 0 && !isMenuLoading ? (
-              renderStateCard(
-                'Menu preview is empty',
-                'Add fresh menu items to bring the daily grid to life.',
-              )
-            ) : (
-              <View style={styles.menuGrid}>
-                {menuPreviewItems.map(item => {
-                  const hasImage = item.image_url.trim().length > 0;
-
-                  return (
-                    <GlassSurface
-                      key={item.id}
-                      depth="card"
-                      intensity={60}
-                      overlayColor={palette.surfaceGlass}
-                      style={[styles.menuCard, styles.ambientShadow]}
-                    >
-                      <View style={styles.menuImageWrap}>
-                        {hasImage ? (
-                          <Image
-                            source={{ uri: item.image_url }}
-                            style={styles.menuImage}
-                            resizeMode="cover"
-                          />
-                        ) : (
-                          <View style={[styles.menuImage, styles.menuImageFallback]}>
-                            <Ionicons name="cafe-outline" size={26} color={palette.textMuted} />
-                          </View>
-                        )}
-
-                        <View style={styles.menuFavoriteButton}>
-                          <Ionicons name="heart-outline" size={15} color={palette.text} />
-                        </View>
-                      </View>
-
-                      <Text style={styles.menuName} numberOfLines={2}>
-                        {item.name}
-                      </Text>
-                      <Text style={styles.menuPrice}>{formatCurrency(item.price)}</Text>
-                    </GlassSurface>
-                  );
-                })}
-              </View>
-            )}
+            {renderActionCard({
+              icon: 'call-outline',
+              onPress: callShop,
+              title: 'Call Us',
+            })}
           </View>
         </ScreenTransition>
       </ScrollView>
@@ -614,87 +519,100 @@ const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => {
       flex: 1,
       backgroundColor: palette.background,
     },
-    content: {
-      paddingHorizontal: theme.spacing.lg,
-      paddingTop: theme.spacing.md,
-      paddingBottom: theme.spacing.xxl,
+    backgroundLayer: {
+      ...StyleSheet.absoluteFillObject,
     },
-    contentWithCartButton: {
-      paddingBottom: 136,
+    topGlow: {
+      position: 'absolute',
+      top: -28,
+      left: -34,
+      width: 208,
+      height: 180,
+      borderRadius: 96,
+    },
+    sideGlow: {
+      position: 'absolute',
+      top: 148,
+      right: -52,
+      width: 188,
+      height: 244,
+      borderRadius: 122,
+      transform: [{ rotate: '-16deg' }],
+    },
+    content: {
+      paddingHorizontal: theme.spacing.md,
+      paddingTop: theme.spacing.md,
     },
     flow: {
-      gap: theme.spacing.xl,
+      gap: 22,
     },
     headerRow: {
+      minHeight: 52,
       flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'space-between',
-      gap: theme.spacing.md,
+      gap: 8,
     },
-    headerLeft: {
-      flex: 1,
-      minWidth: 0,
+    headerSideRail: {
+      width: 92,
       flexDirection: 'row',
       alignItems: 'center',
-      gap: theme.spacing.md,
     },
-    headerIconWrap: {
-      width: 50,
-      height: 50,
-      borderRadius: 25,
+    logoSurface: {
+      width: 48,
+      height: 48,
+      borderRadius: 18,
+      padding: 4,
+      overflow: 'hidden',
     },
-    headerIconSurface: {
+    logoImage: {
       width: '100%',
       height: '100%',
-      borderRadius: 25,
+    },
+    headerCenter: {
+      flex: 1,
+      minWidth: 0,
       alignItems: 'center',
       justifyContent: 'center',
     },
-    greetingBlock: {
-      flex: 1,
-      minWidth: 0,
-      gap: 4,
-    },
-    greetingLabel: {
-      fontSize: theme.typography.caption,
+    greetingText: {
+      fontSize: 16,
+      lineHeight: 22,
       fontWeight: '700',
-      color: palette.textMuted,
-    },
-    greetingName: {
-      fontSize: 22,
-      lineHeight: 26,
-      fontWeight: '900',
-      color: ACCENT_COLOR,
-    },
-    greetingWave: {
       color: palette.text,
+      textAlign: 'center',
+    },
+    waveText: {
+      color: palette.gold,
     },
     headerActions: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: theme.spacing.sm,
+      justifyContent: 'flex-end',
+      gap: 8,
     },
-    headerActionButton: {
+    headerActionWrap: {
       width: 42,
       height: 42,
-      borderRadius: 21,
+      borderRadius: 16,
     },
     headerActionSurface: {
       width: '100%',
       height: '100%',
-      borderRadius: 21,
+      borderRadius: 16,
       alignItems: 'center',
       justifyContent: 'center',
     },
-    avatarButton: {
-      width: 44,
-      height: 44,
-      borderRadius: 22,
+    notificationDot: {
+      position: 'absolute',
+      top: 11,
+      right: 10,
+      width: 7,
+      height: 7,
+      borderRadius: 3.5,
+      backgroundColor: palette.gold,
     },
     avatarSurface: {
       width: '100%',
       height: '100%',
-      borderRadius: 22,
+      borderRadius: 16,
       alignItems: 'center',
       justifyContent: 'center',
       overflow: 'hidden',
@@ -704,340 +622,121 @@ const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => {
       height: '100%',
     },
     avatarText: {
-      fontSize: 15,
+      fontSize: 14,
       fontWeight: '800',
       color: palette.text,
     },
-    searchShell: {
-      minHeight: 58,
+    highlightGrid: {
       flexDirection: 'row',
-      alignItems: 'center',
-      gap: 10,
-      borderRadius: theme.radius.hero,
-      paddingHorizontal: theme.spacing.md,
-      paddingVertical: 8,
-    },
-    searchInput: {
-      flex: 1,
-      minWidth: 0,
-      color: palette.text,
-      fontSize: theme.typography.body,
-      fontWeight: '600',
-      paddingVertical: theme.spacing.sm,
-    },
-    filterIconWrap: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: 'rgba(242, 190, 140, 0.12)',
-    },
-    heroPressable: {
-      borderRadius: theme.radius.xl,
-    },
-    heroCard: {
-      minHeight: 188,
-      borderRadius: theme.radius.xl,
-      overflow: 'hidden',
-      padding: 18,
-    },
-    heroContent: {
-      flexDirection: 'row',
-      alignItems: 'center',
+      alignItems: 'stretch',
       gap: 12,
     },
-    heroCopy: {
+    highlightCardWrap: {
       flex: 1,
-      minWidth: 0,
-      justifyContent: 'space-between',
-      gap: 10,
-      paddingRight: 4,
-    },
-    heroEyebrow: {
-      fontSize: theme.typography.eyebrow,
-      fontWeight: '800',
-      letterSpacing: 1.2,
-      textTransform: 'uppercase',
-      color: 'rgba(255, 237, 224, 0.78)',
-    },
-    heroTitle: {
-      fontSize: 26,
-      lineHeight: 30,
-      fontWeight: '900',
-      color: '#FFF4EB',
-    },
-    heroSubtitle: {
-      maxWidth: '96%',
-      fontSize: theme.typography.body,
-      lineHeight: 20,
-      color: 'rgba(255, 241, 233, 0.76)',
-    },
-    heroMetaRow: {
-      gap: 6,
-    },
-    heroCouponPill: {
-      alignSelf: 'flex-start',
-      borderRadius: theme.radius.pill,
-      backgroundColor: 'rgba(255, 244, 235, 0.16)',
-      paddingHorizontal: 11,
-      paddingVertical: 7,
-    },
-    heroCouponText: {
-      fontSize: theme.typography.caption,
-      fontWeight: '800',
-      color: '#FFF4EB',
-    },
-    heroStatusText: {
-      fontSize: theme.typography.caption,
-      lineHeight: 18,
-      color: 'rgba(255, 241, 233, 0.72)',
-    },
-    heroImageWrap: {
-      width: 112,
-      height: 132,
-      borderRadius: 18,
-      overflow: 'hidden',
-      alignSelf: 'center',
-      backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    },
-    heroImage: {
-      width: '100%',
-      height: '100%',
-    },
-    heroImageShade: {
-      ...StyleSheet.absoluteFillObject,
-    },
-    section: {
-      gap: 14,
-    },
-    sectionHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      gap: theme.spacing.md,
-    },
-    sectionTitle: {
-      flex: 1,
-      fontSize: 22,
-      lineHeight: 26,
-      fontWeight: '800',
-      color: palette.text,
-    },
-    sectionAction: {
-      fontSize: theme.typography.caption,
-      fontWeight: '800',
-      color: ACCENT_COLOR,
-    },
-    sectionMeta: {
-      fontSize: theme.typography.eyebrow,
-      fontWeight: '700',
-      letterSpacing: 0.8,
-      textTransform: 'uppercase',
-      color: palette.textMuted,
-    },
-    popularScrollContent: {
-      gap: theme.spacing.md,
-      paddingRight: theme.spacing.lg,
-    },
-    popularCard: {
-      width: 190,
-      borderRadius: theme.radius.xl,
-      padding: 10,
-      gap: 12,
-    },
-    popularImageWrap: {
-      width: '100%',
-      height: 132,
-      borderRadius: 18,
-      overflow: 'hidden',
-      backgroundColor: palette.surfaceHighest,
-    },
-    popularImage: {
-      width: '100%',
-      height: '100%',
-      backgroundColor: palette.surfaceHighest,
-    },
-    popularImageFallback: {
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    popularRatingBadge: {
-      position: 'absolute',
-      top: 10,
-      right: 10,
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 4,
-      borderRadius: theme.radius.pill,
-      backgroundColor: 'rgba(12, 9, 8, 0.58)',
-      paddingHorizontal: 10,
-      paddingVertical: 6,
-    },
-    popularRatingText: {
-      fontSize: theme.typography.caption,
-      fontWeight: '800',
-      color: '#FFF4EB',
-    },
-    popularBody: {
-      gap: 10,
-    },
-    popularName: {
-      fontSize: 17,
-      lineHeight: 21,
-      fontWeight: '800',
-      color: palette.text,
-    },
-    popularDescription: {
-      minHeight: 36,
-      fontSize: theme.typography.caption,
-      lineHeight: 18,
-      color: palette.textMuted,
-    },
-    popularFooter: {
-      flexDirection: 'row',
-      alignItems: 'flex-end',
-      justifyContent: 'space-between',
-      gap: theme.spacing.sm,
-    },
-    popularPriceBlock: {
-      flex: 1,
-      gap: 2,
-    },
-    popularPrice: {
-      fontSize: 18,
-      fontWeight: '900',
-      color: ACCENT_COLOR,
-    },
-    popularCartHint: {
-      fontSize: theme.typography.caption,
-      color: palette.textMuted,
-    },
-    popularAddButtonWrap: {
       borderRadius: 20,
-      overflow: 'hidden',
     },
-    popularAddButton: {
+    highlightCard: {
+      minHeight: 112,
+      height: '100%',
+      borderRadius: 20,
+      paddingHorizontal: 10,
+      paddingVertical: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 12,
+    },
+    highlightIconWrap: {
       width: 40,
       height: 40,
-      borderRadius: 20,
+      borderRadius: 14,
       alignItems: 'center',
       justifyContent: 'center',
+      backgroundColor: 'rgba(20, 13, 6, 0.2)',
     },
-    disabled: {
-      opacity: 0.56,
-    },
-    infoStack: {
-      gap: theme.spacing.md,
-    },
-    infoCard: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: theme.spacing.md,
-      borderRadius: theme.radius.xl,
-      paddingHorizontal: theme.spacing.md,
-      paddingVertical: theme.spacing.md,
-    },
-    infoCardIconWrap: {
-      width: 46,
-      height: 46,
-      borderRadius: 18,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: 'rgba(242, 190, 140, 0.12)',
-    },
-    infoCardCopy: {
-      flex: 1,
-      minWidth: 0,
-      gap: 4,
-    },
-    infoCardTitle: {
-      fontSize: 16,
-      lineHeight: 20,
-      fontWeight: '800',
+    highlightTitle: {
       color: palette.text,
-    },
-    infoCardSubtitle: {
-      fontSize: theme.typography.body,
-      lineHeight: 20,
-      color: palette.textMuted,
-    },
-    infoCardCta: {
-      borderRadius: theme.radius.pill,
-      backgroundColor: 'rgba(242, 190, 140, 0.14)',
-      paddingHorizontal: 12,
-      paddingVertical: 8,
-    },
-    infoCardCtaText: {
-      fontSize: theme.typography.caption,
+      fontSize: 12,
       fontWeight: '800',
-      color: ACCENT_COLOR,
+      letterSpacing: 0.9,
+      lineHeight: 16,
+      textAlign: 'center',
+      textTransform: 'uppercase',
     },
-    stateCard: {
-      borderRadius: theme.radius.xl,
-      padding: theme.spacing.lg,
-      gap: 6,
+    aboutCard: {
+      borderRadius: 22,
+      paddingHorizontal: 18,
+      paddingVertical: 22,
+      gap: 16,
     },
-    stateTitle: {
-      fontSize: 18,
-      lineHeight: 22,
-      fontWeight: '800',
-      color: palette.text,
+    aboutTitle: {
+      color: palette.gold,
+      fontFamily: SERIF_FONT_FAMILY,
+      fontSize: 30,
+      fontWeight: '600',
+      lineHeight: 34,
+      letterSpacing: -0.6,
     },
-    stateText: {
-      fontSize: theme.typography.body,
-      lineHeight: 20,
-      color: palette.textMuted,
+    aboutDescription: {
+      color: palette.textSoft,
+      fontSize: 14,
+      lineHeight: 24,
     },
-    menuGrid: {
+    aboutPoints: {
+      gap: 12,
+      marginTop: 6,
+    },
+    aboutPointRow: {
       flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: theme.spacing.md,
+      alignItems: 'flex-start',
+      gap: 12,
+      paddingVertical: 4,
     },
-    menuCard: {
-      width: '47.5%',
-      borderRadius: theme.radius.xl,
-      padding: 10,
-      gap: 10,
-    },
-    menuImageWrap: {
-      width: '100%',
-      aspectRatio: 1,
-      borderRadius: 18,
-      overflow: 'hidden',
-      backgroundColor: palette.surfaceHighest,
-    },
-    menuImage: {
-      width: '100%',
-      height: '100%',
-      backgroundColor: palette.surfaceHighest,
-    },
-    menuImageFallback: {
+    aboutPointIconWrap: {
+      width: 38,
+      height: 38,
+      borderRadius: 19,
       alignItems: 'center',
       justifyContent: 'center',
+      backgroundColor: 'rgba(235, 228, 183, 0.12)',
     },
-    menuFavoriteButton: {
-      position: 'absolute',
-      top: 10,
-      right: 10,
-      width: 30,
-      height: 30,
-      borderRadius: 15,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: 'rgba(12, 9, 8, 0.54)',
-    },
-    menuName: {
-      minHeight: 40,
+    aboutPointTitle: {
+      color: palette.text,
       fontSize: 15,
-      lineHeight: 20,
-      fontWeight: '800',
-      color: palette.text,
+      fontWeight: '700',
+      lineHeight: 22,
     },
-    menuPrice: {
+    actionGrid: {
+      flexDirection: 'row',
+      alignItems: 'stretch',
+      gap: 12,
+    },
+    actionCardWrap: {
+      flex: 1,
+      borderRadius: 20,
+    },
+    actionCard: {
+      minHeight: 108,
+      borderRadius: 20,
+      borderWidth: 1,
+      borderColor: palette.outlineGhost,
+      paddingHorizontal: 18,
+      paddingVertical: 18,
+      justifyContent: 'center',
+      gap: 16,
+    },
+    actionIconWrap: {
+      width: 42,
+      height: 42,
+      borderRadius: 16,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: 'rgba(20, 13, 6, 0.2)',
+    },
+    actionTitle: {
+      color: palette.text,
       fontSize: 17,
-      fontWeight: '900',
-      color: ACCENT_COLOR,
+      fontWeight: '800',
+      letterSpacing: 0.2,
     },
   });
 };

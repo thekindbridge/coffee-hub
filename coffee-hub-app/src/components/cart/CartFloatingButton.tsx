@@ -4,7 +4,11 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePulseOnChange, useTheme, useThemedStyles } from '../../theme';
 import { formatCurrency } from '../../utils/formatCurrency';
-import { getCustomerPalette } from '../customer/designSystem';
+import {
+  CUSTOMER_FLOATING_CART_BOTTOM_OFFSET,
+  CUSTOMER_FLOATING_CART_MIN_HEIGHT,
+  getCustomerPalette,
+} from '../customer/designSystem';
 import { ScalePressable } from '../ui/ScalePressable';
 
 type CartFloatingButtonProps = {
@@ -27,7 +31,7 @@ export function CartFloatingButton({
   return (
     <View
       pointerEvents="box-none"
-      style={[styles.wrapper, { bottom: insets.bottom + theme.spacing.sm }]}
+      style={[styles.wrapper, { bottom: insets.bottom + CUSTOMER_FLOATING_CART_BOTTOM_OFFSET }]}
     >
       <Animated.View style={pulseStyle}>
         <ScalePressable
@@ -69,32 +73,36 @@ const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => {
       position: 'absolute',
       left: theme.spacing.md,
       right: theme.spacing.md,
+      alignItems: 'flex-end',
     },
     buttonWrap: {
-      borderRadius: theme.radius.hero,
+      alignSelf: 'flex-end',
+      borderRadius: 24,
+      maxWidth: 248,
       overflow: 'hidden',
     },
     button: {
       flexDirection: 'row',
       alignItems: 'center',
-      borderRadius: theme.radius.hero,
-      paddingHorizontal: theme.spacing.md,
-      paddingVertical: theme.spacing.md,
+      borderRadius: 24,
+      minHeight: CUSTOMER_FLOATING_CART_MIN_HEIGHT,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
     },
     iconWrap: {
-      width: 46,
-      height: 46,
-      borderRadius: 23,
+      width: 36,
+      height: 36,
+      borderRadius: 18,
       backgroundColor: 'rgba(23, 18, 16, 0.14)',
       alignItems: 'center',
       justifyContent: 'center',
     },
     copy: {
-      flex: 1,
-      marginLeft: theme.spacing.sm,
+      marginLeft: 10,
+      marginRight: 12,
     },
     title: {
-      fontSize: theme.typography.body,
+      fontSize: 13,
       fontWeight: '800',
       color: palette.background,
     },
@@ -103,12 +111,11 @@ const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => {
     },
     subtitle: {
       marginTop: 2,
-      fontSize: theme.typography.caption,
+      fontSize: 11,
       color: 'rgba(23, 18, 16, 0.72)',
     },
     total: {
-      marginLeft: theme.spacing.sm,
-      fontSize: 17,
+      fontSize: 15,
       fontWeight: '800',
       color: palette.background,
     },

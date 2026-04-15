@@ -9,12 +9,16 @@ import {
   Text,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCartState } from '../app/providers/CartProvider';
 import { CartFloatingButton } from '../components/cart/CartFloatingButton';
 import { CategoryTabs } from '../components/customer/CategoryTabs';
+import {
+  CUSTOMER_SCREEN_BOTTOM_PADDING,
+  CUSTOMER_SCREEN_BOTTOM_PADDING_WITH_CART,
+  getCustomerPalette,
+} from '../components/customer/designSystem';
 import { SearchBar } from '../components/customer/SearchBar';
-import { getCustomerPalette } from '../components/customer/designSystem';
 import { ProductCard } from '../components/ui/ProductCard';
 import { ScalePressable } from '../components/ui/ScalePressable';
 import { ScreenTransition } from '../components/ui/ScreenTransition';
@@ -31,6 +35,7 @@ const MENU_ACCENT_SOFT = 'rgba(242, 190, 140, 0.16)';
 
 export function MenuScreen() {
   const navigation = useNavigation<MenuNavigation>();
+  const insets = useSafeAreaInsets();
   const { theme } = useTheme();
   const palette = getCustomerPalette(theme);
   const styles = useThemedStyles(createStyles);
@@ -54,12 +59,16 @@ export function MenuScreen() {
   const profileInitials = getProfileInitials(profileDisplayName);
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+    <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView
         style={styles.container}
         contentContainerStyle={[
           styles.content,
-          cartCount > 0 ? styles.contentWithCartButton : null,
+          {
+            paddingBottom: insets.bottom + (
+              cartCount > 0 ? CUSTOMER_SCREEN_BOTTOM_PADDING_WITH_CART : CUSTOMER_SCREEN_BOTTOM_PADDING
+            ),
+          },
         ]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
@@ -244,13 +253,9 @@ const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => {
       backgroundColor: palette.background,
     },
     content: {
-      paddingHorizontal: theme.spacing.lg,
+      paddingHorizontal: theme.spacing.md,
       paddingTop: theme.spacing.md,
-      paddingBottom: theme.spacing.xxl,
       gap: theme.spacing.xl,
-    },
-    contentWithCartButton: {
-      paddingBottom: 132,
     },
     flow: {
       gap: theme.spacing.xl,

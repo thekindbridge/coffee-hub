@@ -31,12 +31,7 @@ export function DummyLoginScreen({ errorMessage = '' }: DummyLoginScreenProps) {
 
   const handleLogin = async () => {
     const normalizedEmail = normalizeEmail(email);
-    console.log('[DummyLoginScreen] handleLogin:pressed', {
-      email,
-      normalizedEmail,
-    });
     if (!EMAIL_PATTERN.test(normalizedEmail)) {
-      console.log('[DummyLoginScreen] handleLogin:invalid-email');
       setLocalError('Enter a valid email address to continue.');
       return;
     }
@@ -46,9 +41,7 @@ export function DummyLoginScreen({ errorMessage = '' }: DummyLoginScreenProps) {
 
     try {
       await login(normalizedEmail);
-      console.log('[DummyLoginScreen] handleLogin:success');
     } catch (authIssue) {
-      console.error('[DummyLoginScreen] handleLogin:error', authIssue);
       setLocalError(
         authIssue instanceof Error
           ? authIssue.message

@@ -10,8 +10,9 @@ import {
   Text,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuthContext } from '../auth/context/AuthContext';
+import { CUSTOMER_SCREEN_BOTTOM_PADDING } from '../components/customer/designSystem';
 import { PrimaryButton } from '../components/ui/PrimaryButton';
 import { ScalePressable } from '../components/ui/ScalePressable';
 import { ScreenTransition } from '../components/ui/ScreenTransition';
@@ -68,6 +69,7 @@ function ProfileOptionRow({
 export function ProfileScreen() {
   const navigation = useNavigation<ProfileNavigation>();
   const route = useRoute<ProfileRoute>();
+  const insets = useSafeAreaInsets();
   const { theme } = useTheme();
   const styles = useThemedStyles(createStyles);
   const { logout } = useAuthContext();
@@ -148,7 +150,10 @@ export function ProfileScreen() {
     <SafeAreaView style={styles.screen} edges={['bottom']}>
       <ScrollView
         style={styles.screen}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[
+          styles.content,
+          { paddingBottom: insets.bottom + CUSTOMER_SCREEN_BOTTOM_PADDING },
+        ]}
         showsVerticalScrollIndicator={false}
       >
         <ScreenTransition>
@@ -329,10 +334,9 @@ const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => StyleSheet
     backgroundColor: sensory.background,
   },
   content: {
-    paddingHorizontal: 24,
+    paddingHorizontal: theme.spacing.lg,
     paddingTop: 18,
-    paddingBottom: 120,
-    gap: 32,
+    gap: theme.spacing.xxl,
   },
   headerRow: {
     flexDirection: 'row',

@@ -16,6 +16,7 @@ import {
 import type { DocumentData, QueryDocumentSnapshot, Timestamp } from 'firebase/firestore';
 import { AppServiceError, toAppServiceError } from '../serviceError';
 import type { Offer, OfferInput } from '../../types';
+import { sanitizeFirestoreData } from '../../utils/sanitizeFirestoreData';
 import { getFirebaseDb } from './firebaseConfig';
 
 const OFFERS_COLLECTION = 'offers';
@@ -110,7 +111,7 @@ export const createOfferRecord = async (offerInput: OfferInput) => {
       payload.maxDiscountAmount = offerInput.maxDiscountAmount;
     }
 
-    await addDoc(collection(db, OFFERS_COLLECTION), payload);
+    await addDoc(collection(db, OFFERS_COLLECTION), sanitizeFirestoreData(payload));
   } catch (error) {
     throw toAppServiceError(error, 'Unable to create the offer.', 'network');
   }
@@ -122,19 +123,22 @@ export const updateOfferRecord = async (offerId: string, offerInput: OfferInput)
     const normalizedCouponCode = normalizeCouponCode(offerInput.couponCode);
     await assertCouponCodeUnique(normalizedCouponCode, offerId);
 
-    await updateDoc(doc(db, OFFERS_COLLECTION, offerId), {
-      title: offerInput.title.trim(),
-      description: offerInput.description.trim(),
-      couponCode: normalizedCouponCode,
-      discountType: offerInput.discountType,
-      discountValue: offerInput.discountValue,
-      minOrderAmount: offerInput.minOrderAmount,
-      isActive: offerInput.isActive,
-      maxDiscountAmount:
-        typeof offerInput.maxDiscountAmount === 'number'
-          ? offerInput.maxDiscountAmount
-          : deleteField(),
-    });
+    await updateDoc(
+      doc(db, OFFERS_COLLECTION, offerId),
+      sanitizeFirestoreData({
+        title: offerInput.title.trim(),
+        description: offerInput.description.trim(),
+        couponCode: normalizedCouponCode,
+        discountType: offerInput.discountType,
+        discountValue: offerInput.discountValue,
+        minOrderAmount: offerInput.minOrderAmount,
+        isActive: offerInput.isActive,
+        maxDiscountAmount:
+          typeof offerInput.maxDiscountAmount === 'number'
+            ? offerInput.maxDiscountAmount
+            : deleteField(),
+      }),
+    );
   } catch (error) {
     throw toAppServiceError(error, 'Unable to update the offer.', 'network');
   }
@@ -152,7 +156,10 @@ export const deleteOfferRecord = async (offerId: string) => {
 export const toggleOfferRecordStatus = async (offerId: string, isActive: boolean) => {
   try {
     const db = getFirebaseDb();
-    await updateDoc(doc(db, OFFERS_COLLECTION, offerId), { isActive });
+    await updateDoc(
+      doc(db, OFFERS_COLLECTION, offerId),
+      sanitizeFirestoreData({ isActive }),
+    );
   } catch (error) {
     throw toAppServiceError(error, 'Unable to update offer status.', 'network');
   }

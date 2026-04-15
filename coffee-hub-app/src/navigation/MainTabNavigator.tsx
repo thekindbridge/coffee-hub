@@ -4,6 +4,7 @@ import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect, useRef } from 'react';
 import { Animated, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ScalePressable } from '../components/ui/ScalePressable';
 import { TAB_ROUTES } from '../constants/routes';
 import { CustomerAppShell } from './CustomerAppShell';
@@ -13,7 +14,12 @@ import { OffersScreen } from '../screens/OffersScreen';
 import { OrdersScreen } from '../screens/OrdersScreen';
 import { ProfileScreen } from '../screens/ProfileScreen';
 import { useTheme } from '../theme';
-import { getCustomerPalette } from '../components/customer/designSystem';
+import {
+  CUSTOMER_TAB_BAR_BOTTOM_MARGIN,
+  CUSTOMER_TAB_BAR_HEIGHT,
+  CUSTOMER_TAB_BAR_HORIZONTAL_MARGIN,
+  getCustomerPalette,
+} from '../components/customer/designSystem';
 import type { MainTabParamList } from './types';
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -135,14 +141,17 @@ function TabIcon({
 }
 
 export function MainTabNavigator() {
+  const insets = useSafeAreaInsets();
   const { theme } = useTheme();
   const palette = getCustomerPalette(theme);
+  const tabBarBottom = insets.bottom + CUSTOMER_TAB_BAR_BOTTOM_MARGIN;
+  const tabBarHeight = CUSTOMER_TAB_BAR_HEIGHT;
 
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
-        tabBarActiveTintColor: palette.caramel,
+        tabBarActiveTintColor: palette.gold,
         tabBarInactiveTintColor: palette.textMuted,
         tabBarHideOnKeyboard: true,
         tabBarButton: props => <TabBarButton {...props} />,
@@ -167,7 +176,7 @@ export function MainTabNavigator() {
                 StyleSheet.absoluteFill,
                 {
                   backgroundColor: theme.isDark
-                    ? 'rgba(44, 34, 31, 0.62)'
+                    ? palette.surfaceGlassStrong
                     : 'rgba(255, 249, 244, 0.72)',
                 },
               ]}
@@ -175,7 +184,7 @@ export function MainTabNavigator() {
             <LinearGradient
               pointerEvents="none"
               colors={theme.isDark
-                ? ['rgba(255, 255, 255, 0.18)', 'rgba(255, 255, 255, 0.04)', 'rgba(0, 0, 0, 0.12)']
+                ? ['rgba(255, 255, 255, 0.18)', 'rgba(255, 255, 255, 0.05)', 'rgba(15, 10, 7, 0.22)']
                 : ['rgba(255, 255, 255, 0.52)', 'rgba(255, 255, 255, 0.14)', 'rgba(75, 46, 43, 0.05)']}
               locations={[0, 0.4, 1]}
               start={{ x: 0, y: 0 }}
@@ -186,28 +195,30 @@ export function MainTabNavigator() {
         ),
         tabBarStyle: {
           position: 'absolute',
-          left: 14,
-          right: 14,
-          bottom: 12,
+          left: CUSTOMER_TAB_BAR_HORIZONTAL_MARGIN,
+          right: CUSTOMER_TAB_BAR_HORIZONTAL_MARGIN,
+          bottom: tabBarBottom,
           backgroundColor: 'transparent',
           borderTopWidth: 0,
-          borderRadius: 30,
-          height: 82,
-          paddingTop: 12,
-          paddingBottom: 12,
+          borderRadius: 24,
+          height: tabBarHeight,
+          paddingTop: 6,
+          paddingBottom: 8,
           overflow: 'hidden',
-          shadowColor: theme.colors.shadowStrong,
-          shadowOffset: { width: 0, height: 18 },
-          shadowOpacity: theme.isDark ? 0.34 : 0.16,
-          shadowRadius: 30,
-          elevation: 18,
+          shadowColor: palette.cocoa,
+          shadowOffset: { width: 0, height: 14 },
+          shadowOpacity: theme.isDark ? 0.2 : 0.14,
+          shadowRadius: 28,
+          elevation: 14,
         },
         tabBarItemStyle: {
-          paddingTop: 2,
+          paddingTop: 0,
+          paddingBottom: 2,
         },
         tabBarLabelStyle: {
-          fontSize: 11,
+          fontSize: 10,
           fontWeight: '800',
+          letterSpacing: 0.5,
         },
         sceneStyle: {
           backgroundColor: palette.background,
@@ -245,15 +256,15 @@ export function MainTabNavigator() {
 
 const styles = StyleSheet.create({
   iconWrap: {
-    minWidth: 44,
-    minHeight: 36,
+    minWidth: 38,
+    minHeight: 30,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 999,
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     overflow: 'hidden',
   },
   iconWrapFocused: {
-    minWidth: 50,
+    minWidth: 44,
   },
 });

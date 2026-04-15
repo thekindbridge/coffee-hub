@@ -40,6 +40,12 @@ const toFiniteNumber = (value: unknown) => {
   return null;
 };
 
+const toRecord = (value: unknown): Record<string, unknown> | null => (
+  value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null
+);
+
 export const mapLocationRecord = (value: unknown): DeliveryLocation | null => {
   if (!value || typeof value !== 'object') {
     return null;
@@ -78,12 +84,15 @@ const normalizeStoredAgentStatus = (
     if (normalized === 'offline') {
       return 'offline';
     }
+    if (normalized === 'active') {
+      return 'active';
+    }
     if (normalized === 'available') {
       return 'available';
     }
   }
 
-  return 'available';
+  return 'active';
 };
 
 export const mapAgentRecordToAgent = (
@@ -251,7 +260,30 @@ export const mapOrderRecordToOrder = (
     created_at: createdAt,
     updated_at: updatedAt,
     cancelled_at: cancelledAt,
+    timestamps: {
+      acceptedAt: mapTimestampToIsoString(data.acceptedAt ?? toRecord(data.timestamps)?.acceptedAt) || undefined,
+      cancelledAt: cancelledAt || undefined,
+      createdAt,
+      deliveredAt: deliveredAt || undefined,
+      outForDeliveryAt: outForDeliveryAt || undefined,
+      preparedAt: preparingAt || undefined,
+      rejectedAt: mapTimestampToIsoString(data.rejectedAt ?? toRecord(data.timestamps)?.rejectedAt) || undefined,
+    },
     user_id: ((data.userId as string) || (data.user_id as string) || '').trim(),
+    assigned_agent_id: (
+      (data.assignedAgentId as string) ||
+      (data.agentId as string) ||
+      (data.deliveryAgentId as string) ||
+      (data.delivery_agent_id as string) ||
+      ''
+    ).trim(),
+    assigned_agent_name: (
+      (data.assignedAgentName as string) ||
+      (data.agentName as string) ||
+      (data.deliveryAgentName as string) ||
+      (data.delivery_agent_name as string) ||
+      ''
+    ).trim(),
     customer_location: mapLocationRecord(data.customerLocation ?? data.customer_location),
     delivery_location: mapLocationRecord(data.deliveryLocation ?? data.delivery_location),
     delivery_agent_id: (

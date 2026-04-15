@@ -10,7 +10,6 @@ import {
 import {
   loginWithEmail,
   logoutCurrentUser,
-  resetAuthSession,
   type AuthUser,
 } from '../../services/auth/authService';
 
@@ -33,49 +32,22 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
-    console.log('[AuthContext] mount: forcing logged-out state');
-
-    // Debug hard reset: keep auth state local to React state so Fast Refresh
-    // or previous in-memory service state cannot auto-log the app in on launch.
-    resetAuthSession('AuthProvider mount');
-    setUser(null);
     setError('');
     setIsReady(true);
-
-    return () => {
-      console.log('[AuthContext] unmount');
-    };
   }, []);
-
-  useEffect(() => {
-    console.log('[AuthContext] state', {
-      email: user?.email || '',
-      error,
-      isAuthenticated: Boolean(user),
-      isReady,
-      role: user?.role || '',
-    });
-  }, [error, isReady, user]);
 
   const login = useCallback(async (email: string) => {
     setError('');
-    console.log('[AuthContext] login:requested', email);
 
     try {
       const nextUser = await loginWithEmail(email);
       setUser(nextUser);
-      console.log('[AuthContext] login:success', nextUser);
       return nextUser;
     } catch (authError) {
-      console.error('[AuthContext] login:error', authError);
       setUser(null);
       const message = authError instanceof Error
         ? authError.message
         : 'Unable to sign in right now.';
-      console.log('[AuthContext] login:state-reset', {
-        email,
-        message,
-      });
       setError(message);
       throw authError;
     }
@@ -83,14 +55,11 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   const logout = useCallback(async () => {
     setError('');
-    console.log('[AuthContext] logout:requested');
 
     try {
       await logoutCurrentUser();
       setUser(null);
-      console.log('[AuthContext] logout:success');
     } catch (authError) {
-      console.error('[AuthContext] logout:error', authError);
       const message = authError instanceof Error
         ? authError.message
         : 'Unable to sign out right now.';

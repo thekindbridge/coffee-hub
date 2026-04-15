@@ -5,6 +5,8 @@ import { getCustomerPalette } from './designSystem';
 type StatusBadgeTone =
   | 'neutral'
   | 'pending'
+  | 'accepted'
+  | 'preparing'
   | 'progress'
   | 'delivery'
   | 'success'
@@ -27,6 +29,8 @@ export function StatusBadge({
       style={[
         styles.badge,
         tone === 'pending' ? styles.pending : null,
+        tone === 'accepted' ? styles.accepted : null,
+        tone === 'preparing' ? styles.preparing : null,
         tone === 'progress' ? styles.progress : null,
         tone === 'delivery' ? styles.delivery : null,
         tone === 'success' ? styles.success : null,
@@ -38,6 +42,8 @@ export function StatusBadge({
         style={[
           styles.label,
           tone === 'pending' ? styles.pendingLabel : null,
+          tone === 'accepted' ? styles.acceptedLabel : null,
+          tone === 'preparing' ? styles.preparingLabel : null,
           tone === 'progress' ? styles.progressLabel : null,
           tone === 'delivery' ? styles.deliveryLabel : null,
           tone === 'success' ? styles.successLabel : null,
@@ -65,11 +71,17 @@ const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => {
     pending: {
       backgroundColor: palette.warningSurface,
     },
+    accepted: {
+      backgroundColor: 'rgba(103, 146, 240, 0.18)',
+    },
+    preparing: {
+      backgroundColor: 'rgba(232, 144, 71, 0.18)',
+    },
     progress: {
-      backgroundColor: palette.ghost,
+      backgroundColor: 'rgba(103, 146, 240, 0.18)',
     },
     delivery: {
-      backgroundColor: 'rgba(200, 146, 99, 0.18)',
+      backgroundColor: 'rgba(138, 108, 255, 0.18)',
     },
     success: {
       backgroundColor: palette.successSurface,
@@ -90,11 +102,17 @@ const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => {
     pendingLabel: {
       color: palette.warning,
     },
+    acceptedLabel: {
+      color: '#8CB3FF',
+    },
+    preparingLabel: {
+      color: '#F2B36B',
+    },
     progressLabel: {
-      color: palette.textSoft,
+      color: '#8CB3FF',
     },
     deliveryLabel: {
-      color: palette.caramel,
+      color: '#C7B2FF',
     },
     successLabel: {
       color: palette.success,

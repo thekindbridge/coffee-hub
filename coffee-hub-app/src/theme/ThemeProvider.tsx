@@ -27,9 +27,7 @@ export function ThemeProvider({ children }: PropsWithChildren) {
 
   const setThemeMode = useCallback((_nextMode: ThemeMode) => {
     setMode(LOCKED_THEME_MODE);
-    void AsyncStorage.setItem(THEME_STORAGE_KEY, LOCKED_THEME_MODE).catch(() => {
-      console.warn('Failed to persist theme mode.');
-    });
+    void AsyncStorage.setItem(THEME_STORAGE_KEY, LOCKED_THEME_MODE).catch(() => undefined);
   }, []);
 
   const toggleTheme = useCallback(() => {
@@ -37,9 +35,7 @@ export function ThemeProvider({ children }: PropsWithChildren) {
   }, [setThemeMode]);
 
   useEffect(() => {
-    void AsyncStorage.setItem(THEME_STORAGE_KEY, LOCKED_THEME_MODE).catch(() => {
-      console.warn('Failed to persist theme mode.');
-    });
+    void AsyncStorage.setItem(THEME_STORAGE_KEY, LOCKED_THEME_MODE).catch(() => undefined);
   }, []);
 
   const value = useMemo<ThemeContextValue>(() => ({

@@ -4,6 +4,7 @@ import {
   setDoc,
 } from 'firebase/firestore';
 import type { DeliveryLocation } from '../../types';
+import { sanitizeFirestoreData } from '../../utils/sanitizeFirestoreData';
 import { toAppServiceError } from '../serviceError';
 import { getFirebaseDb } from './firebaseConfig';
 
@@ -33,45 +34,45 @@ export const persistAgentTrackingLocation = async ({
     await Promise.all([
       setDoc(
         doc(db, 'orders', orderDocId),
-        {
+        sanitizeFirestoreData({
           deliveryLocation: toFirestoreLocation(location),
           updatedAt: serverTimestamp(),
-        },
+        }),
         { merge: true },
       ),
       setDoc(
         doc(db, 'agent_locations', orderId),
-        {
+        sanitizeFirestoreData({
           lat: location.lat,
           lng: location.lng,
           accuracy: location.accuracy ?? null,
           agentId,
           orderDocId,
           updatedAt: serverTimestamp(),
-        },
+        }),
         { merge: true },
       ),
       setDoc(
         doc(db, 'agents', agentId),
-        {
+        sanitizeFirestoreData({
           isActive: true,
           currentOrderId: orderId,
           currentLocation: toFirestoreLocation(location),
           lastLocation: toFirestoreLocation(location),
           updatedAt: serverTimestamp(),
-        },
+        }),
         { merge: true },
       ),
       setDoc(
         doc(db, 'delivery_sessions', orderId),
-        {
+        sanitizeFirestoreData({
           orderId,
           orderDocId,
           agentId,
           status: 'active',
           updatedAt: serverTimestamp(),
           lastLocation: toFirestoreLocation(location),
-        },
+        }),
         { merge: true },
       ),
     ]);

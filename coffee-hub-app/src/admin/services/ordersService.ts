@@ -2,269 +2,204 @@ import {
   collection,
   doc,
   onSnapshot,
-  orderBy,
-  query,
   serverTimestamp,
   writeBatch,
 } from 'firebase/firestore';
-import type { QueryDocumentSnapshot, Timestamp } from 'firebase/firestore';
-import type { Order, OrderItem, OrderStatusCode } from '../types';
+import { mapAgentRecordToAgent } from '../../delivery-agent/lib/firestoreMappers';
 import {
-  isTerminalOrderStatus,
-  isValidOrderStatusTransition,
-  mapStatusCodeToStatus,
-  normalizeOrderStatusCode,
-  requiresRejectionReason,
-} from '../types';
+  subscribeToAdminOrders,
+  subscribeToKitchenOrders,
+  subscribeToPendingOrders,
+} from '../../services/firebase/ordersRealtimeService';
 import { getFirebaseDb } from '../../services/firebase';
 import { AppServiceError, toAppServiceError } from '../../services/serviceError';
+import {
+  getOrderStatusFirestoreValue,
+  isTerminalOrderStatus,
+  isValidOrderStatusTransition,
+  normalizeOrderStatusCode,
+  requiresRejectionReason,
+  type OrderStatusCode,
+} from '../../shared/orderStatus';
+import { sanitizeFirestoreData } from '../../utils/sanitizeFirestoreData';
+import type { DeliveryAgent, Order } from '../types';
 
 const ORDERS_COLLECTION = 'orders';
-const FALLBACK_TIMESTAMP_ISO = new Date(0).toISOString();
+const AGENTS_COLLECTION = 'agents';
+const DELIVERY_SESSIONS_COLLECTION = 'delivery_sessions';
 
-const mapTimestampToIsoString = (value: unknown) => {
-  if (
-    value &&
-    typeof value === 'object' &&
-    typeof (value as { toDate?: () => Date }).toDate === 'function'
-  ) {
-    return (value as { toDate: () => Date }).toDate().toISOString();
-  }
+export type DeliveryAgentAssignment = Pick<
+  DeliveryAgent,
+  'email' | 'id' | 'name' | 'phone' | 'vehicle_type'
+>;
 
-  return '';
+export {
+  subscribeToAdminOrders,
+  subscribeToKitchenOrders,
+  subscribeToPendingOrders,
 };
 
-const toFiniteNumber = (value: unknown) => {
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return value;
-  }
-
-  if (typeof value === 'string' && value.trim()) {
-    const parsed = Number(value);
-    if (Number.isFinite(parsed)) {
-      return parsed;
-    }
-  }
-
-  return null;
+const isAvailableAgentStatus = (value?: string | null) => {
+  const normalizedValue = value?.trim().toLowerCase() || '';
+  return normalizedValue === 'active' || normalizedValue === 'available';
 };
 
-const mapLocationRecord = (value: unknown): Order['customer_location'] => {
-  if (!value || typeof value !== 'object') {
-    return null;
-  }
-
-  const data = value as Record<string, unknown>;
-  const lat = toFiniteNumber(data.lat);
-  const lng = toFiniteNumber(data.lng);
-  if (lat === null || lng === null) {
-    return null;
-  }
-
-  const accuracy = toFiniteNumber(data.accuracy);
-
-  return {
-    lat,
-    lng,
-    accuracy: accuracy ?? undefined,
-    updated_at: mapTimestampToIsoString(data.updatedAt ?? data.updated_at),
-  };
-};
-
-const mapEmbeddedOrderItems = (orderId: string, value: unknown): OrderItem[] => {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
-  return value.flatMap((item, index) => {
-    if (!item || typeof item !== 'object') {
-      return [];
-    }
-
-    const itemData = item as Record<string, unknown>;
-    const itemId = ((itemData.itemId as string) || (itemData.id as string) || '').trim();
-
-    return [{
-      id: `${itemId || 'item'}-${index + 1}`,
-      order_id: orderId,
-      menu_item_id: itemId,
-      name: (itemData.name as string) || 'Item',
-      quantity: Number(itemData.quantity || 0),
-      price: Number(itemData.price || 0),
-    }];
-  });
-};
-
-const mapOrderDocToOrder = (snapshot: QueryDocumentSnapshot): Order => {
-  const data = snapshot.data() as Record<string, unknown>;
-  const createdAtValue = (data.createdAt ?? data.created_at) as Timestamp | undefined;
-  const updatedAtValue = (data.updatedAt ?? data.updated_at) as Timestamp | undefined;
-  const createdAt = createdAtValue?.toDate?.().toISOString() || FALLBACK_TIMESTAMP_ISO;
-  const updatedAt = updatedAtValue?.toDate?.().toISOString() || '';
-  const orderId = ((data.orderId as string) || snapshot.id).toUpperCase();
-  const statusCode = normalizeOrderStatusCode(
-    data.status ?? data.orderStatus ?? data.status_code,
-  );
-  const subtotal = Number(data.subtotal ?? data.totalAmount ?? data.finalTotal ?? data.total ?? 0);
-  const discount = Number(data.discount || 0);
-  const deliveryFee = Number(data.deliveryFee ?? data.delivery_fee ?? 0);
-  const finalTotal = Number(
-    data.totalAmount ??
-    data.total_amount ??
-    data.finalTotal ??
-    data.final_total ??
-    data.total ??
-    Math.max(0, subtotal - discount),
-  );
-  const embeddedItems = mapEmbeddedOrderItems(orderId, data.items);
-
-  return {
-    id: orderId,
-    doc_id: snapshot.id,
-    customer_name: (
-      (data.name as string) ||
-      (data.customerName as string) ||
-      (data.customer_name as string) ||
-      ''
-    ).trim(),
-    phone: ((data.phone as string) || '').trim(),
-    address: ((data.address as string) || '').trim(),
-    total_amount: finalTotal,
-    subtotal,
-    discount,
-    delivery_fee: deliveryFee,
-    coupon_code: ((data.couponCode as string) || (data.coupon_code as string) || '').toUpperCase(),
-    final_total: finalTotal,
-    status: mapStatusCodeToStatus(statusCode),
-    status_code: statusCode,
-    rejection_reason: (
-      (data.rejectionReason as string) ||
-      (data.rejection_reason as string) ||
-      ''
-    ).trim(),
-    cancellation_reason: (
-      (data.cancellationReason as string) ||
-      (data.cancellation_reason as string) ||
-      ''
-    ).trim(),
-    payment_method: (
-      (data.paymentMode as string) ||
-      (data.payment_method as string) ||
-      (data.paymentMethod as string) ||
-      'COD'
-    ).trim(),
-    payment_status: typeof data.paymentStatus === 'string' && data.paymentStatus.toLowerCase() === 'paid'
-      ? 'paid'
-      : 'pending',
-    created_at: createdAt,
-    updated_at: updatedAt,
-    cancelled_at: mapTimestampToIsoString(data.cancelledAt ?? data.cancelled_at),
-    user_id: ((data.userId as string) || (data.user_id as string) || '').trim(),
-    customer_location: mapLocationRecord(data.customerLocation ?? data.customer_location),
-    delivery_location: mapLocationRecord(data.deliveryLocation ?? data.delivery_location),
-    delivery_agent_id: (
-      (data.assignedAgentId as string) ||
-      (data.deliveryAgentId as string) ||
-      (data.delivery_agent_id as string) ||
-      ''
-    ).trim(),
-    delivery_agent_name: (
-      (data.assignedAgentName as string) ||
-      (data.deliveryAgentName as string) ||
-      (data.delivery_agent_name as string) ||
-      ''
-    ).trim(),
-    delivery_agent_phone: (
-      (data.assignedAgentPhone as string) ||
-      (data.deliveryAgentPhone as string) ||
-      (data.delivery_agent_phone as string) ||
-      ''
-    ).trim(),
-    delivery_agent_email: (
-      (data.assignedAgentEmail as string) ||
-      (data.deliveryAgentEmail as string) ||
-      (data.delivery_agent_email as string) ||
-      ''
-    ).trim(),
-    delivery_agent_vehicle: (
-      (data.assignedAgentVehicle as string) ||
-      (data.deliveryAgentVehicle as string) ||
-      (data.delivery_agent_vehicle as string) ||
-      ''
-    ).trim(),
-    delivery_assigned_at: mapTimestampToIsoString(data.assignedAt ?? data.deliveryAssignedAt),
-    delivery_picked_at: mapTimestampToIsoString(data.pickedAt ?? data.deliveryPickedAt),
-    delivery_out_for_delivery_at: mapTimestampToIsoString(
-      data.outForDeliveryAt ?? data.deliveryOutForDeliveryAt,
-    ),
-    delivery_delivered_at: mapTimestampToIsoString(
-      data.deliveredAt ?? data.deliveryDeliveredAt,
-    ),
-    preparing_at: mapTimestampToIsoString(data.preparingAt ?? data.preparing_at),
-    ready_for_pickup_at: mapTimestampToIsoString(
-      data.readyAt ?? data.readyForPickupAt ?? data.ready_for_pickup_at,
-    ),
-    items: embeddedItems,
-  };
-};
-
-export const subscribeToAdminOrders = (
-  onData: (orders: Order[]) => void,
+export const subscribeToAvailableDeliveryAgents = (
+  onData: (agents: DeliveryAgent[]) => void,
   onError: (error: Error) => void,
-) => {
-  const db = getFirebaseDb();
-  let fallbackSubscribed = false;
-  let unsubscribe = () => {};
+) => onSnapshot(
+  collection(getFirebaseDb(), AGENTS_COLLECTION),
+  snapshot => {
+    const agents = snapshot.docs
+      .filter(docSnapshot => {
+        const data = docSnapshot.data() as Record<string, unknown>;
+        return data.accessOnly !== true;
+      })
+      .map(docSnapshot => mapAgentRecordToAgent(
+        docSnapshot.id,
+        docSnapshot.data() as Record<string, unknown>,
+      ))
+      .filter(agent => agent.is_active && isAvailableAgentStatus(agent.status));
 
-  const subscribe = (withOrderBy: boolean) => {
-    unsubscribe = onSnapshot(
-      withOrderBy
-        ? query(collection(db, ORDERS_COLLECTION), orderBy('createdAt', 'desc'))
-        : collection(db, ORDERS_COLLECTION),
-      snapshot => {
-        const orders = snapshot.docs
-          .map(mapOrderDocToOrder)
-          .sort((left, right) => (
-            new Date(right.created_at).getTime() - new Date(left.created_at).getTime()
-          ));
-        onData(orders);
-      },
-      error => {
-        const errorCode = (error as { code?: string }).code;
-        if (withOrderBy && !fallbackSubscribed && errorCode === 'failed-precondition') {
-          fallbackSubscribed = true;
-          unsubscribe();
-          subscribe(false);
-          return;
-        }
-
-        console.error('Failed to subscribe to admin orders:', error);
-        onError(toAppServiceError(error, 'Unable to load orders.', 'network'));
-      },
-    );
-  };
-
-  subscribe(true);
-
-  return () => {
-    unsubscribe();
-  };
-};
+    onData(agents);
+  },
+  error => {
+    console.error('Failed to subscribe to available delivery agents', error);
+    onError(toAppServiceError(error, 'Unable to load delivery agents.', 'network'));
+  },
+);
 
 type UpdateAdminOrderStatusParams = {
-  order: Order;
+  assignedAgent?: DeliveryAgentAssignment | null;
   nextStatus: OrderStatusCode | string;
+  order: Order;
   rejectionReason?: string;
 };
 
+const buildOrderStatusUpdate = (
+  nextStatus: OrderStatusCode,
+  rejectionReason: string,
+  assignedAgent: DeliveryAgentAssignment | null,
+) => {
+  const timestampValue = serverTimestamp();
+  const update: Record<string, unknown> = {
+    orderStatus: nextStatus,
+    rejectionReason: nextStatus === 'REJECTED' ? rejectionReason : '',
+    rejection_reason: nextStatus === 'REJECTED' ? rejectionReason : '',
+    status: getOrderStatusFirestoreValue(nextStatus),
+    status_code: nextStatus,
+    updatedAt: timestampValue,
+    updated_at: timestampValue,
+  };
+
+  if (nextStatus === 'ACCEPTED') {
+    update.acceptedAt = timestampValue;
+    update.accepted_at = timestampValue;
+    update['timestamps.acceptedAt'] = timestampValue;
+  }
+
+  if (nextStatus === 'PREPARING') {
+    update.preparingAt = timestampValue;
+    update.preparing_at = timestampValue;
+    update['timestamps.preparedAt'] = timestampValue;
+  }
+
+  if (nextStatus === 'OUT_FOR_DELIVERY') {
+    update.assignedAt = timestampValue;
+    update.assigned_at = timestampValue;
+    update.deliveryAssignedAt = timestampValue;
+    update.delivery_assigned_at = timestampValue;
+    update.outForDeliveryAt = timestampValue;
+    update.out_for_delivery_at = timestampValue;
+    update.deliveryOutForDeliveryAt = timestampValue;
+    update.delivery_out_for_delivery_at = timestampValue;
+    update['timestamps.outForDeliveryAt'] = timestampValue;
+
+    if (assignedAgent) {
+      const normalizedAgentId = assignedAgent.id.trim().toLowerCase();
+      update.assignedAgentEmail = assignedAgent.email?.trim().toLowerCase() || normalizedAgentId;
+      update.assignedAgentId = normalizedAgentId;
+      update.assignedAgentName = assignedAgent.name.trim();
+      update.assignedAgentPhone = assignedAgent.phone.trim();
+      update.assignedAgentVehicle = assignedAgent.vehicle_type?.trim() || '';
+      update.agentEmail = assignedAgent.email?.trim().toLowerCase() || normalizedAgentId;
+      update.agentId = normalizedAgentId;
+      update.agentName = assignedAgent.name.trim();
+      update.agentPhone = assignedAgent.phone.trim();
+      update.agentVehicle = assignedAgent.vehicle_type?.trim() || '';
+      update.deliveryAgentEmail = assignedAgent.email?.trim().toLowerCase() || normalizedAgentId;
+      update.deliveryAgentId = normalizedAgentId;
+      update.deliveryAgentName = assignedAgent.name.trim();
+      update.deliveryAgentPhone = assignedAgent.phone.trim();
+      update.deliveryAgentVehicle = assignedAgent.vehicle_type?.trim() || '';
+      update.delivery_agent_email = assignedAgent.email?.trim().toLowerCase() || normalizedAgentId;
+      update.delivery_agent_id = normalizedAgentId;
+      update.delivery_agent_name = assignedAgent.name.trim();
+      update.delivery_agent_phone = assignedAgent.phone.trim();
+      update.delivery_agent_vehicle = assignedAgent.vehicle_type?.trim() || '';
+    }
+  }
+
+  if (nextStatus === 'DELIVERED') {
+    update.deliveredAt = timestampValue;
+    update.delivered_at = timestampValue;
+    update.deliveryDeliveredAt = timestampValue;
+    update.delivery_delivered_at = timestampValue;
+    update['timestamps.deliveredAt'] = timestampValue;
+  }
+
+  if (nextStatus === 'REJECTED') {
+    update.rejectedAt = timestampValue;
+    update.rejected_at = timestampValue;
+    update['timestamps.rejectedAt'] = timestampValue;
+  }
+
+  if (nextStatus === 'CANCELLED') {
+    update.cancelledAt = timestampValue;
+    update.cancelled_at = timestampValue;
+    update['timestamps.cancelledAt'] = timestampValue;
+  }
+
+  return update;
+};
+
+const resolveAssignedAgent = (
+  order: Order,
+  assignedAgent?: DeliveryAgentAssignment | null,
+): DeliveryAgentAssignment | null => {
+  if (assignedAgent?.id?.trim()) {
+    return {
+      email: assignedAgent.email?.trim().toLowerCase() || assignedAgent.id.trim().toLowerCase(),
+      id: assignedAgent.id.trim().toLowerCase(),
+      name: assignedAgent.name.trim(),
+      phone: assignedAgent.phone.trim(),
+      vehicle_type: assignedAgent.vehicle_type?.trim() || '',
+    };
+  }
+
+  if (!order.delivery_agent_id?.trim()) {
+    return null;
+  }
+
+  return {
+    email: order.delivery_agent_email?.trim().toLowerCase() || order.delivery_agent_id.trim().toLowerCase(),
+    id: order.delivery_agent_id.trim().toLowerCase(),
+    name: order.delivery_agent_name?.trim() || 'Assigned agent',
+    phone: order.delivery_agent_phone?.trim() || '',
+    vehicle_type: order.delivery_agent_vehicle?.trim() || '',
+  };
+};
+
 export const updateAdminOrderStatus = async ({
-  order,
+  assignedAgent = null,
   nextStatus,
+  order,
   rejectionReason = '',
 }: UpdateAdminOrderStatusParams) => {
   const normalizedCurrentStatus = normalizeOrderStatusCode(order.status_code);
   const normalizedNextStatus = normalizeOrderStatusCode(nextStatus);
   const trimmedReason = rejectionReason.trim();
+  const resolvedAgent = resolveAssignedAgent(order, assignedAgent);
 
   if (normalizedCurrentStatus === normalizedNextStatus) {
     throw new AppServiceError('Order is already in that status.', {
@@ -290,49 +225,89 @@ export const updateAdminOrderStatus = async ({
     });
   }
 
+  if (normalizedNextStatus === 'OUT_FOR_DELIVERY' && !resolvedAgent?.id) {
+    throw new AppServiceError('Assign a delivery agent before dispatching this order.', {
+      code: 'validation',
+    });
+  }
+
+  if (normalizedNextStatus === 'DELIVERED' && !resolvedAgent?.id) {
+    throw new AppServiceError('This order must be assigned before it can be delivered.', {
+      code: 'validation',
+    });
+  }
+
   const db = getFirebaseDb();
-  const orderRef = doc(db, ORDERS_COLLECTION, order.doc_id);
   const batch = writeBatch(db);
-  const orderUpdate: Record<string, unknown> = {
-    status: normalizedNextStatus,
-    orderStatus: normalizedNextStatus,
-    rejectionReason: normalizedNextStatus === 'REJECTED' ? trimmedReason : '',
-    updatedAt: serverTimestamp(),
-  };
+  const orderRef = doc(db, ORDERS_COLLECTION, order.doc_id);
 
-  if (normalizedNextStatus === 'ACCEPTED') {
-    orderUpdate.acceptedAt = serverTimestamp();
+  batch.update(
+    orderRef,
+    sanitizeFirestoreData(
+      buildOrderStatusUpdate(normalizedNextStatus, trimmedReason, resolvedAgent),
+    ),
+  );
+
+  if (normalizedNextStatus === 'OUT_FOR_DELIVERY' && resolvedAgent) {
+    batch.set(
+      doc(db, AGENTS_COLLECTION, resolvedAgent.id),
+      sanitizeFirestoreData({
+        currentOrderId: order.id,
+        email: resolvedAgent.email || resolvedAgent.id,
+        isActive: true,
+        name: resolvedAgent.name,
+        phone: resolvedAgent.phone,
+        status: 'busy',
+        updatedAt: serverTimestamp(),
+        vehicle: resolvedAgent.vehicle_type || '',
+      }),
+      { merge: true },
+    );
+
+    batch.set(
+      doc(db, DELIVERY_SESSIONS_COLLECTION, order.id),
+      sanitizeFirestoreData({
+        agentEmail: resolvedAgent.email || resolvedAgent.id,
+        agentId: resolvedAgent.id,
+        agentName: resolvedAgent.name,
+        agentPhone: resolvedAgent.phone,
+        agentVehicle: resolvedAgent.vehicle_type || '',
+        completedAt: null,
+        customerLocation: order.customer_location || null,
+        lastLocation: null,
+        orderDocId: order.doc_id,
+        orderId: order.id,
+        startedAt: null,
+        status: 'assigned',
+        updatedAt: serverTimestamp(),
+      }),
+      { merge: true },
+    );
   }
 
-  if (normalizedNextStatus === 'PREPARING') {
-    orderUpdate.preparingAt = serverTimestamp();
-  }
+  if (normalizedNextStatus === 'DELIVERED' && resolvedAgent) {
+    batch.set(
+      doc(db, AGENTS_COLLECTION, resolvedAgent.id),
+      sanitizeFirestoreData({
+        currentOrderId: '',
+        isActive: true,
+        status: 'active',
+        updatedAt: serverTimestamp(),
+      }),
+      { merge: true },
+    );
 
-  if (normalizedNextStatus === 'OUT_FOR_DELIVERY') {
-    orderUpdate.assignedAt = serverTimestamp();
-    orderUpdate.deliveryAssignedAt = serverTimestamp();
-    orderUpdate.outForDeliveryAt = serverTimestamp();
-    orderUpdate.deliveryOutForDeliveryAt = serverTimestamp();
-  }
-
-  if (normalizedNextStatus === 'DELIVERED') {
-    orderUpdate.deliveredAt = serverTimestamp();
-    orderUpdate.deliveryDeliveredAt = serverTimestamp();
-  }
-
-  if (normalizedNextStatus === 'REJECTED') {
-    orderUpdate.rejectedAt = serverTimestamp();
-  }
-
-  batch.update(orderRef, orderUpdate);
-
-  if (normalizedNextStatus === 'DELIVERED' && order.delivery_agent_id) {
-    const agentRef = doc(db, 'agents', order.delivery_agent_id);
-    batch.set(agentRef, {
-      currentOrderId: '',
-      status: 'AVAILABLE',
-      updatedAt: serverTimestamp(),
-    }, { merge: true });
+    batch.set(
+      doc(db, DELIVERY_SESSIONS_COLLECTION, order.id),
+      sanitizeFirestoreData({
+        completedAt: serverTimestamp(),
+        orderDocId: order.doc_id,
+        orderId: order.id,
+        status: 'completed',
+        updatedAt: serverTimestamp(),
+      }),
+      { merge: true },
+    );
   }
 
   try {

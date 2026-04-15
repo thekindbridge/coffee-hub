@@ -49,7 +49,6 @@ export const getMenuItems = async () => {
       .filter(item => item.is_available)
       .sort((left, right) => left.name.localeCompare(right.name));
 
-    console.log('Menu items:', items);
     return items;
   } catch (error) {
     throw toAppServiceError(error, 'Unable to load menu items.', 'network');

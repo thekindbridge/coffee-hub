@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../auth/context/AuthContext';
-import { getOrdersRequest } from '../services/ordersService';
-import { toAppServiceError } from '../services/serviceError';
+import { subscribeToUserOrders } from '../services/firebase/ordersRealtimeService';
+import { isTerminalOrderStatus } from '../shared/orderStatus';
 import type { Order } from '../types';
 
 type UseOrdersOptions = {
@@ -27,67 +27,59 @@ export const useOrders = ({
 }: UseOrdersOptions) => {
   const { user } = useAuth();
   const [orders, setOrders] = useState<Order[]>(() => mergeOrders([], optimisticOrder));
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const [refreshNonce, setRefreshNonce] = useState(0);
 
   useEffect(() => {
     setOrders(previousOrders => mergeOrders(previousOrders, optimisticOrder));
   }, [optimisticOrder]);
 
-  const refreshOrders = useCallback(async () => {
-    const userEmail = user?.email?.trim().toLowerCase() || currentUserId.trim().toLowerCase();
-    if (!userEmail) {
-      console.log('[useOrders] refresh:skipped-no-user');
+  useEffect(() => {
+    const normalizedUserId =
+      user?.uid?.trim().toLowerCase() ||
+      user?.email?.trim().toLowerCase() ||
+      currentUserId.trim().toLowerCase();
+
+    if (!normalizedUserId) {
       setOrders(mergeOrders([], optimisticOrder));
       setError('');
       setIsLoading(false);
-      return;
+      return undefined;
     }
 
-    console.log('[useOrders] refresh:start', {
-      currentUserId,
-      hasOptimisticOrder: Boolean(optimisticOrder),
-      userEmail,
-    });
     setIsLoading(true);
 
-    try {
-      const response = await getOrdersRequest({ userId: userEmail });
-      console.log('[useOrders] refresh:success', {
-        orderCount: response.orders.length,
-        userEmail,
-      });
-      setOrders(mergeOrders(response.orders, optimisticOrder));
-      setError('');
-    } catch (requestError) {
-      const typedError = toAppServiceError(
-        requestError,
-        'Unable to load your orders right now.',
-        'network',
-      );
-      console.error('[useOrders] refresh:error', {
-        rawError: requestError,
-        userEmail,
-      });
-      setError(typedError.message);
-      setOrders(previousOrders => mergeOrders(previousOrders, optimisticOrder));
-    } finally {
-      console.log('[useOrders] refresh:complete', { userEmail });
-      setIsLoading(false);
-    }
-  }, [currentUserId, optimisticOrder, user]);
+    const unsubscribe = subscribeToUserOrders(
+      normalizedUserId,
+      nextOrders => {
+        setOrders(mergeOrders(nextOrders, optimisticOrder));
+        setError('');
+        setIsLoading(false);
+      },
+      subscriptionError => {
+        setError(subscriptionError.message || 'Unable to load your orders right now.');
+        setOrders(previousOrders => mergeOrders(previousOrders, optimisticOrder));
+        setIsLoading(false);
+      },
+    );
 
-  useEffect(() => {
-    void refreshOrders();
-  }, [refreshOrders]);
+    return unsubscribe;
+  }, [currentUserId, optimisticOrder, refreshNonce, user?.email, user?.uid]);
+
+  const refreshOrders = useCallback(async () => {
+    setError('');
+    setIsLoading(true);
+    setRefreshNonce(previousNonce => previousNonce + 1);
+  }, []);
 
   const activeOrders = useMemo(
-    () => orders.filter(order => !['DELIVERED', 'REJECTED', 'CANCELLED'].includes(order.status_code)),
+    () => orders.filter(order => !isTerminalOrderStatus(order.status_code)),
     [orders],
   );
 
   const pastOrders = useMemo(
-    () => orders.filter(order => ['DELIVERED', 'REJECTED', 'CANCELLED'].includes(order.status_code)),
+    () => orders.filter(order => isTerminalOrderStatus(order.status_code)),
     [orders],
   );
 

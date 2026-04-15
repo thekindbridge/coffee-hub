@@ -11,8 +11,6 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 export function CustomerStackNavigator() {
   const { theme } = useTheme();
 
-  console.log('[CustomerStackNavigator] render');
-
   return (
     <Stack.Navigator
       screenOptions={{

@@ -1,4 +1,3 @@
-import { useEffect } from 'react';
 import {
   NavigationContainer,
   useNavigationContainerRef,
@@ -20,18 +19,7 @@ export function AppNavigator() {
   const { theme } = useTheme();
   const auth = useAuth();
 
-  useEffect(() => {
-    console.log('USER STATE:', auth.user);
-  }, [auth.user]);
-
-  console.log('[AppNavigator] decision check:', {
-    authError: auth.authError,
-    isAuthReady: auth.isAuthReady,
-    user: auth.user,
-  });
-
   if (!auth.isAuthReady) {
-    console.log('[AppNavigator] -> loading-screen');
     return (
       <RoleLoadingScreen
         subtitle="Checking for a saved COFFEE-HUB email login."
@@ -41,21 +29,12 @@ export function AppNavigator() {
   }
 
   if (!auth.user) {
-    console.log('[AppNavigator] -> login-screen');
-    console.log('\u27A1\uFE0F login-screen');
     return <DummyLoginScreen errorMessage={auth.authError} />;
   }
 
   const isAdmin = auth.user.role === 'admin';
   const isAgent = auth.user.role === 'agent';
   const isCustomer = auth.user.role === 'customer';
-
-  console.log('[AppNavigator] -> authenticated-stack', {
-    isAdmin,
-    isAgent,
-    isCustomer,
-  });
-  console.log('\u27A1\uFE0F authenticated-stack');
 
   return (
     <AppProviders auth={auth}>

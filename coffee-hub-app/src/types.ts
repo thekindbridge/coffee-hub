@@ -66,7 +66,7 @@ export interface DeliveryLocation {
 }
 
 export type DeliverySessionStatus = 'assigned' | 'active' | 'completed';
-export type DeliveryAgentStatus = 'available' | 'offline' | 'busy';
+export type DeliveryAgentStatus = 'active' | 'available' | 'offline' | 'busy';
 
 export interface DeliveryAgent {
   id: string;
@@ -124,6 +124,16 @@ export interface OrderItem {
   price: number;
 }
 
+export interface OrderTimestamps {
+  createdAt: string;
+  acceptedAt?: string;
+  preparedAt?: string;
+  outForDeliveryAt?: string;
+  deliveredAt?: string;
+  rejectedAt?: string;
+  cancelledAt?: string;
+}
+
 export interface Order {
   id: string;
   doc_id: string;
@@ -141,13 +151,16 @@ export interface Order {
   rejection_reason?: string;
   cancellation_reason?: string;
   payment_method: string;
-  payment_status?: string;
+  payment_status?: 'pending' | 'paid';
   created_at: string;
   updated_at?: string;
   cancelled_at?: string;
+  timestamps: OrderTimestamps;
   user_id: string;
   customer_location?: DeliveryLocation | null;
   delivery_location?: DeliveryLocation | null;
+  assigned_agent_id?: string;
+  assigned_agent_name?: string;
   delivery_agent_id?: string;
   delivery_agent_name?: string;
   delivery_agent_phone?: string;
@@ -159,7 +172,7 @@ export interface Order {
   delivery_delivered_at?: string;
   preparing_at?: string;
   ready_for_pickup_at?: string;
-  items?: OrderItem[];
+  items: OrderItem[];
 }
 
 export interface CheckoutCustomerDetails {

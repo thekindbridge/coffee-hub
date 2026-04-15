@@ -7,6 +7,7 @@ import {
 import { getFirebaseDb } from '../../../services/firebase';
 import { toAppServiceError } from '../../../services/serviceError';
 import type { CustomerProfile } from '../../../types';
+import { sanitizeFirestoreData } from '../../../utils/sanitizeFirestoreData';
 import {
   EMPTY_PROFILE,
   buildProfileStoragePayload,
@@ -60,10 +61,10 @@ export const saveCustomerProfile = async (
 
     await setDoc(
       doc(db, 'users', currentUserId),
-      {
+      sanitizeFirestoreData({
         ...buildProfileStoragePayload(profileDraft, currentUserEmail),
         updatedAt: serverTimestamp(),
-      },
+      }),
       { merge: true },
     );
   } catch (error) {

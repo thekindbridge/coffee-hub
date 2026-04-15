@@ -1,24 +1,37 @@
 import { useCallback } from 'react';
+import type { DeliveryAgent } from '../../types';
 import type { Order } from '../types';
 import {
   getNextOrderStatus,
   type OrderStatusCode,
 } from '../types';
 import {
+  subscribeToAvailableDeliveryAgents,
   subscribeToAdminOrders,
+  subscribeToKitchenOrders,
+  subscribeToPendingOrders,
   updateAdminOrderStatus,
 } from '../services/ordersService';
+
+type DeliveryAgentAssignment = Pick<
+  DeliveryAgent,
+  'email' | 'id' | 'name' | 'phone' | 'vehicle_type'
+>;
 
 export const useOrderOperations = () => {
   const updateOrderStatus = useCallback(async (
     order: Order,
     statusCode: OrderStatusCode | string,
-    rejectionReason?: string,
+    options?: {
+      assignedAgent?: DeliveryAgentAssignment | null;
+      rejectionReason?: string;
+    },
   ) => {
     await updateAdminOrderStatus({
+      assignedAgent: options?.assignedAgent,
       order,
       nextStatus: statusCode,
-      rejectionReason,
+      rejectionReason: options?.rejectionReason,
     });
   }, []);
 
@@ -27,15 +40,22 @@ export const useOrderOperations = () => {
   }, [updateOrderStatus]);
 
   const rejectOrder = useCallback(async (order: Order, reason: string) => {
-    await updateOrderStatus(order, 'REJECTED', reason);
+    await updateOrderStatus(order, 'REJECTED', {
+      rejectionReason: reason,
+    });
   }, [updateOrderStatus]);
 
   const markPreparing = useCallback(async (order: Order) => {
     await updateOrderStatus(order, 'PREPARING');
   }, [updateOrderStatus]);
 
-  const markOutForDelivery = useCallback(async (order: Order) => {
-    await updateOrderStatus(order, 'OUT_FOR_DELIVERY');
+  const markOutForDelivery = useCallback(async (
+    order: Order,
+    assignedAgent: DeliveryAgentAssignment,
+  ) => {
+    await updateOrderStatus(order, 'OUT_FOR_DELIVERY', {
+      assignedAgent,
+    });
   }, [updateOrderStatus]);
 
   const markDelivered = useCallback(async (order: Order) => {
@@ -63,3 +83,8 @@ export const useOrderOperations = () => {
 };
 
 export { subscribeToAdminOrders };
+export {
+  subscribeToAvailableDeliveryAgents,
+  subscribeToKitchenOrders,
+  subscribeToPendingOrders,
+};

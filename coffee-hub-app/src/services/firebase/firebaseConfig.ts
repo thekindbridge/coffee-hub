@@ -17,31 +17,16 @@ const firebaseConfig = {
 };
 
 const FIRESTORE_INIT_SETTINGS = {
-  // Keep Firestore in memory for the mobile app while we debug connectivity.
-  // This avoids persistent offline cache behavior blocking fresh verification.
+  // Use an in-memory cache so Expo sessions always reflect the latest server state.
+  ignoreUndefinedProperties: true,
   localCache: memoryLocalCache(),
   experimentalForceLongPolling: true,
 };
-
-const sanitizeFirebaseConfigForLog = () => ({
-  appIdSuffix: firebaseConfig.appId.slice(-8),
-  authDomain: firebaseConfig.authDomain,
-  hasApiKey: Boolean(firebaseConfig.apiKey),
-  messagingSenderId: firebaseConfig.messagingSenderId,
-  projectId: firebaseConfig.projectId,
-  storageBucket: firebaseConfig.storageBucket,
-});
 
 const hasExistingFirebaseApp = getApps().length > 0;
 
 let firebaseApp: FirebaseApp = hasExistingFirebaseApp ? getApp() : initializeApp(firebaseConfig);
 let firestoreDb: Firestore | null = null;
-
-console.log('[firebaseConfig] app:init', {
-  appCount: getApps().length,
-  reusedExistingApp: hasExistingFirebaseApp,
-  ...sanitizeFirebaseConfigForLog(),
-});
 
 export const app = firebaseApp;
 
@@ -49,16 +34,12 @@ export const getFirebaseApp = (): FirebaseApp => app;
 
 export const getFirebaseDb = (): Firestore => {
   if (firestoreDb) {
-    console.log('[firebaseConfig] firestore:reuse');
     return firestoreDb;
   }
 
   try {
-    console.log('[firebaseConfig] firestore:initialize:start', FIRESTORE_INIT_SETTINGS);
     firestoreDb = initializeFirestore(app, FIRESTORE_INIT_SETTINGS);
-    console.log('[firebaseConfig] firestore:initialize:success');
-  } catch (error) {
-    console.warn('[firebaseConfig] firestore:initialize:fallback', error);
+  } catch {
     firestoreDb = getFirestore(app);
   }
 

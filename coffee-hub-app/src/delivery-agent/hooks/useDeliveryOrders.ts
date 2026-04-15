@@ -1,14 +1,11 @@
 import {
   useEffect,
   useMemo,
-  useRef,
   useState,
-  type MutableRefObject,
 } from 'react';
 import type { DeliveryAgent, DeliverySession, Order } from '../../types';
+import { useAgentOrders } from '../../hooks/useAgentOrders';
 import {
-  hydrateOrdersWithItems,
-  subscribeToAgentOrdersByStatus,
   subscribeToCurrentDeliverySession,
   subscribeToDeliveryAgents,
 } from '../services/deliveryService';
@@ -38,10 +35,6 @@ export const useDeliveryOrders = ({
 }: UseDeliveryOrdersParams): DeliveryOrdersState => {
   const [deliveryAgents, setDeliveryAgents] = useState<DeliveryAgent[]>([]);
   const [deliverySessions, setDeliverySessions] = useState<DeliverySession[]>([]);
-  const [activeOrders, setActiveOrders] = useState<Order[]>([]);
-  const [completedOrders, setCompletedOrders] = useState<Order[]>([]);
-  const activeOrdersSnapshotVersionRef = useRef(0);
-  const completedOrdersSnapshotVersionRef = useRef(0);
 
   useEffect(() => {
     if (!isAdmin && !isDeliveryAgent) {
@@ -78,65 +71,13 @@ export const useDeliveryOrders = ({
   const currentAgentId = isDeliveryAgent
     ? (currentDeliveryAgent?.id || normalizedCurrentEmail)
     : '';
-
-  const subscribeToHydratedOrders = (
-    agentId: string,
-    status: 'OUT_FOR_DELIVERY' | 'DELIVERED',
-    onOrdersChange: (orders: Order[]) => void,
-    snapshotVersionRef: MutableRefObject<number>,
-  ) => subscribeToAgentOrdersByStatus(
-    agentId,
-    status,
-    mappedOrders => {
-      onOrdersChange(mappedOrders);
-
-      const snapshotVersion = snapshotVersionRef.current + 1;
-      snapshotVersionRef.current = snapshotVersion;
-
-      void hydrateOrdersWithItems(mappedOrders)
-        .then(hydratedOrders => {
-          if (snapshotVersionRef.current !== snapshotVersion) {
-            return;
-          }
-
-          onOrdersChange(hydratedOrders);
-        })
-        .catch(error => {
-          console.error(`Failed to hydrate ${status} agent orders`, error);
-        });
-    },
-    error => {
-      console.error(`Failed to subscribe to ${status} agent orders`, error);
-      onOrdersChange([]);
-    },
-  );
-
-  useEffect(() => {
-    if (!isDeliveryAgent || !currentAgentId) {
-      setActiveOrders([]);
-      setCompletedOrders([]);
-      setDeliverySessions([]);
-      return;
-    }
-
-    const unsubscribeActive = subscribeToHydratedOrders(
-      currentAgentId,
-      'OUT_FOR_DELIVERY',
-      setActiveOrders,
-      activeOrdersSnapshotVersionRef,
-    );
-    const unsubscribeCompleted = subscribeToHydratedOrders(
-      currentAgentId,
-      'DELIVERED',
-      setCompletedOrders,
-      completedOrdersSnapshotVersionRef,
-    );
-
-    return () => {
-      unsubscribeActive();
-      unsubscribeCompleted();
-    };
-  }, [currentAgentId, isDeliveryAgent]);
+  const {
+    activeOrders,
+    completedOrders,
+    orders,
+  } = useAgentOrders({
+    currentAgentId: isDeliveryAgent ? currentAgentId : '',
+  });
 
   const currentDeliveryOrder = useMemo(() => {
     if (!activeOrders.length) {
@@ -171,9 +112,9 @@ export const useDeliveryOrders = ({
     return unsubscribe;
   }, [currentDeliveryOrder?.id]);
 
-  const orders = useMemo(
-    () => sortDeliveryOrders([...activeOrders, ...completedOrders]),
-    [activeOrders, completedOrders],
+  const sortedOrders = useMemo(
+    () => sortDeliveryOrders([...orders]),
+    [orders],
   );
 
   return {
@@ -184,6 +125,6 @@ export const useDeliveryOrders = ({
     currentDeliverySession: deliverySessions[0] || null,
     deliveryAgents,
     deliverySessions,
-    orders,
+    orders: sortedOrders,
   };
 };

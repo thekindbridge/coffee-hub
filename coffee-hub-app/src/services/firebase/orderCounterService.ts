@@ -5,6 +5,7 @@ import {
   setDoc,
 } from 'firebase/firestore';
 import type { DeliveryLocation } from '../../types';
+import { sanitizeFirestoreData } from '../../utils/sanitizeFirestoreData';
 import { toAppServiceError } from '../serviceError';
 import { getFirebaseDb } from './firebaseConfig';
 
@@ -19,7 +20,11 @@ export const getNextOrderId = async (): Promise<string> => {
           ? counterSnapshot.data().nextOrderNumber
           : 1001;
 
-      transaction.set(counterRef, { nextOrderNumber: currentValue + 1 }, { merge: true });
+      transaction.set(
+        counterRef,
+        sanitizeFirestoreData({ nextOrderNumber: currentValue + 1 }),
+        { merge: true },
+      );
       return currentValue;
     });
 
@@ -47,7 +52,7 @@ export const persistActiveDeliverySession = async ({
 
     await setDoc(
       doc(db, 'delivery_sessions', orderId),
-      {
+      sanitizeFirestoreData({
         agentId,
         agentName,
         customerLocation,
@@ -56,7 +61,7 @@ export const persistActiveDeliverySession = async ({
         startedAt: serverTimestamp(),
         status: 'active',
         updatedAt: serverTimestamp(),
-      },
+      }),
       { merge: true },
     );
   } catch (error) {

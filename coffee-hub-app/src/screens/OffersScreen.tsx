@@ -8,8 +8,9 @@ import {
   Text,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCartState } from '../app/providers/CartProvider';
+import { CUSTOMER_SCREEN_BOTTOM_PADDING } from '../components/customer/designSystem';
 import { OfferCard } from '../components/offers/OfferCard';
 import { ScalePressable } from '../components/ui/ScalePressable';
 import { ScreenTransition } from '../components/ui/ScreenTransition';
@@ -37,6 +38,7 @@ const sensory = {
 
 export function OffersScreen() {
   const navigation = useNavigation<OffersNavigation>();
+  const insets = useSafeAreaInsets();
   const { theme } = useTheme();
   const styles = useThemedStyles(createStyles);
   const { activeOffers, error, isLoading } = useOffers();
@@ -47,7 +49,10 @@ export function OffersScreen() {
     <SafeAreaView style={styles.screen} edges={['bottom']}>
       <ScrollView
         style={styles.screen}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[
+          styles.content,
+          { paddingBottom: insets.bottom + CUSTOMER_SCREEN_BOTTOM_PADDING },
+        ]}
         showsVerticalScrollIndicator={false}
       >
         <ScreenTransition>
@@ -118,10 +123,9 @@ const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => {
       backgroundColor: sensory.background,
     },
     content: {
-      paddingHorizontal: 24,
-      paddingTop: 24,
-      paddingBottom: 120,
-      gap: 24,
+      paddingHorizontal: theme.spacing.lg,
+      paddingTop: theme.spacing.lg,
+      gap: theme.spacing.lg,
     },
     headerBlock: {
       gap: 7,

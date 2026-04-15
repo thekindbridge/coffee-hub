@@ -19,9 +19,20 @@ export interface Order {
   created_at: string;
   updated_at?: string;
   cancelled_at?: string;
+  timestamps: {
+    createdAt: string;
+    acceptedAt?: string;
+    preparedAt?: string;
+    outForDeliveryAt?: string;
+    deliveredAt?: string;
+    rejectedAt?: string;
+    cancelledAt?: string;
+  };
   user_id: string;
   customer_location?: DeliveryLocation | null;
   delivery_location?: DeliveryLocation | null;
+  assigned_agent_id?: string;
+  assigned_agent_name?: string;
   delivery_agent_id?: string;
   delivery_agent_name?: string;
   delivery_agent_phone?: string;
@@ -66,7 +77,7 @@ export interface DeliveryAgent {
 }
 
 export type OrderPaymentStatus = 'pending' | 'paid';
-export type DeliveryAgentStatus = 'available' | 'offline' | 'busy';
+export type DeliveryAgentStatus = 'active' | 'available' | 'offline' | 'busy';
 
 export const ORDER_STATUS_DISPLAY = {
   PENDING: 'Pending',

@@ -55,8 +55,9 @@ const getStatusTone = (status: string) => {
     case 'PENDING':
       return 'pending' as const;
     case 'ACCEPTED':
+      return 'accepted' as const;
     case 'PREPARING':
-      return 'progress' as const;
+      return 'preparing' as const;
     case 'OUT_FOR_DELIVERY':
       return 'delivery' as const;
     case 'DELIVERED':

@@ -11,8 +11,10 @@ import {
   Text,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCartState } from '../app/providers/CartProvider';
+import { CUSTOMER_SCREEN_BOTTOM_PADDING } from '../components/customer/designSystem';
+import { StatusBadge } from '../components/customer/StatusBadge';
 import { GlassSurface } from '../components/ui/GlassSurface';
 import { PrimaryButton } from '../components/ui/PrimaryButton';
 import { ScalePressable } from '../components/ui/ScalePressable';
@@ -20,9 +22,11 @@ import { ScreenTransition } from '../components/ui/ScreenTransition';
 import { TAB_ROUTES } from '../constants/routes';
 import { useProfileData } from '../features/profile/hooks/useProfileData';
 import { getProfileInitials } from '../features/profile/lib/profileMappers';
+import { useOrderNotifications } from '../notifications/useOrderNotifications';
 import { useOrders } from '../hooks/useOrders';
 import type { MainTabParamList } from '../navigation/types';
 import {
+  getOrderStatusCustomerCopy,
   getOrderStatusLabel,
   normalizeOrderStatusCode,
 } from '../shared/orderStatus';
@@ -100,6 +104,17 @@ const getTimelineIndex = (order: Order, mode: OrderMode) => {
 
 const getStatusMeta = (order: Order, mode: OrderMode) => {
   const normalizedStatus = normalizeOrderStatusCode(order.status_code);
+  const rejectionReason = order.rejection_reason?.trim();
+
+  if (normalizedStatus === 'REJECTED') {
+    return rejectionReason
+      ? `Order rejected: ${rejectionReason}`
+      : 'Order rejected';
+  }
+
+  if (normalizedStatus === 'DELIVERED') {
+    return 'Delivered';
+  }
 
   if (mode === 'pickup') {
     if (hasPickupSignal(order)) {
@@ -107,28 +122,55 @@ const getStatusMeta = (order: Order, mode: OrderMode) => {
     }
 
     if (normalizedStatus === 'PENDING') {
-      return 'WAITING FOR CAFE';
+      return 'Waiting for confirmation';
     }
 
-    return 'BREWING NOW';
+    if (normalizedStatus === 'ACCEPTED') {
+      return 'Order accepted';
+    }
+
+    if (normalizedStatus === 'PREPARING') {
+      return 'Preparing your order';
+    }
+
+    return getOrderStatusCustomerCopy(normalizedStatus);
   }
 
   switch (normalizedStatus) {
     case 'PENDING':
-      return 'WAITING FOR CAFE';
+      return 'Waiting for confirmation';
     case 'ACCEPTED':
+      return 'Order accepted';
     case 'PREPARING':
-      return 'PREPARING NOW';
+      return 'Preparing your order';
     case 'OUT_FOR_DELIVERY':
-      return 'ON THE WAY';
-    case 'DELIVERED':
-      return 'DELIVERED';
-    case 'REJECTED':
-      return 'REJECTED';
+      return 'Out for delivery';
     case 'CANCELLED':
-      return 'CANCELLED';
+      return 'Order cancelled';
     default:
-      return getOrderStatusLabel(normalizedStatus).toUpperCase();
+      return getOrderStatusCustomerCopy(normalizedStatus);
+  }
+};
+
+const getStatusTone = (status: string) => {
+  const normalizedStatus = normalizeOrderStatusCode(status);
+
+  switch (normalizedStatus) {
+    case 'PENDING':
+      return 'pending' as const;
+    case 'ACCEPTED':
+      return 'accepted' as const;
+    case 'PREPARING':
+      return 'preparing' as const;
+    case 'OUT_FOR_DELIVERY':
+      return 'delivery' as const;
+    case 'DELIVERED':
+      return 'success' as const;
+    case 'REJECTED':
+    case 'CANCELLED':
+      return 'danger' as const;
+    default:
+      return 'neutral' as const;
   }
 };
 
@@ -261,6 +303,10 @@ function ActiveOrderCard({
         </View>
 
         <View style={styles.activeCardAside}>
+          <StatusBadge
+            label={getOrderStatusLabel(order.status_code)}
+            tone={getStatusTone(order.status_code)}
+          />
           <Text numberOfLines={1} style={styles.orderPrice}>
             {formatCurrency(getOrderTotal(order))}
           </Text>
@@ -284,37 +330,47 @@ function ActiveOrderCard({
 
 function PastOrderCard({ order }: { order: Order }) {
   const styles = useThemedStyles(createStyles);
-  const statusLabel = getOrderStatusLabel(order.status_code).toUpperCase();
+  const statusLabel = getOrderStatusLabel(order.status_code);
+  const reasonText = order.rejection_reason?.trim() || order.cancellation_reason?.trim() || '';
 
   return (
     <View style={styles.pastCard}>
-      <View style={styles.pastIconWrap}>
-        <Ionicons color={ACCENT} name={getPastOrderIcon(order)} size={18} />
+      <View style={styles.pastCardTop}>
+        <View style={styles.pastIconWrap}>
+          <Ionicons color={ACCENT} name={getPastOrderIcon(order)} size={18} />
+        </View>
+
+        <View style={styles.pastCopy}>
+          <Text numberOfLines={1} style={styles.pastTitle}>
+            {getPastOrderTitle(order)}
+          </Text>
+          <Text numberOfLines={1} style={styles.pastMeta}>
+            {getPastOrderMeta(order)}
+          </Text>
+        </View>
+
+        <View style={styles.pastAside}>
+          <Text numberOfLines={1} style={styles.pastPrice}>
+            {formatCurrency(getOrderTotal(order))}
+          </Text>
+          <StatusBadge label={statusLabel} tone={getStatusTone(order.status_code)} />
+        </View>
       </View>
 
-      <View style={styles.pastCopy}>
-        <Text numberOfLines={1} style={styles.pastTitle}>
-          {getPastOrderTitle(order)}
+      {reasonText ? (
+        <Text style={styles.pastReason}>
+          {normalizeOrderStatusCode(order.status_code) === 'REJECTED'
+            ? `Rejected: ${reasonText}`
+            : reasonText}
         </Text>
-        <Text numberOfLines={1} style={styles.pastMeta}>
-          {getPastOrderMeta(order)}
-        </Text>
-      </View>
-
-      <View style={styles.pastAside}>
-        <Text numberOfLines={1} style={styles.pastPrice}>
-          {formatCurrency(getOrderTotal(order))}
-        </Text>
-        <Text numberOfLines={1} style={styles.pastStatus}>
-          {statusLabel}
-        </Text>
-      </View>
+      ) : null}
     </View>
   );
 }
 
 export function OrdersScreen() {
   const navigation = useNavigation<OrdersNavigation>();
+  const insets = useSafeAreaInsets();
   const styles = useThemedStyles(createStyles);
   const { currentUserId, isAuthReady, placedOrder, setPlacedOrder } = useCartState();
   const {
@@ -330,9 +386,17 @@ export function OrdersScreen() {
   });
   const {
     authPhotoUrl,
+    profile,
     profileDisplayName,
   } = useProfileData();
   const [isHistoryExpanded, setIsHistoryExpanded] = useState(false);
+  const areOrderNotificationsEnabled = profile.notificationSettings.orderUpdates !== false;
+
+  useOrderNotifications(orders, {
+    currentUserId,
+    enabled: areOrderNotificationsEnabled,
+    isLoading,
+  });
 
   useFocusEffect(
     useCallback(() => {
@@ -403,31 +467,14 @@ export function OrdersScreen() {
 
   const profileInitials = getProfileInitials(profileDisplayName);
 
-  useEffect(() => {
-    console.log('[OrdersScreen] state', {
-      activeCount: activeOrders.length,
-      currentUserId,
-      error,
-      isAuthReady,
-      isLoading,
-      orderCount: orders.length,
-      pastCount: pastOrders.length,
-    });
-  }, [
-    activeOrders.length,
-    currentUserId,
-    error,
-    isAuthReady,
-    isLoading,
-    orders.length,
-    pastOrders.length,
-  ]);
-
   return (
     <SafeAreaView style={styles.screen} edges={['bottom']}>
       <ScrollView
         style={styles.screen}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[
+          styles.content,
+          { paddingBottom: insets.bottom + CUSTOMER_SCREEN_BOTTOM_PADDING },
+        ]}
         refreshControl={(
           <RefreshControl
             refreshing={isLoading}
@@ -563,9 +610,8 @@ const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => StyleSheet
     backgroundColor: SCREEN_BACKGROUND,
   },
   content: {
-    paddingHorizontal: theme.spacing.xl,
+    paddingHorizontal: theme.spacing.lg,
     paddingTop: theme.spacing.md,
-    paddingBottom: 136,
   },
   flow: {
     gap: theme.spacing.xxl,
@@ -864,13 +910,16 @@ const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => StyleSheet
     gap: theme.spacing.md,
   },
   pastCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing.md,
     borderRadius: theme.radius.xl,
     backgroundColor: SURFACE_CARD,
+    gap: theme.spacing.md,
     paddingHorizontal: 14,
     paddingVertical: 14,
+  },
+  pastCardTop: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: theme.spacing.md,
   },
   pastIconWrap: {
     width: 42,
@@ -911,6 +960,11 @@ const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => StyleSheet
     lineHeight: 12,
     fontWeight: '800',
     color: TEXT_MUTED,
+  },
+  pastReason: {
+    color: '#F0B5A7',
+    fontSize: 12,
+    lineHeight: 18,
   },
   historyButton: {
     alignSelf: 'center',

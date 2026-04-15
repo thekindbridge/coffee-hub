@@ -71,6 +71,8 @@ export const getAdminSurfaceColor = (depth: 'section' | 'card' | 'floating' = 'c
 export type AdminBadgeTone =
   | 'neutral'
   | 'pending'
+  | 'accepted'
+  | 'preparing'
   | 'progress'
   | 'delivery'
   | 'success'
@@ -86,8 +88,9 @@ export const getAdminStatusTone = (statusCode: OrderStatusCode | string): AdminB
     case 'PENDING':
       return 'pending';
     case 'ACCEPTED':
+      return 'accepted';
     case 'PREPARING':
-      return 'progress';
+      return 'preparing';
     case 'OUT_FOR_DELIVERY':
       return 'delivery';
     case 'DELIVERED':

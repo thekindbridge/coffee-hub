@@ -11,6 +11,7 @@ import {
 } from 'firebase/firestore';
 import type { QueryDocumentSnapshot } from 'firebase/firestore';
 import type { MenuItem } from '../../types';
+import { sanitizeFirestoreData } from '../../utils/sanitizeFirestoreData';
 import { toAppServiceError } from '../serviceError';
 import { getFirebaseDb } from './index';
 
@@ -73,17 +74,20 @@ export const subscribeToAdminMenuItems = (
 
 export const createAdminMenuItem = async (input: AdminMenuItemInput) => {
   try {
-    await addDoc(collection(getFirebaseDb(), MENU_COLLECTION), {
-      name: input.name.trim(),
-      category: input.category.trim(),
-      price: input.price,
-      image: input.image.trim(),
-      spiceLevel: input.spiceLevel,
-      veg: input.veg,
-      isAvailable: true,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
+    await addDoc(
+      collection(getFirebaseDb(), MENU_COLLECTION),
+      sanitizeFirestoreData({
+        name: input.name.trim(),
+        category: input.category.trim(),
+        price: input.price,
+        image: input.image.trim(),
+        spiceLevel: input.spiceLevel,
+        veg: input.veg,
+        isAvailable: true,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      }),
+    );
   } catch (error) {
     console.error('Failed to create menu item', error);
     throw toAppServiceError(error, 'Unable to create the menu item.', 'network');
@@ -96,16 +100,19 @@ export const updateAdminMenuItem = async (
   isAvailable: boolean,
 ) => {
   try {
-    await updateDoc(doc(getFirebaseDb(), MENU_COLLECTION, menuItemId), {
-      name: input.name.trim(),
-      category: input.category.trim(),
-      price: input.price,
-      image: input.image.trim(),
-      spiceLevel: input.spiceLevel,
-      veg: input.veg,
-      isAvailable,
-      updatedAt: serverTimestamp(),
-    });
+    await updateDoc(
+      doc(getFirebaseDb(), MENU_COLLECTION, menuItemId),
+      sanitizeFirestoreData({
+        name: input.name.trim(),
+        category: input.category.trim(),
+        price: input.price,
+        image: input.image.trim(),
+        spiceLevel: input.spiceLevel,
+        veg: input.veg,
+        isAvailable,
+        updatedAt: serverTimestamp(),
+      }),
+    );
   } catch (error) {
     console.error('Failed to update menu item', error);
     throw toAppServiceError(error, 'Unable to update the menu item.', 'network');
@@ -126,10 +133,13 @@ export const setAdminMenuItemAvailability = async (
   isAvailable: boolean,
 ) => {
   try {
-    await updateDoc(doc(getFirebaseDb(), MENU_COLLECTION, menuItemId), {
-      isAvailable,
-      updatedAt: serverTimestamp(),
-    });
+    await updateDoc(
+      doc(getFirebaseDb(), MENU_COLLECTION, menuItemId),
+      sanitizeFirestoreData({
+        isAvailable,
+        updatedAt: serverTimestamp(),
+      }),
+    );
   } catch (error) {
     console.error('Failed to update menu item availability', error);
     throw toAppServiceError(error, 'Unable to update item availability.', 'network');
