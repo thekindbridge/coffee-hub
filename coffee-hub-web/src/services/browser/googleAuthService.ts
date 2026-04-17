@@ -1,6 +1,8 @@
 import {
   GoogleAuthProvider,
+  browserLocalPersistence,
   getRedirectResult,
+  setPersistence,
   signInWithRedirect,
   signInWithPopup,
 } from 'firebase/auth';
@@ -9,7 +11,7 @@ import { FIREBASE_AUTH_DOMAIN } from '../firebase/firebaseConfig';
 import { AppServiceError, toAppServiceError } from '../platform/serviceError';
 
 const provider = new GoogleAuthProvider();
-const EXPECTED_AUTH_DOMAIN = 'coffee-hub-c8fdb.firebaseapp.com';
+const EXPECTED_AUTH_DOMAIN = 'coffee-hub-inkollu.vercel.app';
 const GOOGLE_AUTH_ERROR_KEY = 'coffee_hub_google_auth_error';
 const GOOGLE_AUTH_REDIRECT_KEY = 'coffee_hub_google_auth_redirect';
 const GOOGLE_AUTH_REDIRECT_NOTICE_KEY = 'coffee_hub_google_auth_redirect_notice';
@@ -99,7 +101,12 @@ const mapGoogleAuthError = (error: unknown) => {
   return toAppServiceError(error, 'Unable to sign in with Google.', 'network');
 };
 
+const ensureBrowserLocalPersistence = async () => {
+  await setPersistence(auth, browserLocalPersistence);
+};
+
 const beginRedirectSignIn = async (reason = '') => {
+  await ensureBrowserLocalPersistence();
   writeStorage(GOOGLE_AUTH_REDIRECT_KEY, '1');
   writeStorage(GOOGLE_AUTH_REDIRECT_NOTICE_KEY, reason);
   writeStorage(GOOGLE_AUTH_REDIRECT_STARTED_AT_KEY, `${Date.now()}`);
@@ -135,7 +142,8 @@ export const initializeGoogleAuth = async () => {
 
   try {
     const redirectResult = await getRedirectResult(auth);
-    console.log('REDIRECT RESULT:', redirectResult);
+    console.log('Redirect result:', redirectResult);
+    console.log('Auth user:', auth.currentUser);
 
     const resolvedUser = redirectResult?.user || auth.currentUser || null;
 
@@ -193,6 +201,7 @@ export const loginWithGoogle = async () => {
       return null;
     }
 
+    await ensureBrowserLocalPersistence();
     const result = await signInWithPopup(auth, provider);
     clearRedirectState();
     writeStorage(GOOGLE_AUTH_ERROR_KEY, '');
