@@ -9,7 +9,7 @@ import { FIREBASE_AUTH_DOMAIN } from '../firebase/firebaseConfig';
 import { AppServiceError, toAppServiceError } from '../platform/serviceError';
 
 const provider = new GoogleAuthProvider();
-const EXPECTED_AUTH_DOMAIN = 'coffee-hub-c8fdb.firebaseapp.com';
+const EXPECTED_AUTH_DOMAIN = 'coffee-hub-inkollu.vercel.app';
 const GOOGLE_AUTH_ERROR_KEY = 'coffee_hub_google_auth_error';
 const GOOGLE_AUTH_REDIRECT_KEY = 'coffee_hub_google_auth_redirect';
 const GOOGLE_AUTH_REDIRECT_NOTICE_KEY = 'coffee_hub_google_auth_redirect_notice';
