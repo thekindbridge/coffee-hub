@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
+  getAuthSessionSnapshot,
   initializeAuthState,
   subscribeToAuthSession,
 } from '../../../services/firebase/authService';
@@ -20,7 +21,7 @@ export const useAuth = (): AuthState => {
 
   useEffect(() => {
     let isActive = true;
-    let hasResolvedAuthState = false;
+    let hasRecoveredAuthenticatedUser = false;
     let fallbackTimeoutId = 0;
 
     const applySession = (session: {
@@ -32,16 +33,26 @@ export const useAuth = (): AuthState => {
         return;
       }
 
-      hasResolvedAuthState = true;
-      window.clearTimeout(fallbackTimeoutId);
+      if (session.isLoggedIn) {
+        hasRecoveredAuthenticatedUser = true;
+        window.clearTimeout(fallbackTimeoutId);
+      }
+
       setIsLoggedIn(session.isLoggedIn);
       setCurrentUserId(session.currentUserId);
       setCurrentUserEmail(session.currentUserEmail);
       setIsAuthReady(true);
     };
 
-    const unlockAuthUi = () => {
-      if (!isActive || hasResolvedAuthState) {
+    const recoverFromCurrentUser = () => {
+      if (!isActive) {
+        return;
+      }
+
+      const fallbackSession = getAuthSessionSnapshot();
+
+      if (fallbackSession.isLoggedIn) {
+        applySession(fallbackSession);
         return;
       }
 
@@ -50,16 +61,23 @@ export const useAuth = (): AuthState => {
 
     const unsubscribe = subscribeToAuthSession(session => {
       applySession(session);
+
+      if (!session.isLoggedIn && !hasRecoveredAuthenticatedUser) {
+        const fallbackSession = getAuthSessionSnapshot();
+        if (fallbackSession.isLoggedIn) {
+          applySession(fallbackSession);
+        }
+      }
     });
 
     fallbackTimeoutId = window.setTimeout(() => {
-      unlockAuthUi();
+      recoverFromCurrentUser();
     }, 4000);
 
     void initializeAuthState()
       .catch(error => {
         console.warn('AUTH INITIALIZATION FAILED', error);
-        unlockAuthUi();
+        recoverFromCurrentUser();
       });
 
     return () => {

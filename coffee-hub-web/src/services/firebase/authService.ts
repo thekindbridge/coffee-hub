@@ -70,9 +70,9 @@ export const initializeAuthState = async () => {
   return authBootstrapPromise;
 };
 
-export const getAuthSessionSnapshot = (): AuthSessionSnapshot => {
-  return createAuthSessionSnapshot(auth.currentUser);
-};
+export const getAuthSessionSnapshot = (): AuthSessionSnapshot => (
+  createAuthSessionSnapshot(auth.currentUser)
+);
 
 export const subscribeToAuthSession = (
   listener: (snapshot: AuthSessionSnapshot) => void,
@@ -82,7 +82,8 @@ export const subscribeToAuthSession = (
   });
 
   return onAuthStateChanged(auth, user => {
-    listener(createAuthSessionSnapshot(user));
+    const resolvedUser = user || auth.currentUser;
+    listener(createAuthSessionSnapshot(resolvedUser));
   });
 };
 
