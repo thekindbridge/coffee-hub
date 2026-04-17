@@ -41,8 +41,21 @@ export const initializeAuthState = async () => {
 
   if (!authBootstrapPromise) {
     authBootstrapPromise = (async () => {
+      console.log('AUTH BOOTSTRAP: initialize');
       await initializeAuthSession();
       await initializeGoogleAuth();
+
+      if (auth.currentUser) {
+        try {
+          await auth.currentUser.getIdToken();
+          console.log('AUTH BOOTSTRAP: current user token ready', {
+            uid: auth.currentUser.uid,
+            email: auth.currentUser.email || '',
+          });
+        } catch (error) {
+          console.warn('AUTH BOOTSTRAP: token refresh failed', error);
+        }
+      }
     })().catch(error => {
       authBootstrapPromise = null;
       throw error;
@@ -76,6 +89,8 @@ export const subscribeToAuthSession = (
   void initializeAuthState().catch(() => undefined);
 
   return onIdTokenChanged(auth, user => {
+    console.log('AUTH STATE:', user);
+
     if (!user) {
       listener({
         currentUserEmail: '',

@@ -31,13 +31,15 @@ const getRequiredEnv = (label: string, ...keys: string[]) => {
   return value;
 };
 
+export const FIREBASE_AUTH_DOMAIN = getRequiredEnv(
+  'VITE_AUTH_DOMAIN',
+  'VITE_AUTH_DOMAIN',
+  'VITE_FIREBASE_AUTH_DOMAIN',
+);
+
 const firebaseConfig = {
   apiKey: getRequiredEnv('VITE_API_KEY', 'VITE_API_KEY', 'VITE_FIREBASE_API_KEY'),
-  authDomain: getRequiredEnv(
-    'VITE_AUTH_DOMAIN',
-    'VITE_AUTH_DOMAIN',
-    'VITE_FIREBASE_AUTH_DOMAIN',
-  ),
+  authDomain: FIREBASE_AUTH_DOMAIN,
   projectId: getRequiredEnv('VITE_PROJECT_ID', 'VITE_PROJECT_ID', 'VITE_FIREBASE_PROJECT_ID'),
   storageBucket: getRequiredEnv(
     'VITE_STORAGE_BUCKET',

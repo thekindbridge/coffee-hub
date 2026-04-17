@@ -1,18 +1,19 @@
 import {
   GoogleAuthProvider,
   getRedirectResult,
-  setPersistence,
-  browserLocalPersistence,
   signInWithRedirect,
   signInWithPopup,
 } from 'firebase/auth';
 import { auth } from '../firebase';
+import { FIREBASE_AUTH_DOMAIN } from '../firebase/firebaseConfig';
 import { AppServiceError, toAppServiceError } from '../platform/serviceError';
 
 const provider = new GoogleAuthProvider();
+const EXPECTED_AUTH_DOMAIN = 'coffee-hub-c8fdb.firebaseapp.com';
 const GOOGLE_AUTH_ERROR_KEY = 'coffee_hub_google_auth_error';
 const GOOGLE_AUTH_REDIRECT_KEY = 'coffee_hub_google_auth_redirect';
 const GOOGLE_AUTH_REDIRECT_NOTICE_KEY = 'coffee_hub_google_auth_redirect_notice';
+const GOOGLE_AUTH_REDIRECT_STARTED_AT_KEY = 'coffee_hub_google_auth_redirect_started_at';
 
 provider.setCustomParameters({
   prompt: 'select_account',
@@ -40,6 +41,8 @@ const writeStorage = (key: string, value: string) => {
 
   window.sessionStorage.removeItem(key);
 };
+
+const hasPendingRedirectAttempt = () => readStorage(GOOGLE_AUTH_REDIRECT_KEY) === '1';
 
 const prefersRedirectFlow = () => {
   if (!isBrowser()) {
@@ -99,23 +102,71 @@ const mapGoogleAuthError = (error: unknown) => {
 const beginRedirectSignIn = async (reason = '') => {
   writeStorage(GOOGLE_AUTH_REDIRECT_KEY, '1');
   writeStorage(GOOGLE_AUTH_REDIRECT_NOTICE_KEY, reason);
+  writeStorage(GOOGLE_AUTH_REDIRECT_STARTED_AT_KEY, `${Date.now()}`);
   writeStorage(GOOGLE_AUTH_ERROR_KEY, '');
+  console.log('GOOGLE AUTH: redirect sign-in start', {
+    authDomain: FIREBASE_AUTH_DOMAIN,
+    reason,
+    returnUrl: window.location.href,
+  });
   await signInWithRedirect(auth, provider);
 };
 
 const clearRedirectState = () => {
   writeStorage(GOOGLE_AUTH_REDIRECT_KEY, '');
   writeStorage(GOOGLE_AUTH_REDIRECT_NOTICE_KEY, '');
+  writeStorage(GOOGLE_AUTH_REDIRECT_STARTED_AT_KEY, '');
 };
 
 export const initializeGoogleAuth = async () => {
+  const redirectAttempted = hasPendingRedirectAttempt();
+  console.log('AUTH START', {
+    authDomain: FIREBASE_AUTH_DOMAIN,
+    currentUrl: window.location.href,
+    redirectAttempted,
+  });
+
+  if (FIREBASE_AUTH_DOMAIN !== EXPECTED_AUTH_DOMAIN) {
+    console.warn('AUTH DOMAIN MISMATCH', {
+      expected: EXPECTED_AUTH_DOMAIN,
+      actual: FIREBASE_AUTH_DOMAIN,
+    });
+  }
+
   try {
-    await setPersistence(auth, browserLocalPersistence);
     const redirectResult = await getRedirectResult(auth);
+    console.log('REDIRECT RESULT:', redirectResult);
+
+    const resolvedUser = redirectResult?.user || auth.currentUser || null;
+
     clearRedirectState();
     writeStorage(GOOGLE_AUTH_ERROR_KEY, '');
-    return redirectResult?.user || null;
+
+    if (resolvedUser) {
+      try {
+        await resolvedUser.getIdToken();
+        console.log('AUTH TOKEN RESTORED', {
+          uid: resolvedUser.uid,
+          email: resolvedUser.email || '',
+        });
+      } catch (tokenError) {
+        console.warn('AUTH TOKEN RESTORE FAILED', tokenError);
+      }
+
+      return resolvedUser;
+    }
+
+    if (redirectAttempted) {
+      writeStorage(
+        GOOGLE_AUTH_ERROR_KEY,
+        'Google sign-in did not complete. Please try again.',
+      );
+      console.warn('AUTH RECOVERY: redirect returned without a signed-in user');
+    }
+
+    return null;
   } catch (error) {
+    console.error('REDIRECT RESULT ERROR:', error);
     clearRedirectState();
     const appError = mapGoogleAuthError(error);
     writeStorage(GOOGLE_AUTH_ERROR_KEY, appError.message);
@@ -137,8 +188,6 @@ export const consumeGoogleAuthError = () => {
 
 export const loginWithGoogle = async () => {
   try {
-    await setPersistence(auth, browserLocalPersistence);
-
     if (prefersRedirectFlow()) {
       await beginRedirectSignIn('Continuing Google sign-in in this tab...');
       return null;
