@@ -121,7 +121,7 @@ export const DashboardPage = ({
       <DeliveryNavbar
         activeView={activeView}
         items={deliveryNavItems}
-        onChange={setActiveView}
+        onChange={nextView => setActiveView(nextView)}
       />
     </div>
   );

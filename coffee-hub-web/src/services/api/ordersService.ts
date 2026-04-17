@@ -46,3 +46,15 @@ export const completeDeliveryRequest = (
   },
   idToken: string,
 ) => postApi<UpdateOrderStatusResponse>('/api/orders/complete-delivery', params, idToken);
+
+export const updateDeliveryTrackingRequest = (
+  params: {
+    orderDocId: string;
+    orderId: string;
+    agentId: string;
+    agentName?: string;
+    customerLocation?: DeliveryLocation | null;
+    location?: DeliveryLocation | null;
+  },
+  idToken: string,
+) => postApi<{ success: true }>('/api/orders/update-delivery-tracking', params, idToken);

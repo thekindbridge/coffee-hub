@@ -882,6 +882,17 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    match /menu/{itemId} {
+      allow read: if true;
+      allow create, update: if isAdmin() && isValidMenuItem(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /offers/{offerId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
     // orders: customers create and read their own, admins can review and update status
     match /orders/{orderId} {
       allow read: if
@@ -919,7 +930,7 @@ service cloud.firestore {
     }
 
     match /delivery_sessions/{orderId} {
-      allow read: if isAdmin() || isDeliverySessionAgent(resource.data);
+      allow read: if isAuthenticated();
       allow create, update: if
         (
           isAdmin() ||
@@ -931,7 +942,7 @@ service cloud.firestore {
     }
 
     match /agent_locations/{orderId} {
-      allow read: if isAdmin() || isAgentDocumentOwner(resource.data.agentId);
+      allow read: if isAuthenticated();
       allow create, update: if
         (isAdmin() || isAgentDocumentOwner(request.resource.data.agentId)) &&
         isValidAgentLocationDocument(request.resource.data);
@@ -939,7 +950,7 @@ service cloud.firestore {
     }
 
     match /meta/{docId} {
-      allow read: if isAuthenticated() && docId == 'orderCounter';
+      allow read: if false;
       allow create, update: if
         isAdmin() &&
         docId == 'orderCounter' &&

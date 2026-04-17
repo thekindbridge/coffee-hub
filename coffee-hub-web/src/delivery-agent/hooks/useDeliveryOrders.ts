@@ -144,13 +144,13 @@ export const useDeliveryOrders = ({
   );
 
   useEffect(() => {
-    if (!currentDeliveryOrder?.id) {
+    if (!currentDeliveryOrder?.doc_id) {
       setDeliverySessions([]);
       return;
     }
 
     const unsubscribe = subscribeToCurrentDeliverySession(
-      currentDeliveryOrder.id,
+      currentDeliveryOrder.doc_id,
       setDeliverySessions,
       error => {
         console.error('Failed to subscribe to current delivery session', error);
@@ -159,7 +159,7 @@ export const useDeliveryOrders = ({
     );
 
     return unsubscribe;
-  }, [currentDeliveryOrder?.id]);
+  }, [currentDeliveryOrder?.doc_id]);
 
   const orders = useMemo(
     () => sortDeliveryOrders([...activeOrders, ...completedOrders]),

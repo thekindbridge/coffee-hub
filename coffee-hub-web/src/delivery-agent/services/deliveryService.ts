@@ -10,19 +10,11 @@ import {
   mapDeliverySessionRecordToSession,
   mapOrderDocToOrder,
 } from '../../features/app/lib/firestoreMappers';
-import { fetchOrderItemsMap } from '../../services/firebase/orderItemsService';
 import { db } from '../../services/firebase';
 import { toAppServiceError } from '../../services/platform/serviceError';
 import type { DeliveryAgent, DeliverySession, Order } from '../../types';
 
-export const hydrateOrdersWithItems = async (orders: Order[]) => {
-  const orderItemsMap = await fetchOrderItemsMap(orders.map(order => order.id));
-
-  return orders.map(order => ({
-    ...order,
-    items: orderItemsMap.get(order.id) || order.items || [],
-  }));
-};
+export const hydrateOrdersWithItems = async (orders: Order[]) => orders;
 
 export const subscribeToDeliveryAgents = (
   onData: (agents: DeliveryAgent[]) => void,

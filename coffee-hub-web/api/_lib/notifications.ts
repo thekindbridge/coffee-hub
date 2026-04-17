@@ -359,10 +359,6 @@ const sendExpoPushNotifications = async (
     let response: Response;
 
     try {
-      targetChunk.forEach(target => {
-        console.log('Sending push to:', target.token);
-      });
-
       response = await fetch(EXPO_PUSH_API_URL, {
         method: 'POST',
         headers: {

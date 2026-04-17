@@ -59,7 +59,7 @@ export const useLiveDeliveryLocation = ({
       onError: error => {
         console.error('Failed to subscribe to delivery location', error);
         setSubscribedAgentLocation(null);
-        setTrackingLabel('Unable to load the rider location right now.');
+        setTrackingLabel('Live rider location is unavailable right now.');
       },
       orderDocId: normalizedOrderDocId,
       orderId: normalizedOrderId,

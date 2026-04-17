@@ -38,7 +38,7 @@ export const useOrderTracking = (order: Order) => {
 
   useEffect(() => {
     const unsubscribe = subscribeToDeliverySession(
-      liveOrder.id,
+      liveOrder.doc_id,
       setDeliverySession,
       error => {
         console.error('Failed to subscribe to delivery session', error);
@@ -49,7 +49,7 @@ export const useOrderTracking = (order: Order) => {
     return () => {
       unsubscribe();
     };
-  }, [liveOrder.id]);
+  }, [liveOrder.doc_id]);
 
   const agentId = useMemo(
     () => deliverySession?.agent_id || liveOrder.delivery_agent_id || '',

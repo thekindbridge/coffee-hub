@@ -59,7 +59,7 @@ export const OrdersPage = ({
 
       <StatusToggle
         label="Order Status"
-        onChange={setSelectedFilter}
+        onChange={nextValue => setSelectedFilter(nextValue as DeliveryOrderFilterId)}
         options={DELIVERY_ORDER_FILTERS}
         value={selectedFilter}
       />

@@ -38,11 +38,11 @@ export const subscribeToTrackedOrder = (
 );
 
 export const subscribeToDeliverySession = (
-  orderId: string,
+  orderDocId: string,
   onData: (session: DeliverySession | null) => void,
   onError: (error: Error) => void,
 ) => onSnapshot(
-  doc(db, 'delivery_sessions', orderId),
+  doc(db, 'delivery_sessions', orderDocId),
   snapshot => {
     if (!snapshot.exists()) {
       onData(null);
@@ -51,7 +51,7 @@ export const subscribeToDeliverySession = (
 
     onData(
       mapDeliverySessionRecordToSession(
-        orderId,
+        snapshot.id,
         snapshot.data() as Record<string, unknown>,
       ),
     );
@@ -107,8 +107,8 @@ export const subscribeToDeliveryLocation = ({
     return () => undefined;
   }
 
-  const targetDoc = normalizedOrderId
-    ? doc(db, 'agent_locations', normalizedOrderId)
+  const targetDoc = normalizedOrderDocId
+    ? doc(db, 'agent_locations', normalizedOrderDocId)
     : normalizedAgentId
       ? doc(db, 'agents', normalizedAgentId)
       : doc(db, 'orders', normalizedOrderDocId);

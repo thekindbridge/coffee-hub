@@ -241,7 +241,7 @@ export const CustomerAppShell = ({
             { id: 'offers', icon: Tag, label: 'Offers' },
             { id: 'orders', icon: Clock, label: 'Orders' },
           ]}
-          onChange={customerExperience.setActiveTab}
+          onChange={nextTab => customerExperience.setActiveTab(nextTab)}
         />
       )}
       overlays={(

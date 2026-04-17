@@ -24,6 +24,7 @@ export type ForegroundNotification = {
 };
 
 const PUSH_PROMPT_DISMISS_KEY = 'coffee_hub_push_prompt_dismissed';
+let hasWarnedAboutMissingVapidKey = false;
 
 export const getBrowserPushPermissionState = (): PushPermissionState => {
   return notificationAdapter.getPermissionState();
@@ -94,21 +95,24 @@ export const syncBrowserPushRegistration = async ({
     if (permissionState === 'granted') {
       const vapidKey = (import.meta.env.VITE_FIREBASE_VAPID_KEY || '').trim();
       if (!vapidKey) {
-        throw new Error('VITE_FIREBASE_VAPID_KEY is missing.');
-      }
+        if (!hasWarnedAboutMissingVapidKey) {
+          hasWarnedAboutMissingVapidKey = true;
+          console.warn('Browser push notifications disabled: VITE_FIREBASE_VAPID_KEY is missing.');
+        }
+      } else {
+        const registration = await getPushServiceWorkerRegistration();
+        if (!registration) {
+          throw new Error('Push service worker registration failed.');
+        }
 
-      const registration = await getPushServiceWorkerRegistration();
-      if (!registration) {
-        throw new Error('Push service worker registration failed.');
-      }
+        token = await getToken(getMessaging(app), {
+          vapidKey,
+          serviceWorkerRegistration: registration,
+        });
 
-      token = await getToken(getMessaging(app), {
-        vapidKey,
-        serviceWorkerRegistration: registration,
-      });
-
-      if (!token) {
-        throw new Error('Browser did not return an FCM token.');
+        if (!token) {
+          throw new Error('Browser did not return an FCM token.');
+        }
       }
     }
 

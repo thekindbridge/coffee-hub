@@ -1,11 +1,7 @@
-import {
-  doc,
-  serverTimestamp,
-  setDoc,
-} from 'firebase/firestore';
 import type { DeliveryLocation } from '../../types';
+import { updateDeliveryTrackingRequest } from '../api/ordersService';
 import { toAppServiceError } from '../platform/serviceError';
-import { db } from './index';
+import { getCurrentUserIdToken } from './authService';
 
 export const persistActiveDeliverySession = async ({
   agentId,
@@ -21,19 +17,20 @@ export const persistActiveDeliverySession = async ({
   orderId: string;
 }) => {
   try {
-    await setDoc(
-      doc(db, 'delivery_sessions', orderId),
+    const idToken = await getCurrentUserIdToken(true);
+    if (!idToken) {
+      throw new Error('Please sign in again before starting delivery tracking.');
+    }
+
+    await updateDeliveryTrackingRequest(
       {
         agentId,
         agentName,
+        customerLocation,
         orderDocId,
         orderId,
-        startedAt: serverTimestamp(),
-        status: 'active',
-        updatedAt: serverTimestamp(),
-        customerLocation,
       },
-      { merge: true },
+      idToken,
     );
   } catch (error) {
     throw toAppServiceError(

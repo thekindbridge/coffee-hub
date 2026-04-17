@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import type { Order } from '../../../types';
-import { fetchOrderItemsMap } from '../../../services/firebase/orderItemsService';
 import type { AudioHandle } from '../../../services/platform/audioAdapter';
 import { audioAdapter } from '../../../services/platform/audioAdapter';
 import { notificationAdapter } from '../../../services/platform/notificationAdapter';
@@ -37,9 +36,6 @@ export const useOrdersData = (
   const previousAdminOrderCountRef = useRef(0);
   const hasInitializedAdminOrdersRef = useRef(false);
   const orderAlertAudioRef = useRef<AudioHandle | null>(null);
-  const adminOrdersSnapshotVersionRef = useRef(0);
-  const userOrdersSnapshotVersionRef = useRef(0);
-
   // --- Admin orders subscription ---
   useEffect(() => {
     if (!isAdmin) {
@@ -47,7 +43,6 @@ export const useOrdersData = (
       setNewOrderDocIds([]);
       previousAdminOrderCountRef.current = 0;
       hasInitializedAdminOrdersRef.current = false;
-      adminOrdersSnapshotVersionRef.current = 0;
       return;
     }
 
@@ -66,23 +61,6 @@ export const useOrdersData = (
     const unsubscribe = subscribeToAdminOrders(
       ({ addedOrderDocIds, orders, snapshotSize }) => {
         setAdminOrders(orders);
-
-        const snapshotVersion = adminOrdersSnapshotVersionRef.current + 1;
-        adminOrdersSnapshotVersionRef.current = snapshotVersion;
-
-        // Hydrate items asynchronously
-        void (async () => {
-          try {
-            const orderItemsMap = await fetchOrderItemsMap(orders.map(order => order.id));
-            if (adminOrdersSnapshotVersionRef.current !== snapshotVersion) return;
-            setAdminOrders(orders.map(order => ({
-              ...order,
-              items: orderItemsMap.get(order.id) || order.items || [],
-            })));
-          } catch (error) {
-            console.error('Failed to load order items for admin orders', error);
-          }
-        })();
 
         if (!hasInitializedAdminOrdersRef.current) {
           previousAdminOrderCountRef.current = snapshotSize;
@@ -131,7 +109,6 @@ export const useOrdersData = (
     if (!currentUserId) {
       setUserOrders([]);
       setIsUserOrdersLoading(false);
-      userOrdersSnapshotVersionRef.current = 0;
       return;
     }
 
@@ -142,22 +119,6 @@ export const useOrdersData = (
       sortedOrders => {
         setUserOrders(sortedOrders);
         setIsUserOrdersLoading(false);
-
-        const snapshotVersion = userOrdersSnapshotVersionRef.current + 1;
-        userOrdersSnapshotVersionRef.current = snapshotVersion;
-
-        void (async () => {
-          try {
-            const orderItemsMap = await fetchOrderItemsMap(sortedOrders.map(order => order.id));
-            if (userOrdersSnapshotVersionRef.current !== snapshotVersion) return;
-            setUserOrders(sortedOrders.map(order => ({
-              ...order,
-              items: orderItemsMap.get(order.id) || order.items || [],
-            })));
-          } catch (error) {
-            console.error('Failed to load order items for user orders', error);
-          }
-        })();
       },
       error => {
         console.error('Failed to subscribe to user orders', error);
