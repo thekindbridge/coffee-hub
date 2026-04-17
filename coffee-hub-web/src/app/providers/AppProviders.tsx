@@ -1,12 +1,10 @@
 import { useEffect } from 'react';
 import type { PropsWithChildren } from 'react';
-import { initializeGoogleAuth } from '../../services/browser/googleAuthService';
-import { initializeAuthSession } from '../../services/firebase/authService';
+import { initializeAuthState } from '../../services/firebase/authService';
 
 export const AppProviders = ({ children }: PropsWithChildren) => {
   useEffect(() => {
-    void initializeAuthSession().catch(() => undefined);
-    void initializeGoogleAuth().catch(() => undefined);
+    void initializeAuthState().catch(() => undefined);
   }, []);
 
   return children;

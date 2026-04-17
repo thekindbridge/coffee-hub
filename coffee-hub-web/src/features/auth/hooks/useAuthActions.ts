@@ -17,15 +17,30 @@ export const useAuthActions = (): AuthActionsState => {
   const [loginError, setLoginError] = useState('');
 
   useEffect(() => {
+    let redirectNoticeTimeoutId: number | null = null;
     const pendingNotice = consumeGoogleAuthNotice();
     if (pendingNotice) {
       setLoginError(pendingNotice);
+      redirectNoticeTimeoutId = window.setTimeout(() => {
+        setLoginError(currentError => (
+          currentError === pendingNotice ? '' : currentError
+        ));
+      }, 5000);
     }
 
     const pendingError = consumeGoogleAuthError();
     if (pendingError) {
+      if (redirectNoticeTimeoutId) {
+        window.clearTimeout(redirectNoticeTimeoutId);
+      }
       setLoginError(pendingError);
     }
+
+    return () => {
+      if (redirectNoticeTimeoutId) {
+        window.clearTimeout(redirectNoticeTimeoutId);
+      }
+    };
   }, []);
 
   const handleLogin = async () => {

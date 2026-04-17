@@ -4,6 +4,7 @@ import {
   setPersistence,
   signOut,
 } from 'firebase/auth';
+import { initializeGoogleAuth } from '../browser/googleAuthService';
 import { toAppServiceError } from '../platform/serviceError';
 import { auth } from './firebaseConfig';
 
@@ -14,6 +15,7 @@ export type AuthSessionSnapshot = {
 };
 
 let authInitializationPromise: Promise<void> | null = null;
+let authBootstrapPromise: Promise<void> | null = null;
 
 export const initializeAuthSession = async () => {
   if (typeof window === 'undefined') {
@@ -32,26 +34,62 @@ export const initializeAuthSession = async () => {
   return authInitializationPromise;
 };
 
-export const subscribeToAuthSession = (
-  listener: (snapshot: AuthSessionSnapshot) => void,
-) => {
-  void initializeAuthSession().catch(() => undefined);
-
-  return onIdTokenChanged(auth, user => {
-  if (!user) {
-    listener({
-      currentUserEmail: '',
-      currentUserId: '',
-      isLoggedIn: false,
-    });
+export const initializeAuthState = async () => {
+  if (typeof window === 'undefined') {
     return;
   }
 
-  listener({
+  if (!authBootstrapPromise) {
+    authBootstrapPromise = (async () => {
+      await initializeAuthSession();
+      await initializeGoogleAuth();
+    })().catch(error => {
+      authBootstrapPromise = null;
+      throw error;
+    });
+  }
+
+  return authBootstrapPromise;
+};
+
+export const getAuthSessionSnapshot = (): AuthSessionSnapshot => {
+  const user = auth.currentUser;
+
+  if (!user) {
+    return {
+      currentUserEmail: '',
+      currentUserId: '',
+      isLoggedIn: false,
+    };
+  }
+
+  return {
     currentUserEmail: user.email || '',
     currentUserId: user.uid,
     isLoggedIn: true,
-  });
+  };
+};
+
+export const subscribeToAuthSession = (
+  listener: (snapshot: AuthSessionSnapshot) => void,
+) => {
+  void initializeAuthState().catch(() => undefined);
+
+  return onIdTokenChanged(auth, user => {
+    if (!user) {
+      listener({
+        currentUserEmail: '',
+        currentUserId: '',
+        isLoggedIn: false,
+      });
+      return;
+    }
+
+    listener({
+      currentUserEmail: user.email || '',
+      currentUserId: user.uid,
+      isLoggedIn: true,
+    });
   });
 };
 
