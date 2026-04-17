@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import {
-  getAuthSessionSnapshot,
   initializeAuthState,
   subscribeToAuthSession,
 } from '../../../services/firebase/authService';
@@ -21,6 +20,8 @@ export const useAuth = (): AuthState => {
 
   useEffect(() => {
     let isActive = true;
+    let hasResolvedAuthState = false;
+    let fallbackTimeoutId = 0;
 
     const applySession = (session: {
       isLoggedIn: boolean;
@@ -31,9 +32,19 @@ export const useAuth = (): AuthState => {
         return;
       }
 
+      hasResolvedAuthState = true;
+      window.clearTimeout(fallbackTimeoutId);
       setIsLoggedIn(session.isLoggedIn);
       setCurrentUserId(session.currentUserId);
       setCurrentUserEmail(session.currentUserEmail);
+      setIsAuthReady(true);
+    };
+
+    const unlockAuthUi = () => {
+      if (!isActive || hasResolvedAuthState) {
+        return;
+      }
+
       setIsAuthReady(true);
     };
 
@@ -41,18 +52,14 @@ export const useAuth = (): AuthState => {
       applySession(session);
     });
 
-    const fallbackTimeoutId = window.setTimeout(() => {
-      applySession(getAuthSessionSnapshot());
-    }, 5000);
+    fallbackTimeoutId = window.setTimeout(() => {
+      unlockAuthUi();
+    }, 4000);
 
     void initializeAuthState()
-      .then(() => {
-        window.clearTimeout(fallbackTimeoutId);
-        applySession(getAuthSessionSnapshot());
-      })
-      .catch(() => {
-        window.clearTimeout(fallbackTimeoutId);
-        applySession(getAuthSessionSnapshot());
+      .catch(error => {
+        console.warn('AUTH INITIALIZATION FAILED', error);
+        unlockAuthUi();
       });
 
     return () => {
