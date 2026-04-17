@@ -30,14 +30,6 @@ export const persistAgentTrackingLocation = async ({
   try {
     await Promise.all([
       setDoc(
-        doc(db, 'orders', orderDocId),
-        {
-          deliveryLocation: toFirestoreLocation(location),
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true },
-      ),
-      setDoc(
         doc(db, 'agent_locations', orderId),
         {
           lat: location.lat,

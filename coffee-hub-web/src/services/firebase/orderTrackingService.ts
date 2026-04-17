@@ -107,11 +107,11 @@ export const subscribeToDeliveryLocation = ({
     return () => undefined;
   }
 
-  const targetDoc = normalizedOrderDocId
-    ? doc(db, 'orders', normalizedOrderDocId)
+  const targetDoc = normalizedOrderId
+    ? doc(db, 'agent_locations', normalizedOrderId)
     : normalizedAgentId
       ? doc(db, 'agents', normalizedAgentId)
-      : doc(db, 'agent_locations', normalizedOrderId);
+      : doc(db, 'orders', normalizedOrderDocId);
 
   return onSnapshot(
     targetDoc,
@@ -122,11 +122,11 @@ export const subscribeToDeliveryLocation = ({
       }
 
       const snapshotData = snapshot.data() as Record<string, unknown>;
-      const locationRecord = normalizedOrderDocId
-        ? snapshotData.deliveryLocation
+      const locationRecord = normalizedOrderId
+        ? snapshotData
         : normalizedAgentId
           ? snapshotData.currentLocation ?? snapshotData.lastLocation
-          : snapshotData;
+          : snapshotData.deliveryLocation;
 
       onData(mapLocationRecord(locationRecord));
     },

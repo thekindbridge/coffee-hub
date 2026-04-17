@@ -33,7 +33,6 @@ interface OfferRecord {
 }
 
 export interface SanitizedOrderDraft {
-  orderId: string;
   customer: CheckoutOrderCustomerPayload;
   items: CheckoutOrderItemPayload[];
   couponCode: string;
@@ -79,15 +78,6 @@ const ensureString = (value: unknown, fieldName: string) => {
   }
 
   return value.trim();
-};
-
-const ensureOrderId = (value: unknown) => {
-  const orderId = ensureString(value, 'Order ID').toUpperCase();
-  if (orderId.length > 40) {
-    throw new ApiError(400, 'Order ID must be 40 characters or fewer.');
-  }
-
-  return orderId;
 };
 
 const ensureNonNegativeMoney = (value: unknown, fieldName: string) => {
@@ -147,7 +137,6 @@ export const parseOrderDraft = (value: unknown): SanitizedOrderDraft => {
   }
 
   return {
-    orderId: ensureOrderId(payload.orderId),
     customer: {
       name: ensureString(customer.name, 'Customer name'),
       phone: ensureString(customer.phone, 'Phone number'),

@@ -17,6 +17,7 @@ type StoredOrderItem = {
 export interface StoredOrderRecord {
   orderId?: string;
   userId?: string;
+  email?: string;
   name?: string;
   phone?: string;
   address?: string;

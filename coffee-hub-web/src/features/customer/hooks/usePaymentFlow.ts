@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import { createOrderRequest } from '../../../services/api/ordersService';
 import { getCurrentUserIdToken } from '../../../services/firebase/authService';
-import { getNextOrderId } from '../../../services/firebase/orderCounterService';
 import { locationAdapter } from '../../../services/platform/locationAdapter';
 import { navigationAdapter } from '../../../services/platform/navigationAdapter';
 import { getAppServiceErrorMessage } from '../../../services/platform/serviceError';
@@ -319,8 +318,6 @@ export const usePaymentFlow = ({
     }
 
     const finalTotal = Number((discountedSubtotal + deliveryFeeValue).toFixed(2));
-    const orderId = draftOrderId || await getNextOrderId();
-    setDraftOrderId(orderId);
 
     const items: CheckoutOrderItemPayload[] = cart.map(item => ({
       id: item.id,
@@ -331,7 +328,6 @@ export const usePaymentFlow = ({
 
     return {
       order: {
-        orderId,
         customer: { name, phone, address, location: customerLocation },
         items,
         subtotal: cartTotal,

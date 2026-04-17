@@ -27,9 +27,10 @@ const buildStoredOrderRecord = (
   orderDraft: SanitizedOrderDraft,
   pricing: ValidatedPricing,
   userId: string,
+  email: string,
 ): StoredOrderRecord => ({
-  orderId: orderDraft.orderId,
   userId,
+  email,
   name: orderDraft.customer.name,
   phone: orderDraft.customer.phone,
   address: orderDraft.customer.address,
@@ -59,16 +60,52 @@ const buildStoredOrderRecord = (
   assignedAgentVehicle: '',
 });
 
-const loadExistingOrder = async (db: Firestore, orderId: string) => {
-  const orderDoc = await db.collection('orders').doc(orderId).get();
-  if (!orderDoc.exists) {
-    return null;
-  }
+const ORDER_COUNTER_START = 1001;
 
-  return {
-    docId: orderDoc.id,
-    data: orderDoc.data() as StoredOrderRecord,
-  };
+const buildOrderId = (orderNumber: number) => `COF${String(orderNumber).padStart(4, '0')}`;
+
+const createOrderWithNextNumber = async (
+  db: Firestore,
+  storedOrder: StoredOrderRecord,
+) => {
+  const orderRef = db.collection('orders').doc();
+
+  return db.runTransaction(async transaction => {
+    const counterRef = db.collection('meta').doc('orderCounter');
+    const counterSnapshot = await transaction.get(counterRef);
+    const currentValue =
+      counterSnapshot.exists && typeof counterSnapshot.data()?.nextOrderNumber === 'number'
+        ? counterSnapshot.data()!.nextOrderNumber
+        : ORDER_COUNTER_START;
+    const orderId = buildOrderId(currentValue);
+
+    transaction.set(
+      orderRef,
+      {
+        ...storedOrder,
+        orderId,
+        createdAt: FieldValue.serverTimestamp(),
+        timestamps: {
+          createdAt: FieldValue.serverTimestamp(),
+        },
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+    );
+
+    transaction.set(
+      counterRef,
+      {
+        nextOrderNumber: currentValue + 1,
+      },
+      { merge: true },
+    );
+
+    return {
+      orderId,
+      orderNumber: currentValue,
+      orderRef,
+    };
+  });
 };
 
 const sendError = (response: VercelResponse, error: unknown) => {
@@ -92,38 +129,23 @@ export default async function handler(request: VercelRequest, response: VercelRe
     const decodedToken = await verifyRequestUser(request);
     const { orderDraft } = parseCreateOrderBody(request.body);
     const effectiveUserId = decodedToken.uid;
+    const effectiveEmail = (decodedToken.email || '').trim().toLowerCase();
 
     const adminDb = getAdminDb();
-    const existingOrder = await loadExistingOrder(adminDb, orderDraft.orderId);
-    if (existingOrder) {
-      if (existingOrder.data.userId !== effectiveUserId) {
-        throw new ApiError(403, 'An order with this receipt already exists for another user.');
-      }
-
-      response.status(200).json({
-        order: mapOrderRecordToResponse(existingOrder.docId, existingOrder.data),
-      });
-      return;
-    }
-
     await assertShopIsOpen(adminDb);
     const pricing = await recalculatePricing(adminDb, orderDraft);
     assertPricingMatches(orderDraft, pricing);
 
-    const storedOrder = buildStoredOrderRecord(orderDraft, pricing, effectiveUserId);
-    const orderRef = adminDb.collection('orders').doc(orderDraft.orderId);
+    const storedOrder = buildStoredOrderRecord(
+      orderDraft,
+      pricing,
+      effectiveUserId,
+      effectiveEmail,
+    );
+    const { orderId, orderNumber, orderRef } = await createOrderWithNextNumber(adminDb, storedOrder);
 
-    await orderRef.set({
-      ...storedOrder,
-      createdAt: FieldValue.serverTimestamp(),
-      timestamps: {
-        createdAt: FieldValue.serverTimestamp(),
-      },
-      updatedAt: FieldValue.serverTimestamp(),
-    });
-
-    const createdOrder = await loadExistingOrder(adminDb, orderDraft.orderId);
-    if (!createdOrder) {
+    const createdOrderSnapshot = await orderRef.get();
+    if (!createdOrderSnapshot.exists) {
       throw new Error('Order was created, but could not be loaded afterwards.');
     }
 
@@ -134,7 +156,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
         await sendPushNotification(
           adminDb,
           adminRecipients,
-          buildAdminNewOrderNotification(orderDraft.orderId),
+          buildAdminNewOrderNotification(orderId),
         );
       }
     } catch (notificationError) {
@@ -142,7 +164,13 @@ export default async function handler(request: VercelRequest, response: VercelRe
     }
 
     response.status(200).json({
-      order: mapOrderRecordToResponse(createdOrder.docId, createdOrder.data),
+      success: true,
+      order: mapOrderRecordToResponse(
+        createdOrderSnapshot.id,
+        createdOrderSnapshot.data() as StoredOrderRecord,
+      ),
+      orderNumber: orderId,
+      numericOrderNumber: orderNumber,
     });
   } catch (error) {
     sendError(response, error);

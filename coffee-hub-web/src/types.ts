@@ -153,7 +153,6 @@ export interface CheckoutOrderItemPayload {
 }
 
 export interface CheckoutOrderDraft {
-  orderId: string;
   customer: CheckoutCustomerDetails;
   items: CheckoutOrderItemPayload[];
   subtotal: number;
@@ -164,6 +163,8 @@ export interface CheckoutOrderDraft {
 }
 
 export interface CreateOrderResponse {
+  success?: boolean;
+  orderNumber?: string;
   order: Order;
 }
 
