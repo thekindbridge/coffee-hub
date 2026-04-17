@@ -16,7 +16,6 @@ let cachedAdminDb: Firestore | null = null;
 let cachedAdminMessaging: Messaging | null = null;
 
 const normalizeEmail = (value: string) => value.trim().toLowerCase();
-const normalizeUserId = (value: string) => value.trim().toLowerCase();
 
 const getRequiredEnv = (key: string, fallbacks: string[] = []) => {
   for (const candidate of [process.env[key], ...fallbacks]) {
@@ -184,6 +183,15 @@ export const hasAdminAccess = async (email: string) => {
   return adminAccessDoc.exists;
 };
 
+const hasAdminClaim = (decodedToken: DecodedIdToken) => {
+  const role = typeof decodedToken.role === 'string' ? decodedToken.role.trim().toLowerCase() : '';
+  const roles = Array.isArray(decodedToken.roles)
+    ? decodedToken.roles.filter((value): value is string => typeof value === 'string')
+    : [];
+
+  return decodedToken.admin === true || role === 'admin' || roles.includes('admin');
+};
+
 export const verifyRequestUser = async (
   request: VercelRequest,
   expectedUserId?: string,
@@ -210,37 +218,6 @@ export const verifyRequestUser = async (
   }
 };
 
-type ResolvedRequestUser = Pick<DecodedIdToken, 'email' | 'uid'> & {
-  authMode: 'firebase' | 'dummy';
-};
-
-export const resolveRequestUser = async (
-  request: VercelRequest,
-  expectedUserId?: string,
-): Promise<ResolvedRequestUser> => {
-  const normalizedExpectedUserId = normalizeUserId(expectedUserId || '');
-
-  if (request.headers.authorization) {
-    const decodedToken = await verifyRequestUser(request, normalizedExpectedUserId || undefined);
-
-    return {
-      authMode: 'firebase',
-      email: decodedToken.email,
-      uid: decodedToken.uid,
-    };
-  }
-
-  if (!normalizedExpectedUserId) {
-    throw new ApiError(401, 'Missing Firebase authentication token.');
-  }
-
-  return {
-    authMode: 'dummy',
-    email: normalizedExpectedUserId.includes('@') ? normalizedExpectedUserId : undefined,
-    uid: normalizedExpectedUserId,
-  };
-};
-
 export const verifyAdminRequest = async (request: VercelRequest) => {
   const decodedToken = await verifyRequestUser(request);
   const normalizedEmail = normalizeEmail(decodedToken.email || '');
@@ -249,7 +226,7 @@ export const verifyAdminRequest = async (request: VercelRequest) => {
     throw new ApiError(403, 'Admin access requires an email-backed account.');
   }
 
-  if (!(await hasAdminAccess(normalizedEmail))) {
+  if (!hasAdminClaim(decodedToken) && !(await hasAdminAccess(normalizedEmail))) {
     throw new ApiError(403, 'Admin access required.');
   }
 

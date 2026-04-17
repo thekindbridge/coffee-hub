@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { authAdapter } from '../../../services/platform/authAdapter';
 import { getAppServiceErrorMessage } from '../../../services/platform/serviceError';
+import { consumeGoogleAuthError } from '../../../services/browser/googleAuthService';
 
 type AuthActionsState = {
   handleLogin: () => Promise<void>;
@@ -11,6 +12,13 @@ type AuthActionsState = {
 export const useAuthActions = (): AuthActionsState => {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [loginError, setLoginError] = useState('');
+
+  useEffect(() => {
+    const pendingError = consumeGoogleAuthError();
+    if (pendingError) {
+      setLoginError(pendingError);
+    }
+  }, []);
 
   const handleLogin = async () => {
     setIsLoggingIn(true);

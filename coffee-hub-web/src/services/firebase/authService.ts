@@ -1,5 +1,7 @@
 import {
-  onAuthStateChanged,
+  browserLocalPersistence,
+  onIdTokenChanged,
+  setPersistence,
   signOut,
 } from 'firebase/auth';
 import { toAppServiceError } from '../platform/serviceError';
@@ -11,9 +13,31 @@ export type AuthSessionSnapshot = {
   isLoggedIn: boolean;
 };
 
+let authInitializationPromise: Promise<void> | null = null;
+
+export const initializeAuthSession = async () => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  if (!authInitializationPromise) {
+    authInitializationPromise = setPersistence(auth, browserLocalPersistence)
+      .then(() => undefined)
+      .catch(error => {
+        authInitializationPromise = null;
+        throw toAppServiceError(error, 'Unable to restore your session.', 'network');
+      });
+  }
+
+  return authInitializationPromise;
+};
+
 export const subscribeToAuthSession = (
   listener: (snapshot: AuthSessionSnapshot) => void,
-) => onAuthStateChanged(auth, user => {
+) => {
+  void initializeAuthSession().catch(() => undefined);
+
+  return onIdTokenChanged(auth, user => {
   if (!user) {
     listener({
       currentUserEmail: '',
@@ -28,7 +52,8 @@ export const subscribeToAuthSession = (
     currentUserId: user.uid,
     isLoggedIn: true,
   });
-});
+  });
+};
 
 export const getCurrentUserIdToken = async (forceRefresh = false) => {
   try {

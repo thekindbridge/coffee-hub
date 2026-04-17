@@ -14,6 +14,7 @@ import {
   mapOrderRecordToResponse,
   type StoredOrderRecord,
 } from '../_lib/responseMappers.js';
+import { getOrderStatusFirestoreValue } from '../../shared/orderStatus.js';
 
 const parseRequestBody = (body: unknown) => {
   if (!body || typeof body !== 'object' || Array.isArray(body)) {
@@ -112,20 +113,43 @@ export default async function handler(request: VercelRequest, response: VercelRe
         assignedAgentName: agentName,
         assignedAgentPhone: agentPhone,
         assignedAgentVehicle: agentVehicle,
+        deliveryAgentEmail: agentEmail,
+        deliveryAgentId: agentId,
+        deliveryAgentName: agentName,
+        deliveryAgentPhone: agentPhone,
+        deliveryAgentVehicle: agentVehicle,
+        delivery_agent_email: agentEmail,
+        delivery_agent_id: agentId,
+        delivery_agent_name: agentName,
+        delivery_agent_phone: agentPhone,
+        delivery_agent_vehicle: agentVehicle,
+        agentEmail,
+        agentId,
+        agentName,
+        agentPhone,
+        agentVehicle,
         orderStatus: 'OUT_FOR_DELIVERY',
         rejectionReason: '',
-        status: 'OUT_FOR_DELIVERY',
+        rejection_reason: '',
+        status: getOrderStatusFirestoreValue('OUT_FOR_DELIVERY'),
+        status_code: 'OUT_FOR_DELIVERY',
         updatedAt: FieldValue.serverTimestamp(),
+        updated_at: FieldValue.serverTimestamp(),
       };
 
       if (!orderData.assignedAt && !orderData.deliveryAssignedAt) {
         orderUpdate.assignedAt = FieldValue.serverTimestamp();
+        orderUpdate.assigned_at = FieldValue.serverTimestamp();
         orderUpdate.deliveryAssignedAt = FieldValue.serverTimestamp();
+        orderUpdate.delivery_assigned_at = FieldValue.serverTimestamp();
       }
 
       if (!orderData.outForDeliveryAt && !orderData.deliveryOutForDeliveryAt) {
         orderUpdate.outForDeliveryAt = FieldValue.serverTimestamp();
+        orderUpdate.out_for_delivery_at = FieldValue.serverTimestamp();
         orderUpdate.deliveryOutForDeliveryAt = FieldValue.serverTimestamp();
+        orderUpdate.delivery_out_for_delivery_at = FieldValue.serverTimestamp();
+        orderUpdate['timestamps.outForDeliveryAt'] = FieldValue.serverTimestamp();
       }
 
       transaction.update(orderRef, orderUpdate);
@@ -138,7 +162,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
           isActive: true,
           name: agentName,
           phone: agentPhone,
-          status: 'BUSY',
+          status: 'busy',
           vehicle: agentVehicle,
           updatedAt: FieldValue.serverTimestamp(),
         },
@@ -150,7 +174,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
           adminDb.collection('agents').doc(previousAgentId),
           {
             currentOrderId: '',
-            status: 'AVAILABLE',
+            status: 'active',
             updatedAt: FieldValue.serverTimestamp(),
           },
           { merge: true },

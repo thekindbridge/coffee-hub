@@ -6,10 +6,8 @@ import { getAdminDb, verifyRequestUser } from '../_lib/firebaseAdmin.js';
 import {
   buildAdminOrderCancelledNotification,
   buildAgentOrderCancelledNotification,
-  buildCustomerOrderNotification,
   getAdminRecipients,
   getAgentRecipient,
-  getCustomerRecipient,
   sendPushNotification,
 } from '../_lib/notifications.js';
 import {
@@ -18,6 +16,7 @@ import {
 } from '../_lib/responseMappers.js';
 import {
   isCustomerCancellableOrderStatus,
+  getOrderStatusFirestoreValue,
   normalizeOrderStatusCode,
 } from '../../shared/orderStatus.js';
 
@@ -112,11 +111,17 @@ export default async function handler(request: VercelRequest, response: VercelRe
 
       transaction.update(orderRef, {
         cancellationReason,
+        cancellation_reason: cancellationReason,
         cancelledAt: FieldValue.serverTimestamp(),
+        cancelled_at: FieldValue.serverTimestamp(),
         orderStatus: 'CANCELLED',
         rejectionReason: '',
-        status: 'CANCELLED',
+        rejection_reason: '',
+        status: getOrderStatusFirestoreValue('CANCELLED'),
+        status_code: 'CANCELLED',
         updatedAt: FieldValue.serverTimestamp(),
+        updated_at: FieldValue.serverTimestamp(),
+        'timestamps.cancelledAt': FieldValue.serverTimestamp(),
       });
 
       const assignedAgentId = resolveAssignedAgentId(currentOrder);
@@ -125,7 +130,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
           adminDb.collection('agents').doc(assignedAgentId),
           {
             currentOrderId: '',
-            status: 'AVAILABLE',
+            status: 'active',
             updatedAt: FieldValue.serverTimestamp(),
           },
           { merge: true },
@@ -142,10 +147,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
     const assignedAgentId = resolveAssignedAgentId(updatedOrder);
 
     try {
-      const [customerRecipient, adminRecipients, agentRecipient] = await Promise.all([
-        updatedOrder.userId
-          ? getCustomerRecipient(adminDb, updatedOrder.userId)
-          : Promise.resolve(null),
+      const [adminRecipients, agentRecipient] = await Promise.all([
         getAdminRecipients(adminDb),
         assignedAgentId
           ? getAgentRecipient(adminDb, assignedAgentId)
@@ -153,19 +155,6 @@ export default async function handler(request: VercelRequest, response: VercelRe
       ]);
 
       const notificationTasks: Promise<unknown>[] = [];
-
-      if (customerRecipient) {
-        notificationTasks.push(
-          sendPushNotification(
-            adminDb,
-            [customerRecipient],
-            buildCustomerOrderNotification({
-              orderId,
-              status: 'CANCELLED',
-            }),
-          ),
-        );
-      }
 
       if (adminRecipients.length > 0) {
         notificationTasks.push(

@@ -11,8 +11,11 @@ export type StoredNotificationSettings = {
   offers: boolean;
 };
 
+type NotificationTokenType = 'expo' | 'fcm';
+
 type NotificationRecipient = {
-  token: string;
+  fcmToken?: string;
+  pushToken?: string;
   settings: StoredNotificationSettings;
   userDocId?: string;
   agentDocId?: string;
@@ -25,6 +28,8 @@ type PushMessageContent = {
   tag?: string;
   preferenceKey: NotificationPreferenceKey;
   urgency?: 'high' | 'normal';
+  orderId?: string;
+  status?: OrderStatusCode;
 };
 
 type QueuedNotificationJob = {
@@ -45,6 +50,8 @@ const DEFAULT_NOTIFICATION_SETTINGS: StoredNotificationSettings = {
 
 const NOTIFICATION_JOB_COLLECTION = 'notification_jobs';
 const COLLAPSE_DELAY_MS = 20000;
+const EXPO_PUSH_API_URL = 'https://exp.host/--/api/v2/push/send';
+const EXPO_PUSH_CHUNK_SIZE = 100;
 const buildOrderTrackingUrl = (orderId: string) => `/?tab=tracking&orderId=${encodeURIComponent(orderId)}`;
 
 const normalizeNotificationSettings = (value: unknown): StoredNotificationSettings => {
@@ -65,13 +72,16 @@ const buildRecipientFromUserSnapshot = (
   snapshot: QueryDocumentSnapshot,
 ): NotificationRecipient | null => {
   const data = snapshot.data() as Record<string, unknown>;
-  const token = typeof data.fcmToken === 'string' ? data.fcmToken.trim() : '';
-  if (!token) {
+  const fcmToken = typeof data.fcmToken === 'string' ? data.fcmToken.trim() : '';
+  const pushToken = typeof data.pushToken === 'string' ? data.pushToken.trim() : '';
+
+  if (!fcmToken && !pushToken) {
     return null;
   }
 
   return {
-    token,
+    ...(fcmToken ? { fcmToken } : {}),
+    ...(pushToken ? { pushToken } : {}),
     settings: normalizeNotificationSettings(data.notificationSettings),
     userDocId: snapshot.id,
   };
@@ -81,13 +91,13 @@ const buildRecipientFromAgentSnapshot = (
   snapshot: QueryDocumentSnapshot,
 ): NotificationRecipient | null => {
   const data = snapshot.data() as Record<string, unknown>;
-  const token = typeof data.fcmToken === 'string' ? data.fcmToken.trim() : '';
-  if (!token) {
+  const fcmToken = typeof data.fcmToken === 'string' ? data.fcmToken.trim() : '';
+  if (!fcmToken) {
     return null;
   }
 
   return {
-    token,
+    fcmToken,
     settings: normalizeNotificationSettings(data.notificationSettings),
     agentDocId: snapshot.id,
   };
@@ -100,28 +110,51 @@ const shouldDeliverToRecipient = (
 
 const buildPushDataPayload = (content: PushMessageContent) => ({
   body: content.body,
+  ...(content.orderId ? { orderId: content.orderId } : {}),
   preferenceKey: content.preferenceKey,
+  ...(content.status ? { status: content.status } : {}),
   tag: content.tag || 'coffee-hub',
   title: content.title,
   url: normalizeUrl(content.url || '/'),
 });
 
-const isInvalidTokenErrorCode = (code: string) =>
+const isInvalidFcmTokenErrorCode = (code: string) =>
   code === 'messaging/registration-token-not-registered' ||
   code === 'messaging/invalid-registration-token' ||
   code === 'messaging/mismatched-credential';
 
+const isExpoPushToken = (token: string) =>
+  token.startsWith('ExpoPushToken[') || token.startsWith('ExponentPushToken[');
+
+const isInvalidExpoTicketErrorCode = (code: string) =>
+  code === 'DeviceNotRegistered' ||
+  code === 'ExpoPushTokenInvalid';
+
+const chunkTargets = <T>(items: T[], size: number) => {
+  const chunks: T[][] = [];
+
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size));
+  }
+
+  return chunks;
+};
+
 const clearInvalidRecipientToken = async (
   adminDb: Firestore,
   recipient: NotificationRecipient,
+  tokenType: NotificationTokenType,
 ) => {
   const updates: Promise<unknown>[] = [];
+  const tokenField = tokenType === 'expo' ? 'pushToken' : 'fcmToken';
+  const tokenTimestampField = tokenType === 'expo' ? 'pushTokenUpdatedAt' : 'fcmTokenUpdatedAt';
 
   if (recipient.userDocId) {
     updates.push(
       adminDb.collection('users').doc(recipient.userDocId).set(
         {
-          fcmToken: FieldValue.delete(),
+          [tokenField]: FieldValue.delete(),
+          [tokenTimestampField]: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),
         },
         { merge: true },
@@ -129,11 +162,12 @@ const clearInvalidRecipientToken = async (
     );
   }
 
-  if (recipient.agentDocId) {
+  if (recipient.agentDocId && tokenType === 'fcm') {
     updates.push(
       adminDb.collection('agents').doc(recipient.agentDocId).set(
         {
           fcmToken: FieldValue.delete(),
+          fcmTokenUpdatedAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),
         },
         { merge: true },
@@ -150,16 +184,22 @@ export const syncNotificationRegistration = async (
     email,
     permission,
     token,
+    tokenType = 'fcm',
     userId,
   }: {
     email: string;
     permission: 'default' | 'denied' | 'granted';
     token: string;
+    tokenType?: NotificationTokenType;
     userId: string;
   },
 ) => {
   const normalizedEmail = email.trim().toLowerCase();
   const normalizedToken = token.trim();
+  const tokenField = tokenType === 'expo' ? 'pushToken' : 'fcmToken';
+  const tokenTimestampField = tokenType === 'expo'
+    ? 'pushTokenUpdatedAt'
+    : 'fcmTokenUpdatedAt';
   const userRef = adminDb.collection('users').doc(userId);
   const userSnapshot = await userRef.get();
   const existingSettings = normalizeNotificationSettings(
@@ -178,8 +218,10 @@ export const syncNotificationRegistration = async (
 
   if (normalizedToken) {
     const [duplicateUsers, duplicateAgents] = await Promise.all([
-      adminDb.collection('users').where('fcmToken', '==', normalizedToken).get(),
-      adminDb.collection('agents').where('fcmToken', '==', normalizedToken).get(),
+      adminDb.collection('users').where(tokenField, '==', normalizedToken).get(),
+      tokenType === 'fcm'
+        ? adminDb.collection('agents').where('fcmToken', '==', normalizedToken).get()
+        : Promise.resolve(null),
     ]);
 
     await Promise.all([
@@ -188,17 +230,19 @@ export const syncNotificationRegistration = async (
         .map(snapshot =>
           snapshot.ref.set(
             {
-              fcmToken: FieldValue.delete(),
+              [tokenField]: FieldValue.delete(),
+              [tokenTimestampField]: FieldValue.serverTimestamp(),
               updatedAt: FieldValue.serverTimestamp(),
             },
             { merge: true },
           )),
-      ...duplicateAgents.docs
+      ...(duplicateAgents?.docs || [])
         .filter(snapshot => snapshot.id !== normalizedEmail)
         .map(snapshot =>
           snapshot.ref.set(
             {
               fcmToken: FieldValue.delete(),
+              fcmTokenUpdatedAt: FieldValue.serverTimestamp(),
               updatedAt: FieldValue.serverTimestamp(),
             },
             { merge: true },
@@ -206,20 +250,20 @@ export const syncNotificationRegistration = async (
     ]);
   }
 
-  await userRef.set(
-    {
-      email: normalizedEmail,
-      fcmToken: normalizedToken || FieldValue.delete(),
-      fcmTokenUpdatedAt: FieldValue.serverTimestamp(),
-      notificationPermission: permission,
-      notificationSettings: existingSettings,
-      role,
-      updatedAt: FieldValue.serverTimestamp(),
-    },
-    { merge: true },
-  );
+  const userUpdate: Record<string, unknown> = {
+    email: normalizedEmail,
+    notificationPermission: permission,
+    notificationSettings: existingSettings,
+    role,
+    updatedAt: FieldValue.serverTimestamp(),
+  };
 
-  if (role === 'agent' && normalizedEmail) {
+  userUpdate[tokenField] = normalizedToken || FieldValue.delete();
+  userUpdate[tokenTimestampField] = FieldValue.serverTimestamp();
+
+  await userRef.set(userUpdate, { merge: true });
+
+  if (role === 'agent' && normalizedEmail && tokenType === 'fcm') {
     const existingAgentSettings = normalizeNotificationSettings(
       agentSnapshot?.data()?.notificationSettings,
     );
@@ -276,46 +320,173 @@ export const getAdminRecipients = async (
     .filter((recipient): recipient is NotificationRecipient => Boolean(recipient));
 };
 
+type NotificationTarget = {
+  recipient: NotificationRecipient;
+  token: string;
+  tokenType: NotificationTokenType;
+};
+
+const buildNotificationTargets = (recipient: NotificationRecipient): NotificationTarget[] => {
+  const targets: NotificationTarget[] = [];
+
+  if (recipient.fcmToken) {
+    targets.push({
+      recipient,
+      token: recipient.fcmToken,
+      tokenType: 'fcm',
+    });
+  }
+
+  if (recipient.pushToken && isExpoPushToken(recipient.pushToken)) {
+    targets.push({
+      recipient,
+      token: recipient.pushToken,
+      tokenType: 'expo',
+    });
+  }
+
+  return targets;
+};
+
+const sendExpoPushNotifications = async (
+  adminDb: Firestore,
+  targets: NotificationTarget[],
+  content: PushMessageContent,
+) => {
+  let delivered = 0;
+
+  for (const targetChunk of chunkTargets(targets, EXPO_PUSH_CHUNK_SIZE)) {
+    let response: Response;
+
+    try {
+      targetChunk.forEach(target => {
+        console.log('Sending push to:', target.token);
+      });
+
+      response = await fetch(EXPO_PUSH_API_URL, {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Accept-Encoding': 'gzip, deflate',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(
+          targetChunk.map(target => ({
+            body: content.body,
+            channelId: 'order-updates',
+            data: buildPushDataPayload(content),
+            sound: 'default',
+            title: content.title,
+            to: target.token,
+          })),
+        ),
+      });
+    } catch {
+      continue;
+    }
+
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      continue;
+    }
+
+    const ticketData = Array.isArray((payload as { data?: unknown[] }).data)
+      ? (payload as { data: Array<Record<string, unknown>> }).data
+      : [];
+    const cleanupTasks: Promise<unknown>[] = [];
+
+    ticketData.forEach((ticket, index) => {
+      if (ticket.status === 'ok') {
+        delivered += 1;
+        return;
+      }
+
+      const errorCode = typeof ticket.details === 'object' && ticket.details
+        ? `${(ticket.details as { error?: unknown }).error || ''}`.trim()
+        : '';
+      const target = targetChunk[index];
+
+      if (target && isInvalidExpoTicketErrorCode(errorCode)) {
+        cleanupTasks.push(
+          clearInvalidRecipientToken(adminDb, target.recipient, 'expo'),
+        );
+      }
+    });
+
+    if (cleanupTasks.length > 0) {
+      await Promise.all(cleanupTasks);
+    }
+  }
+
+  return {
+    attempted: targets.length,
+    delivered,
+  };
+};
+
 export const sendPushNotification = async (
   adminDb: Firestore,
   recipients: NotificationRecipient[],
   content: PushMessageContent,
 ) => {
-  const eligibleRecipients = recipients.filter(recipient =>
-    shouldDeliverToRecipient(recipient, content.preferenceKey),
-  );
+  const eligibleTargets = recipients
+    .filter(recipient =>
+      shouldDeliverToRecipient(recipient, content.preferenceKey),
+    )
+    .flatMap(buildNotificationTargets);
 
-  if (eligibleRecipients.length === 0) {
+  if (eligibleTargets.length === 0) {
     return { attempted: 0, delivered: 0 };
   }
 
-  const response = await getAdminMessaging().sendEach(
-    eligibleRecipients.map(recipient => ({
-      data: buildPushDataPayload(content),
-      token: recipient.token,
-      webpush: {
-        headers: {
-          Urgency: content.urgency || 'high',
+  const fcmTargets = eligibleTargets.filter(target => target.tokenType === 'fcm');
+  const expoTargets = eligibleTargets.filter(target => target.tokenType === 'expo');
+
+  let delivered = 0;
+
+  if (fcmTargets.length > 0) {
+    const response = await getAdminMessaging().sendEach(
+      fcmTargets.map(target => ({
+        data: buildPushDataPayload(content),
+        token: target.token,
+        webpush: {
+          headers: {
+            Urgency: content.urgency || 'high',
+          },
         },
-      },
-    })),
-  );
+      })),
+    );
 
-  await Promise.all(response.responses.map(async (result, index) => {
-    if (result.success) {
-      return;
-    }
+    delivered += response.successCount;
 
-    const errorCode = result.error?.code || '';
-    if (isInvalidTokenErrorCode(errorCode)) {
-      await clearInvalidRecipientToken(adminDb, eligibleRecipients[index]);
-    }
-  }));
+    await Promise.all(response.responses.map(async (result, index) => {
+      if (result.success) {
+        return;
+      }
+
+      const errorCode = result.error?.code || '';
+      if (isInvalidFcmTokenErrorCode(errorCode)) {
+        await clearInvalidRecipientToken(adminDb, fcmTargets[index].recipient, 'fcm');
+      }
+    }));
+  }
+
+  if (expoTargets.length > 0) {
+    const expoResponse = await sendExpoPushNotifications(adminDb, expoTargets, content);
+    delivered += expoResponse.delivered;
+  }
 
   return {
-    attempted: eligibleRecipients.length,
-    delivered: response.successCount,
+    attempted: eligibleTargets.length,
+    delivered,
   };
+};
+
+const formatCustomerOrderNumber = (orderId: string) => {
+  const trimmedOrderId = orderId.trim();
+  const orderSuffix = trimmedOrderId.slice(-4);
+
+  return `#${orderSuffix || trimmedOrderId || '----'}`;
 };
 
 export const buildCustomerOrderNotification = ({
@@ -328,71 +499,88 @@ export const buildCustomerOrderNotification = ({
   status: OrderStatusCode;
 }): PushMessageContent => {
   const normalizedStatus = normalizeOrderStatusCode(status);
+  const orderNumber = formatCustomerOrderNumber(orderId);
 
   switch (normalizedStatus) {
     case 'PENDING':
       return {
-        title: 'Order Confirmed',
-        body: 'Your order has been placed successfully.',
+        title: 'Coffee Hub \u2615',
+        body: `Order ${orderNumber} placed successfully \u2615`,
+        orderId,
         preferenceKey: 'orderUpdates',
+        status: normalizedStatus,
         tag: `order-${orderId}`,
         url: buildOrderTrackingUrl(orderId),
       };
     case 'ACCEPTED':
       return {
-        title: 'Order Accepted',
-        body: 'Your order is now being prepared.',
+        title: 'Coffee Hub \u2615',
+        body: `Order ${orderNumber} accepted \u2615`,
+        orderId,
         preferenceKey: 'orderUpdates',
+        status: normalizedStatus,
         tag: `order-${orderId}`,
         url: buildOrderTrackingUrl(orderId),
       };
     case 'PREPARING':
       return {
-        title: 'Preparing',
-        body: 'Your coffee is being freshly prepared.',
+        title: 'Coffee Hub \u2615',
+        body: `Order ${orderNumber} is being prepared \u2615`,
+        orderId,
         preferenceKey: 'orderUpdates',
+        status: normalizedStatus,
         tag: `order-${orderId}`,
         url: buildOrderTrackingUrl(orderId),
       };
     case 'OUT_FOR_DELIVERY':
       return {
-        title: 'On the way',
-        body: 'Your order is on the way. Get ready!',
+        title: 'Coffee Hub \u2615',
+        body: `Order ${orderNumber} is out for delivery \u{1F69A}`,
+        orderId,
         preferenceKey: 'orderUpdates',
+        status: normalizedStatus,
         tag: `order-${orderId}`,
         url: buildOrderTrackingUrl(orderId),
       };
     case 'DELIVERED':
       return {
-        title: 'Delivered',
-        body: 'Enjoy your coffee!',
+        title: 'Coffee Hub \u2615',
+        body: `Order ${orderNumber} delivered \u2705`,
+        orderId,
         preferenceKey: 'orderUpdates',
+        status: normalizedStatus,
         tag: `order-${orderId}`,
         url: buildOrderTrackingUrl(orderId),
       };
     case 'REJECTED':
       return {
-        title: 'Order Update',
+        title: 'Coffee Hub \u2615',
         body: rejectionReason
-          ? `Your order was not accepted. Reason: ${rejectionReason}`
-          : 'Your order was not accepted.',
+          ? `Order ${orderNumber} rejected \u274C. Reason: ${rejectionReason}`
+          : `Order ${orderNumber} rejected \u274C`,
+        orderId,
         preferenceKey: 'orderUpdates',
+        status: normalizedStatus,
         tag: `order-${orderId}`,
         url: buildOrderTrackingUrl(orderId),
       };
     case 'CANCELLED':
       return {
-        title: 'Order Cancelled',
-        body: 'Your order has been cancelled.',
+        title: 'Coffee Hub \u2615',
+        body: `Order ${orderNumber} cancelled`,
+        orderId,
         preferenceKey: 'orderUpdates',
+        status: normalizedStatus,
         tag: `order-${orderId}`,
         url: buildOrderTrackingUrl(orderId),
       };
     default:
       return {
-        title: 'Order Update',
-        body: 'There is an update on your order.',
+        title: 'Coffee Hub \u2615',
+        body: `Order ${orderNumber} updated`,
+        orderId,
         preferenceKey: 'orderUpdates',
+        status: normalizedStatus,
         tag: `order-${orderId}`,
         url: buildOrderTrackingUrl(orderId),
       };

@@ -1,15 +1,12 @@
 import { FieldValue } from 'firebase-admin/firestore';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { ApiError } from '../_lib/errors.js';
-import { getAdminDb, hasAdminAccess, verifyAdminRequest } from '../_lib/firebaseAdmin.js';
+import { getAdminDb, verifyAdminRequest } from '../_lib/firebaseAdmin.js';
 import { loadShopTiming } from '../_lib/shopTiming.js';
 import {
   sanitizeShopTiming,
   validateShopTiming,
 } from '../../shared/shopTiming.js';
-
-const normalizeEmail = (value: unknown) =>
-  typeof value === 'string' ? value.trim().toLowerCase() : '';
 
 const parseRequestBody = (body: unknown) => {
   const payload = body && typeof body === 'object'
@@ -30,26 +27,6 @@ const parseRequestBody = (body: unknown) => {
   });
 };
 
-const verifyAdminTimingRequest = async (request: VercelRequest) => {
-  if (request.headers.authorization) {
-    await verifyAdminRequest(request);
-    return;
-  }
-
-  const payload = request.body && typeof request.body === 'object'
-    ? (request.body as Record<string, unknown>)
-    : {};
-
-  const userEmail = normalizeEmail(payload.userEmail);
-  if (!userEmail) {
-    throw new ApiError(401, 'Admin access requires a valid user email.');
-  }
-
-  if (!(await hasAdminAccess(userEmail))) {
-    throw new ApiError(403, 'Admin access required.');
-  }
-};
-
 const sendError = (response: VercelResponse, error: unknown) => {
   if (error instanceof ApiError) {
     response.status(error.statusCode).json({ error: error.message });
@@ -68,7 +45,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
   }
 
   try {
-    await verifyAdminTimingRequest(request);
+    await verifyAdminRequest(request);
 
     const parsedTiming = parseRequestBody(request.body);
     if (!parsedTiming) {

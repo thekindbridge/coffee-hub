@@ -55,6 +55,16 @@ export interface StoredOrderRecord {
   delivery_agent_phone?: string;
   delivery_agent_email?: string;
   delivery_agent_vehicle?: string;
+  status_code?: string;
+  timestamps?: {
+    createdAt?: TimestampLike;
+    acceptedAt?: TimestampLike;
+    preparedAt?: TimestampLike;
+    outForDeliveryAt?: TimestampLike;
+    deliveredAt?: TimestampLike;
+    rejectedAt?: TimestampLike;
+    cancelledAt?: TimestampLike;
+  };
   assignedAt?: TimestampLike;
   acceptedAt?: TimestampLike;
   pickedAt?: TimestampLike;
@@ -115,7 +125,7 @@ const mapLocationRecord = (value: unknown) => {
     lat,
     lng,
     accuracy: Number.isFinite(Number(data.accuracy)) ? Number(data.accuracy) : undefined,
-    updated_at: mapTimestampToIsoString(data.updatedAt),
+    updated_at: mapTimestampToIsoString(data.updatedAt ?? data.updated_at),
   };
 };
 
@@ -155,25 +165,43 @@ export const mapOrderRecordToResponse = (
   record: StoredOrderRecord,
 ) => {
   const orderId = ((record.orderId as string) || orderDocId).toUpperCase();
-  const statusCode = normalizeOrderStatusCode(record.status ?? record.orderStatus);
+  const statusCode = normalizeOrderStatusCode(
+    record.status_code ?? record.status ?? record.orderStatus,
+  );
   const subtotal = Number(record.subtotal ?? record.totalAmount ?? 0);
   const discount = Number(record.discount || 0);
   const deliveryFee = Number(record.deliveryFee || 0);
   const totalAmount = Number(record.totalAmount ?? record.finalAmount ?? subtotal - discount + deliveryFee);
+  const createdAt = mapTimestampToIsoString(
+    record.timestamps?.createdAt ?? record.createdAt,
+  ) || new Date().toISOString();
   const assignedAt = mapTimestampToIsoString(
-    record.assignedAt ?? record.deliveryAssignedAt ?? record.delivery_assigned_at,
+    record.timestamps?.outForDeliveryAt ??
+    record.assignedAt ??
+    record.deliveryAssignedAt ??
+    record.delivery_assigned_at,
   );
   const pickedAt = mapTimestampToIsoString(
     record.pickedAt ?? record.deliveryPickedAt ?? record.delivery_picked_at,
   );
   const outForDeliveryAt = mapTimestampToIsoString(
-    record.outForDeliveryAt ?? record.deliveryOutForDeliveryAt ?? record.delivery_out_for_delivery_at,
+    record.timestamps?.outForDeliveryAt ??
+    record.outForDeliveryAt ??
+    record.deliveryOutForDeliveryAt ??
+    record.delivery_out_for_delivery_at,
   );
   const deliveredAt = mapTimestampToIsoString(
-    record.deliveredAt ?? record.deliveryDeliveredAt ?? record.delivery_delivered_at,
+    record.timestamps?.deliveredAt ??
+    record.deliveredAt ??
+    record.deliveryDeliveredAt ??
+    record.delivery_delivered_at,
   );
-  const cancelledAt = mapTimestampToIsoString(record.cancelledAt);
-  const preparingAt = mapTimestampToIsoString(record.preparingAt ?? record.preparing_at);
+  const cancelledAt = mapTimestampToIsoString(
+    record.timestamps?.cancelledAt ?? record.cancelledAt,
+  );
+  const preparingAt = mapTimestampToIsoString(
+    record.timestamps?.preparedAt ?? record.preparingAt ?? record.preparing_at,
+  );
   const readyAt = mapTimestampToIsoString(record.readyAt ?? record.readyForPickupAt ?? record.ready_for_pickup_at);
   const agentId = (
     record.assignedAgentId ||
@@ -191,6 +219,13 @@ export const mapOrderRecordToResponse = (
     address: record.address || '',
     customer_location: mapLocationRecord(record.customerLocation),
     delivery_location: mapLocationRecord(record.deliveryLocation),
+    assigned_agent_id: agentId,
+    assigned_agent_name:
+      record.assignedAgentName ||
+      record.agentName ||
+      record.deliveryAgentName ||
+      record.delivery_agent_name ||
+      '',
     total_amount: totalAmount,
     subtotal,
     discount,
@@ -203,9 +238,18 @@ export const mapOrderRecordToResponse = (
     cancellation_reason: (record.cancellationReason || '').trim(),
     payment_method: normalizePaymentMethod(record.paymentMode),
     payment_status: normalizePaymentStatus(record.paymentStatus),
-    created_at: mapTimestampToIsoString(record.createdAt) || new Date().toISOString(),
+    created_at: createdAt,
     updated_at: mapTimestampToIsoString(record.updatedAt),
     cancelled_at: cancelledAt,
+    timestamps: {
+      acceptedAt: mapTimestampToIsoString(record.timestamps?.acceptedAt ?? record.acceptedAt) || undefined,
+      cancelledAt: cancelledAt || undefined,
+      createdAt,
+      deliveredAt: deliveredAt || undefined,
+      outForDeliveryAt: outForDeliveryAt || undefined,
+      preparedAt: preparingAt || undefined,
+      rejectedAt: mapTimestampToIsoString(record.timestamps?.rejectedAt ?? record.rejectedAt) || undefined,
+    },
     user_id: record.userId || '',
     delivery_agent_id: agentId,
     delivery_agent_name:

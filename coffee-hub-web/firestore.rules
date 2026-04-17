@@ -16,16 +16,30 @@ service cloud.firestore {
       return 'coffeehubinkollu@gmail.com';
     }
 
+    function hasAdminClaim() {
+      return request.auth.token.admin == true ||
+        request.auth.token.role == 'admin' ||
+        (request.auth.token.roles is list && request.auth.token.roles.hasAny(['admin']));
+    }
+
+    function isOwnEmail(email) {
+      return isAuthenticated() &&
+        requestEmail() is string &&
+        requestEmail() == email;
+    }
+
     function isOwner(userId) {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
     function isAdmin() {
       return isAuthenticated() &&
-        requestEmail() is string &&
         (
-          requestEmail() == ownerEmail() ||
-          exists(/databases/$(database)/documents/admin_access/$(requestEmail()))
+          hasAdminClaim() ||
+          (requestEmail() is string && (
+            requestEmail() == ownerEmail() ||
+            exists(/databases/$(database)/documents/admin_access/$(requestEmail()))
+          ))
         );
     }
 
@@ -72,6 +86,13 @@ service cloud.firestore {
 
     function isValidOrderStatus(value) {
       return value is string && value in [
+        'pending',
+        'accepted',
+        'preparing',
+        'out_for_delivery',
+        'delivered',
+        'rejected',
+        'cancelled',
         'PENDING',
         'ACCEPTED',
         'PREPARING',
@@ -86,6 +107,132 @@ service cloud.firestore {
       return value == null || (
         value is string &&
         value in ['PENDING', 'PAID', 'FAILED', 'REFUNDED', 'pending', 'paid', 'failed', 'refunded']
+      );
+    }
+
+    function isValidOrderTimestamps(value) {
+      return value == null || (
+        value is map &&
+        value.keys().hasOnly([
+          'createdAt',
+          'acceptedAt',
+          'preparedAt',
+          'outForDeliveryAt',
+          'deliveredAt',
+          'rejectedAt',
+          'cancelledAt'
+        ]) &&
+        isOptionalTimestamp(value.createdAt) &&
+        isOptionalTimestamp(value.acceptedAt) &&
+        isOptionalTimestamp(value.preparedAt) &&
+        isOptionalTimestamp(value.outForDeliveryAt) &&
+        isOptionalTimestamp(value.deliveredAt) &&
+        isOptionalTimestamp(value.rejectedAt) &&
+        isOptionalTimestamp(value.cancelledAt)
+      );
+    }
+
+    function isPendingOrderStatus(status, orderStatus, statusCode) {
+      return status in ['pending', 'PENDING'] &&
+        (orderStatus == null || orderStatus == 'PENDING') &&
+        (statusCode == null || statusCode == 'PENDING');
+    }
+
+    function isAcceptedOrderStatus(status, orderStatus, statusCode) {
+      return status in ['accepted', 'ACCEPTED'] &&
+        (orderStatus == null || orderStatus == 'ACCEPTED') &&
+        (statusCode == null || statusCode == 'ACCEPTED');
+    }
+
+    function isPreparingOrderStatus(status, orderStatus, statusCode) {
+      return status in ['preparing', 'PREPARING'] &&
+        (orderStatus == null || orderStatus == 'PREPARING') &&
+        (statusCode == null || statusCode == 'PREPARING');
+    }
+
+    function isOutForDeliveryOrderStatus(status, orderStatus, statusCode) {
+      return status in ['out_for_delivery', 'OUT_FOR_DELIVERY'] &&
+        (orderStatus == null || orderStatus == 'OUT_FOR_DELIVERY') &&
+        (statusCode == null || statusCode == 'OUT_FOR_DELIVERY');
+    }
+
+    function isDeliveredOrderStatus(status, orderStatus, statusCode) {
+      return status in ['delivered', 'DELIVERED'] &&
+        (orderStatus == null || orderStatus == 'DELIVERED') &&
+        (statusCode == null || statusCode == 'DELIVERED');
+    }
+
+    function isRejectedOrderStatus(status, orderStatus, statusCode) {
+      return status in ['rejected', 'REJECTED'] &&
+        (orderStatus == null || orderStatus == 'REJECTED') &&
+        (statusCode == null || statusCode == 'REJECTED');
+    }
+
+    function isCancelledOrderStatus(status, orderStatus, statusCode) {
+      return status in ['cancelled', 'CANCELLED'] &&
+        (orderStatus == null || orderStatus == 'CANCELLED') &&
+        (statusCode == null || statusCode == 'CANCELLED');
+    }
+
+    function hasMatchingOrderStatuses(status, orderStatus, statusCode) {
+      return (
+        isPendingOrderStatus(status, orderStatus, statusCode) ||
+        isAcceptedOrderStatus(status, orderStatus, statusCode) ||
+        isPreparingOrderStatus(status, orderStatus, statusCode) ||
+        isOutForDeliveryOrderStatus(status, orderStatus, statusCode) ||
+        isDeliveredOrderStatus(status, orderStatus, statusCode) ||
+        isRejectedOrderStatus(status, orderStatus, statusCode) ||
+        isCancelledOrderStatus(status, orderStatus, statusCode)
+      );
+    }
+
+    function isAgentDocumentOwner(agentId) {
+      return isAuthenticated() && (
+        request.auth.uid == agentId ||
+        (requestEmail() is string && requestEmail() == agentId)
+      );
+    }
+
+    function isAssignedAgentForOrder(data) {
+      return isAuthenticated() && (
+        request.auth.uid in [
+          data.assignedAgentId,
+          data.deliveryAgentId,
+          data.agentId,
+          data.delivery_agent_id
+        ] ||
+        (requestEmail() is string && requestEmail() in [
+          data.assignedAgentEmail,
+          data.deliveryAgentEmail,
+          data.agentEmail,
+          data.assignedAgentId,
+          data.deliveryAgentId,
+          data.agentId,
+          data.delivery_agent_id
+        ])
+      );
+    }
+
+    function hasAssignedAgentIdentity(data) {
+      return (
+        isNonEmptyString(data.assignedAgentId, 120) ||
+        isNonEmptyString(data.deliveryAgentId, 120) ||
+        isNonEmptyString(data.agentId, 120) ||
+        isNonEmptyString(data.delivery_agent_id, 120)
+      );
+    }
+
+    function isValidAgentStatus(value) {
+      return value == null || (
+        value is string &&
+        value in ['active', 'available', 'busy', 'offline']
+      );
+    }
+
+    function isValidDeliverySessionStatus(value) {
+      return value == null || (
+        value is string &&
+        value in ['assigned', 'active', 'completed']
       );
     }
 
@@ -165,6 +312,7 @@ service cloud.firestore {
         'created_at',
         'updatedAt',
         'updated_at',
+        'timestamps',
         'acceptedAt',
         'accepted_at',
         'preparingAt',
@@ -235,8 +383,11 @@ service cloud.firestore {
         isValidPaymentStatus(data.paymentStatus) &&
         isValidOrderStatus(data.status) &&
         isValidOrderStatus(data.orderStatus) &&
-        data.status == 'PENDING' &&
+        isOptionalString(data.status_code, 40) &&
+        hasMatchingOrderStatuses(data.status, data.orderStatus, data.status_code) &&
+        data.status in ['pending', 'PENDING'] &&
         data.orderStatus == 'PENDING' &&
+        (data.status_code == null || data.status_code == 'PENDING') &&
         (data.paymentStatus == null || data.paymentStatus in ['PENDING', 'pending']) &&
         (data.rejectionReason == null || data.rejectionReason == '') &&
         (data.cancellationReason == null || data.cancellationReason == '') &&
@@ -244,31 +395,31 @@ service cloud.firestore {
         isValidLocation(data.customer_location) &&
         isValidLocation(data.deliveryLocation) &&
         isValidLocation(data.delivery_location) &&
+        isValidOrderTimestamps(data.timestamps) &&
         isOptionalTimestamp(data.createdAt) &&
         isOptionalTimestamp(data.created_at) &&
         isOptionalTimestamp(data.updatedAt) &&
         isOptionalTimestamp(data.updated_at) &&
-        data.status_code == null &&
-        data.assignedAgentId == null &&
-        data.assignedAgentName == null &&
-        data.assignedAgentPhone == null &&
-        data.assignedAgentEmail == null &&
-        data.assignedAgentVehicle == null &&
-        data.deliveryAgentId == null &&
-        data.deliveryAgentName == null &&
-        data.deliveryAgentPhone == null &&
-        data.deliveryAgentEmail == null &&
-        data.deliveryAgentVehicle == null &&
-        data.agentId == null &&
-        data.agentName == null &&
-        data.agentPhone == null &&
-        data.agentEmail == null &&
-        data.agentVehicle == null &&
-        data.delivery_agent_id == null &&
-        data.delivery_agent_name == null &&
-        data.delivery_agent_phone == null &&
-        data.delivery_agent_email == null &&
-        data.delivery_agent_vehicle == null;
+        (data.assignedAgentId == null || data.assignedAgentId == '') &&
+        (data.assignedAgentName == null || data.assignedAgentName == '') &&
+        (data.assignedAgentPhone == null || data.assignedAgentPhone == '') &&
+        (data.assignedAgentEmail == null || data.assignedAgentEmail == '') &&
+        (data.assignedAgentVehicle == null || data.assignedAgentVehicle == '') &&
+        (data.deliveryAgentId == null || data.deliveryAgentId == '') &&
+        (data.deliveryAgentName == null || data.deliveryAgentName == '') &&
+        (data.deliveryAgentPhone == null || data.deliveryAgentPhone == '') &&
+        (data.deliveryAgentEmail == null || data.deliveryAgentEmail == '') &&
+        (data.deliveryAgentVehicle == null || data.deliveryAgentVehicle == '') &&
+        (data.agentId == null || data.agentId == '') &&
+        (data.agentName == null || data.agentName == '') &&
+        (data.agentPhone == null || data.agentPhone == '') &&
+        (data.agentEmail == null || data.agentEmail == '') &&
+        (data.agentVehicle == null || data.agentVehicle == '') &&
+        (data.delivery_agent_id == null || data.delivery_agent_id == '') &&
+        (data.delivery_agent_name == null || data.delivery_agent_name == '') &&
+        (data.delivery_agent_phone == null || data.delivery_agent_phone == '') &&
+        (data.delivery_agent_email == null || data.delivery_agent_email == '') &&
+        (data.delivery_agent_vehicle == null || data.delivery_agent_vehicle == '');
     }
 
     function hasOnlyAdminManagedOrderChanges() {
@@ -284,6 +435,7 @@ service cloud.firestore {
         'cancellation_reason',
         'updatedAt',
         'updated_at',
+        'timestamps',
         'acceptedAt',
         'accepted_at',
         'preparingAt',
@@ -352,7 +504,11 @@ service cloud.firestore {
         request.resource.data.created_at == resource.data.created_at &&
         isValidOrderStatus(request.resource.data.status) &&
         isValidOrderStatus(request.resource.data.orderStatus) &&
-        request.resource.data.status == request.resource.data.orderStatus &&
+        hasMatchingOrderStatuses(
+          request.resource.data.status,
+          request.resource.data.orderStatus,
+          request.resource.data.status_code,
+        ) &&
         isValidPaymentStatus(request.resource.data.paymentStatus) &&
         isValidPaymentStatus(request.resource.data.payment_status) &&
         isOptionalString(request.resource.data.rejectionReason, 500) &&
@@ -377,6 +533,7 @@ service cloud.firestore {
         isOptionalString(request.resource.data.agentVehicle, 120) &&
         isValidLocation(request.resource.data.deliveryLocation) &&
         isValidLocation(request.resource.data.delivery_location) &&
+        isValidOrderTimestamps(request.resource.data.timestamps) &&
         isOptionalTimestamp(request.resource.data.updatedAt) &&
         isOptionalTimestamp(request.resource.data.updated_at) &&
         isOptionalTimestamp(request.resource.data.acceptedAt) &&
@@ -407,11 +564,106 @@ service cloud.firestore {
         isOptionalTimestamp(request.resource.data.cancelled_at);
     }
 
+    function hasOnlyAgentManagedOrderChanges() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        'status',
+        'orderStatus',
+        'status_code',
+        'updatedAt',
+        'updated_at',
+        'pickedAt',
+        'deliveryPickedAt',
+        'delivery_picked_at',
+        'deliveredAt',
+        'delivered_at',
+        'deliveryDeliveredAt',
+        'delivery_delivered_at',
+        'deliveryLocation',
+        'delivery_location',
+        'timestamps'
+      ]);
+    }
+
+    function isValidAgentOrderUpdate() {
+      return hasAllowedOrderKeys(request.resource.data) &&
+        hasOnlyAgentManagedOrderChanges() &&
+        isAssignedAgentForOrder(resource.data) &&
+        request.resource.data.orderId == resource.data.orderId &&
+        request.resource.data.userId == resource.data.userId &&
+        request.resource.data.name == resource.data.name &&
+        request.resource.data.phone == resource.data.phone &&
+        request.resource.data.address == resource.data.address &&
+        request.resource.data.items == resource.data.items &&
+        request.resource.data.subtotal == resource.data.subtotal &&
+        request.resource.data.discount == resource.data.discount &&
+        request.resource.data.deliveryFee == resource.data.deliveryFee &&
+        request.resource.data.couponCode == resource.data.couponCode &&
+        request.resource.data.totalAmount == resource.data.totalAmount &&
+        request.resource.data.finalAmount == resource.data.finalAmount &&
+        request.resource.data.paymentMode == resource.data.paymentMode &&
+        request.resource.data.paymentStatus == resource.data.paymentStatus &&
+        request.resource.data.payment_status == resource.data.payment_status &&
+        request.resource.data.rejectionReason == resource.data.rejectionReason &&
+        request.resource.data.rejection_reason == resource.data.rejection_reason &&
+        request.resource.data.cancellationReason == resource.data.cancellationReason &&
+        request.resource.data.cancellation_reason == resource.data.cancellation_reason &&
+        request.resource.data.assignedAgentId == resource.data.assignedAgentId &&
+        request.resource.data.assignedAgentName == resource.data.assignedAgentName &&
+        request.resource.data.assignedAgentPhone == resource.data.assignedAgentPhone &&
+        request.resource.data.assignedAgentEmail == resource.data.assignedAgentEmail &&
+        request.resource.data.assignedAgentVehicle == resource.data.assignedAgentVehicle &&
+        request.resource.data.deliveryAgentId == resource.data.deliveryAgentId &&
+        request.resource.data.deliveryAgentName == resource.data.deliveryAgentName &&
+        request.resource.data.deliveryAgentPhone == resource.data.deliveryAgentPhone &&
+        request.resource.data.deliveryAgentEmail == resource.data.deliveryAgentEmail &&
+        request.resource.data.deliveryAgentVehicle == resource.data.deliveryAgentVehicle &&
+        request.resource.data.agentId == resource.data.agentId &&
+        request.resource.data.agentName == resource.data.agentName &&
+        request.resource.data.agentPhone == resource.data.agentPhone &&
+        request.resource.data.agentEmail == resource.data.agentEmail &&
+        request.resource.data.agentVehicle == resource.data.agentVehicle &&
+        request.resource.data.customerLocation == resource.data.customerLocation &&
+        request.resource.data.customer_location == resource.data.customer_location &&
+        request.resource.data.createdAt == resource.data.createdAt &&
+        request.resource.data.created_at == resource.data.created_at &&
+        isValidLocation(request.resource.data.deliveryLocation) &&
+        isValidLocation(request.resource.data.delivery_location) &&
+        isValidOrderTimestamps(request.resource.data.timestamps) &&
+        (
+          (
+            isOutForDeliveryOrderStatus(
+              request.resource.data.status,
+              request.resource.data.orderStatus,
+              request.resource.data.status_code,
+            ) &&
+            isOutForDeliveryOrderStatus(
+              resource.data.status,
+              resource.data.orderStatus,
+              resource.data.status_code,
+            )
+          ) ||
+          (
+            isDeliveredOrderStatus(
+              request.resource.data.status,
+              request.resource.data.orderStatus,
+              request.resource.data.status_code,
+            ) &&
+            isOutForDeliveryOrderStatus(
+              resource.data.status,
+              resource.data.orderStatus,
+              resource.data.status_code,
+            ) &&
+            hasAssignedAgentIdentity(resource.data)
+          )
+        );
+    }
+
     function hasAllowedUserKeys(data) {
       return data.keys().hasOnly([
         'name',
         'phone',
         'email',
+        'notificationPermission',
         'notificationSettings',
         'addresses',
         'addressEntries',
@@ -421,6 +673,8 @@ service cloud.firestore {
         'status',
         'fcmToken',
         'fcmTokenUpdatedAt',
+        'pushToken',
+        'pushTokenUpdatedAt',
         'createdAt',
         'updatedAt'
       ]);
@@ -465,6 +719,7 @@ service cloud.firestore {
         isOptionalString(data.name, 120) &&
         isOptionalString(data.phone, 30) &&
         isMatchingUserEmail(data.email) &&
+        isOptionalString(data.notificationPermission, 20) &&
         isValidNotificationSettings(data.notificationSettings) &&
         isValidAddresses(data.addresses) &&
         isValidAddressEntries(data.addressEntries) &&
@@ -474,6 +729,8 @@ service cloud.firestore {
         isOptionalString(data.status, 40) &&
         isOptionalString(data.fcmToken, 4096) &&
         isOptionalTimestamp(data.fcmTokenUpdatedAt) &&
+        isOptionalString(data.pushToken, 4096) &&
+        isOptionalTimestamp(data.pushTokenUpdatedAt) &&
         isOptionalTimestamp(data.createdAt) &&
         isOptionalTimestamp(data.updatedAt);
     }
@@ -496,17 +753,125 @@ service cloud.firestore {
         'isActive',
         'status',
         'currentOrderId',
+        'name',
+        'phone',
+        'vehicle',
+        'currentLocation',
+        'lastLocation',
         'createdAt',
         'updatedAt'
       ]) &&
-        data.email is string &&
-        data.email == email &&
+        (data.email == null || (data.email is string && data.email.size() <= 320)) &&
         isOptionalString(data.role, 40) &&
         isOptionalBoolean(data.accessOnly) &&
         isOptionalBoolean(data.isActive) &&
-        isOptionalString(data.status, 40) &&
+        isValidAgentStatus(data.status) &&
         isOptionalString(data.currentOrderId, 120) &&
+        isOptionalString(data.name, 120) &&
+        isOptionalString(data.phone, 30) &&
+        isOptionalString(data.vehicle, 120) &&
+        isValidLocation(data.currentLocation) &&
+        isValidLocation(data.lastLocation) &&
         isOptionalTimestamp(data.createdAt) &&
+        isOptionalTimestamp(data.updatedAt);
+    }
+
+    function hasOnlyAgentSelfManagedAgentChanges() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        'isActive',
+        'status',
+        'currentOrderId',
+        'currentLocation',
+        'lastLocation',
+        'updatedAt'
+      ]);
+    }
+
+    function isValidAgentSelfUpdate(agentId) {
+      return isAgentDocumentOwner(agentId) &&
+        isValidAgentAccessRecord(request.resource.data, agentId) &&
+        hasOnlyAgentSelfManagedAgentChanges() &&
+        request.resource.data.email == resource.data.email &&
+        request.resource.data.role == resource.data.role &&
+        request.resource.data.accessOnly == resource.data.accessOnly &&
+        request.resource.data.name == resource.data.name &&
+        request.resource.data.phone == resource.data.phone &&
+        request.resource.data.vehicle == resource.data.vehicle &&
+        request.resource.data.createdAt == resource.data.createdAt;
+    }
+
+    function isValidAgentSelfCreate(agentId) {
+      return isAgentDocumentOwner(agentId) &&
+        isValidAgentAccessRecord(request.resource.data, agentId) &&
+        (request.resource.data.email == null || request.resource.data.email == agentId) &&
+        (request.resource.data.role == null || request.resource.data.role == 'agent') &&
+        request.resource.data.accessOnly != true;
+    }
+
+    function hasAllowedDeliverySessionKeys(data) {
+      return data.keys().hasOnly([
+        'agentEmail',
+        'agentId',
+        'agentName',
+        'agentPhone',
+        'agentVehicle',
+        'completedAt',
+        'customerLocation',
+        'lastLocation',
+        'orderDocId',
+        'orderId',
+        'startedAt',
+        'status',
+        'updatedAt'
+      ]);
+    }
+
+    function isValidDeliverySessionDocument(data, orderId) {
+      return hasAllowedDeliverySessionKeys(data) &&
+        data.orderId == orderId &&
+        isOptionalString(data.orderDocId, 120) &&
+        isOptionalString(data.agentId, 120) &&
+        isOptionalString(data.agentEmail, 320) &&
+        isOptionalString(data.agentName, 120) &&
+        isOptionalString(data.agentPhone, 30) &&
+        isOptionalString(data.agentVehicle, 120) &&
+        isValidDeliverySessionStatus(data.status) &&
+        isValidLocation(data.customerLocation) &&
+        isValidLocation(data.lastLocation) &&
+        isOptionalTimestamp(data.startedAt) &&
+        isOptionalTimestamp(data.completedAt) &&
+        isOptionalTimestamp(data.updatedAt);
+    }
+
+    function isDeliverySessionAgent(data) {
+      return data != null && (
+        isAgentDocumentOwner(data.agentId) ||
+        (requestEmail() is string && requestEmail() == data.agentEmail)
+      );
+    }
+
+    function hasAllowedAgentLocationKeys(data) {
+      return data.keys().hasOnly([
+        'lat',
+        'lng',
+        'accuracy',
+        'agentId',
+        'orderDocId',
+        'updatedAt'
+      ]);
+    }
+
+    function isValidAgentLocationDocument(data) {
+      return hasAllowedAgentLocationKeys(data) &&
+        data.lat is number &&
+        data.lat >= -90 &&
+        data.lat <= 90 &&
+        data.lng is number &&
+        data.lng >= -180 &&
+        data.lng <= 180 &&
+        isOptionalNonNegativeNumber(data.accuracy) &&
+        isOptionalString(data.agentId, 120) &&
+        isOptionalString(data.orderDocId, 120) &&
         isOptionalTimestamp(data.updatedAt);
     }
 
@@ -519,9 +884,14 @@ service cloud.firestore {
 
     // orders: customers create and read their own, admins can review and update status
     match /orders/{orderId} {
-      allow read: if isAdmin() || isOwner(resource.data.userId);
-      allow create: if isValidOrderCreate(request.resource.data);
-      allow update: if isAdmin() && isValidAdminOrderUpdate();
+      allow read: if
+        isAdmin() ||
+        isOwner(resource.data.userId) ||
+        isAssignedAgentForOrder(resource.data);
+      allow create: if false;
+      allow update: if
+        (isAdmin() && isValidAdminOrderUpdate()) ||
+        isValidAgentOrderUpdate();
       allow delete: if false;
     }
 
@@ -534,7 +904,7 @@ service cloud.firestore {
 
     // admin_access: readable by signed-in users, writable only by admins
     match /admin_access/{email} {
-      allow read: if true;
+      allow read: if isAdmin() || isOwnEmail(email);
       allow create, update: if isAdmin() && isValidAdminAccessRecord(request.resource.data, email);
       allow delete: if isAdmin();
     }
@@ -542,8 +912,44 @@ service cloud.firestore {
     // agents: readable for role checks, writable only by admins
     match /agents/{email} {
       allow read: if true;
-      allow create, update: if isAdmin() && isValidAgentAccessRecord(request.resource.data, email);
+      allow create: if
+        (isAdmin() && isValidAgentAccessRecord(request.resource.data, email)) ||
+        isValidAgentSelfCreate(email);
+      allow update: if
+        (isAdmin() && isValidAgentAccessRecord(request.resource.data, email)) ||
+        isValidAgentSelfUpdate(email);
       allow delete: if isAdmin();
+    }
+
+    match /delivery_sessions/{orderId} {
+      allow read: if isAdmin() || isDeliverySessionAgent(resource.data);
+      allow create, update: if
+        (
+          isAdmin() ||
+          isDeliverySessionAgent(request.resource.data) ||
+          isDeliverySessionAgent(resource.data)
+        ) &&
+        isValidDeliverySessionDocument(request.resource.data, orderId);
+      allow delete: if isAdmin();
+    }
+
+    match /agent_locations/{orderId} {
+      allow read: if isAdmin() || isAgentDocumentOwner(resource.data.agentId);
+      allow create, update: if
+        (isAdmin() || isAgentDocumentOwner(request.resource.data.agentId)) &&
+        isValidAgentLocationDocument(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /meta/{docId} {
+      allow read: if isAuthenticated() && docId == 'orderCounter';
+      allow create, update: if
+        isAuthenticated() &&
+        docId == 'orderCounter' &&
+        request.resource.data.keys().hasOnly(['nextOrderNumber']) &&
+        request.resource.data.nextOrderNumber is number &&
+        request.resource.data.nextOrderNumber >= 1001;
+      allow delete: if false;
     }
 
     // Deny everything else by default.

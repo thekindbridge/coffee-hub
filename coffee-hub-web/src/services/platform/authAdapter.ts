@@ -1,4 +1,4 @@
-import { loginWithGooglePopup } from '../browser/googleAuthService';
+import { loginWithGoogle } from '../browser/googleAuthService';
 
 export interface AuthAdapter {
   loginWithGoogle(): Promise<void>;
@@ -6,6 +6,6 @@ export interface AuthAdapter {
 
 export const authAdapter: AuthAdapter = {
   loginWithGoogle: async () => {
-    await loginWithGooglePopup();
+    await loginWithGoogle();
   },
 };

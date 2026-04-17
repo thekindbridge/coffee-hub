@@ -6,7 +6,6 @@ import { getAdminDb, verifyAdminRequest } from '../_lib/firebaseAdmin.js';
 import {
   buildCustomerOrderNotification,
   getCustomerRecipient,
-  queueCollapsedCustomerStatusNotification,
   sendPushNotification,
 } from '../_lib/notifications.js';
 import {
@@ -14,6 +13,7 @@ import {
   type StoredOrderRecord,
 } from '../_lib/responseMappers.js';
 import {
+  getOrderStatusFirestoreValue,
   isTerminalOrderStatus,
   isValidOrderStatusTransition,
   normalizeOrderStatusCode,
@@ -60,42 +60,60 @@ const buildOrderUpdate = (
   nextStatus: OrderStatusCode,
   rejectionReason: string,
 ) => {
+  const timestampValue = FieldValue.serverTimestamp();
   const update: Record<string, unknown> = {
-    status: nextStatus,
+    status_code: nextStatus,
+    status: getOrderStatusFirestoreValue(nextStatus),
     orderStatus: nextStatus,
     rejectionReason: nextStatus === 'REJECTED' ? rejectionReason : '',
-    updatedAt: FieldValue.serverTimestamp(),
+    rejection_reason: nextStatus === 'REJECTED' ? rejectionReason : '',
+    updatedAt: timestampValue,
+    updated_at: timestampValue,
   };
 
   if (nextStatus === 'ACCEPTED' && !currentOrder.acceptedAt) {
-    update.acceptedAt = FieldValue.serverTimestamp();
+    update.acceptedAt = timestampValue;
+    update.accepted_at = timestampValue;
+    update['timestamps.acceptedAt'] = timestampValue;
   }
 
   if (nextStatus === 'PREPARING' && !currentOrder.preparingAt) {
-    update.preparingAt = FieldValue.serverTimestamp();
+    update.preparingAt = timestampValue;
+    update.preparing_at = timestampValue;
+    update['timestamps.preparedAt'] = timestampValue;
   }
 
   if (nextStatus === 'OUT_FOR_DELIVERY') {
     if (!currentOrder.assignedAt && !currentOrder.deliveryAssignedAt) {
-      update.assignedAt = FieldValue.serverTimestamp();
-      update.deliveryAssignedAt = FieldValue.serverTimestamp();
+      update.assignedAt = timestampValue;
+      update.assigned_at = timestampValue;
+      update.deliveryAssignedAt = timestampValue;
+      update.delivery_assigned_at = timestampValue;
     }
 
     if (!currentOrder.outForDeliveryAt && !currentOrder.deliveryOutForDeliveryAt) {
-      update.outForDeliveryAt = FieldValue.serverTimestamp();
-      update.deliveryOutForDeliveryAt = FieldValue.serverTimestamp();
+      update.outForDeliveryAt = timestampValue;
+      update.out_for_delivery_at = timestampValue;
+      update.deliveryOutForDeliveryAt = timestampValue;
+      update.delivery_out_for_delivery_at = timestampValue;
+      update['timestamps.outForDeliveryAt'] = timestampValue;
     }
   }
 
   if (nextStatus === 'DELIVERED') {
     if (!currentOrder.deliveredAt && !currentOrder.deliveryDeliveredAt) {
-      update.deliveredAt = FieldValue.serverTimestamp();
-      update.deliveryDeliveredAt = FieldValue.serverTimestamp();
+      update.deliveredAt = timestampValue;
+      update.delivered_at = timestampValue;
+      update.deliveryDeliveredAt = timestampValue;
+      update.delivery_delivered_at = timestampValue;
+      update['timestamps.deliveredAt'] = timestampValue;
     }
   }
 
   if (nextStatus === 'REJECTED' && !currentOrder.rejectedAt) {
-    update.rejectedAt = FieldValue.serverTimestamp();
+    update.rejectedAt = timestampValue;
+    update.rejected_at = timestampValue;
+    update['timestamps.rejectedAt'] = timestampValue;
   }
 
   return update;
@@ -110,6 +128,13 @@ const sendError = (response: VercelResponse, error: unknown) => {
   console.error('Unhandled update-status error', error);
   response.status(500).json({ error: 'Unable to update order status right now.' });
 };
+
+const shouldSendCustomerStatusPush = (status: OrderStatusCode) => (
+  status === 'ACCEPTED' ||
+  status === 'REJECTED' ||
+  status === 'OUT_FOR_DELIVERY' ||
+  status === 'DELIVERED'
+);
 
 export default async function handler(request: VercelRequest, response: VercelResponse) {
   if (request.method !== 'POST') {
@@ -195,7 +220,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
           adminDb.collection('agents').doc(assignedAgentId),
           {
             currentOrderId: orderId,
-            status: 'BUSY',
+            status: 'busy',
             updatedAt: FieldValue.serverTimestamp(),
           },
           { merge: true },
@@ -223,7 +248,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
           adminDb.collection('agents').doc(assignedAgentId),
           {
             currentOrderId: '',
-            status: 'AVAILABLE',
+            status: 'active',
             updatedAt: FieldValue.serverTimestamp(),
           },
           { merge: true },
@@ -254,33 +279,22 @@ export default async function handler(request: VercelRequest, response: VercelRe
       if (updatedOrder.userId) {
         const customerRecipient = await getCustomerRecipient(adminDb, updatedOrder.userId);
 
-        if (customerRecipient) {
-          if (status === 'ACCEPTED' || status === 'PREPARING') {
-            const notification = buildCustomerOrderNotification({
-              orderId,
-              status,
-            });
+        if (!customerRecipient) {
+          console.warn('Skipping push: no notification recipient found for user', updatedOrder.userId);
+        } else if (!customerRecipient.pushToken && !customerRecipient.fcmToken) {
+          console.warn('Skipping push: missing push token for user', updatedOrder.userId);
+        }
 
-            await queueCollapsedCustomerStatusNotification(adminDb, {
-              body: notification.body,
+        if (customerRecipient && shouldSendCustomerStatusPush(status)) {
+          await sendPushNotification(
+            adminDb,
+            [customerRecipient],
+            buildCustomerOrderNotification({
               orderId,
-              preferenceKey: notification.preferenceKey,
-              tag: notification.tag || `order-${orderId}`,
-              title: notification.title,
-              url: notification.url || '/?tab=tracking',
-              userId: updatedOrder.userId,
-            });
-          } else {
-            await sendPushNotification(
-              adminDb,
-              [customerRecipient],
-              buildCustomerOrderNotification({
-                orderId,
-                rejectionReason,
-                status,
-              }),
-            );
-          }
+              rejectionReason,
+              status,
+            }),
+          );
         }
       }
     } catch (notificationError) {

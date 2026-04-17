@@ -3,12 +3,10 @@ import type { Firestore } from 'firebase-admin/firestore';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 import { ApiError } from '../_lib/errors.js';
-import { getAdminDb, resolveRequestUser } from '../_lib/firebaseAdmin.js';
+import { getAdminDb, verifyRequestUser } from '../_lib/firebaseAdmin.js';
 import {
   buildAdminNewOrderNotification,
-  buildCustomerOrderNotification,
   getAdminRecipients,
-  getCustomerRecipient,
   sendPushNotification,
 } from '../_lib/notifications.js';
 import {
@@ -23,6 +21,7 @@ import {
   type SanitizedOrderDraft,
   type ValidatedPricing,
 } from '../_lib/orderPricing.js';
+import { getOrderStatusFirestoreValue } from '../../shared/orderStatus.js';
 
 const buildStoredOrderRecord = (
   orderDraft: SanitizedOrderDraft,
@@ -49,9 +48,15 @@ const buildStoredOrderRecord = (
   finalAmount: pricing.finalTotal,
   paymentMode: 'COD',
   paymentStatus: 'PENDING',
-  status: 'PENDING',
+  status: getOrderStatusFirestoreValue('PENDING'),
   orderStatus: 'PENDING',
+  status_code: 'PENDING',
   rejectionReason: '',
+  assignedAgentEmail: '',
+  assignedAgentId: '',
+  assignedAgentName: '',
+  assignedAgentPhone: '',
+  assignedAgentVehicle: '',
 });
 
 const loadExistingOrder = async (db: Firestore, orderId: string) => {
@@ -84,9 +89,9 @@ export default async function handler(request: VercelRequest, response: VercelRe
   }
 
   try {
-    const { orderDraft, userId } = parseCreateOrderBody(request.body);
-    const requestUser = await resolveRequestUser(request, userId);
-    const effectiveUserId = requestUser.uid;
+    const decodedToken = await verifyRequestUser(request);
+    const { orderDraft } = parseCreateOrderBody(request.body);
+    const effectiveUserId = decodedToken.uid;
 
     const adminDb = getAdminDb();
     const existingOrder = await loadExistingOrder(adminDb, orderDraft.orderId);
@@ -111,6 +116,9 @@ export default async function handler(request: VercelRequest, response: VercelRe
     await orderRef.set({
       ...storedOrder,
       createdAt: FieldValue.serverTimestamp(),
+      timestamps: {
+        createdAt: FieldValue.serverTimestamp(),
+      },
       updatedAt: FieldValue.serverTimestamp(),
     });
 
@@ -120,21 +128,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
     }
 
     try {
-      const [customerRecipient, adminRecipients] = await Promise.all([
-        getCustomerRecipient(adminDb, effectiveUserId),
-        getAdminRecipients(adminDb),
-      ]);
-
-      if (customerRecipient) {
-        await sendPushNotification(
-          adminDb,
-          [customerRecipient],
-          buildCustomerOrderNotification({
-            orderId: orderDraft.orderId,
-            status: 'PENDING',
-          }),
-        );
-      }
+      const adminRecipients = await getAdminRecipients(adminDb);
 
       if (adminRecipients.length > 0) {
         await sendPushNotification(

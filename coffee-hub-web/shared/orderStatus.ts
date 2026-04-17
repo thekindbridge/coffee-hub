@@ -11,6 +11,20 @@ export const ORDER_STATUS_DISPLAY = {
 export type OrderStatusCode = keyof typeof ORDER_STATUS_DISPLAY;
 export type OrderStatus = (typeof ORDER_STATUS_DISPLAY)[OrderStatusCode];
 
+export const ORDER_STATUS_FIRESTORE_VALUES = {
+  PENDING: 'pending',
+  ACCEPTED: 'accepted',
+  PREPARING: 'preparing',
+  OUT_FOR_DELIVERY: 'out_for_delivery',
+  DELIVERED: 'delivered',
+  REJECTED: 'rejected',
+  CANCELLED: 'cancelled',
+} as const;
+
+export type OrderFirestoreStatus = (
+  typeof ORDER_STATUS_FIRESTORE_VALUES
+)[OrderStatusCode];
+
 export const ORDER_STATUS_PROGRESS_FLOW: readonly OrderStatusCode[] = [
   'PENDING',
   'ACCEPTED',
@@ -77,6 +91,10 @@ export const normalizeOrderStatusCode = (value: unknown): OrderStatusCode => {
 
 export const getOrderStatusLabel = (value: OrderStatusCode | string): OrderStatus =>
   ORDER_STATUS_DISPLAY[normalizeOrderStatusCode(value)];
+
+export const getOrderStatusFirestoreValue = (
+  value: OrderStatusCode | string,
+): OrderFirestoreStatus => ORDER_STATUS_FIRESTORE_VALUES[normalizeOrderStatusCode(value)];
 
 export const getOrderStatusCustomerCopy = (value: OrderStatusCode | string) =>
   ORDER_STATUS_CUSTOMER_COPY[normalizeOrderStatusCode(value)];

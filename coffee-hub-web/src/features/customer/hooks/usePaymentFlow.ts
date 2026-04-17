@@ -354,7 +354,7 @@ export const usePaymentFlow = ({
       }
 
       const orderResponse = await createOrderRequest(
-        { orderDraft: draft, userId: currentUserId },
+        { orderDraft: draft },
         idToken,
       );
 

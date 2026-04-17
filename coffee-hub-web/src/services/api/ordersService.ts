@@ -10,7 +10,6 @@ import { postApi } from './apiClient';
 export const createOrderRequest = (
   params: {
     orderDraft: CheckoutOrderDraft;
-    userId: string;
   },
   idToken: string,
 ) => postApi<CreateOrderResponse>('/api/orders/create', params, idToken);

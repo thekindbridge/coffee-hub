@@ -16,6 +16,7 @@ import {
   mapOrderRecordToResponse,
   type StoredOrderRecord,
 } from '../_lib/responseMappers.js';
+import { getOrderStatusFirestoreValue } from '../../shared/orderStatus.js';
 
 const parseRequestBody = (body: unknown) => {
   if (!body || typeof body !== 'object' || Array.isArray(body)) {
@@ -117,6 +118,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
 
       transaction.update(orderRef, {
         deliveryDeliveredAt: FieldValue.serverTimestamp(),
+        delivery_delivered_at: FieldValue.serverTimestamp(),
         deliveredAt: FieldValue.serverTimestamp(),
         ...(finalLocation
           ? {
@@ -124,11 +126,18 @@ export default async function handler(request: VercelRequest, response: VercelRe
                 ...finalLocation,
                 updatedAt: FieldValue.serverTimestamp(),
               },
+              delivery_location: {
+                ...finalLocation,
+                updatedAt: FieldValue.serverTimestamp(),
+              },
             }
           : {}),
         orderStatus: 'DELIVERED',
-        status: 'DELIVERED',
+        status: getOrderStatusFirestoreValue('DELIVERED'),
+        status_code: 'DELIVERED',
         updatedAt: FieldValue.serverTimestamp(),
+        updated_at: FieldValue.serverTimestamp(),
+        'timestamps.deliveredAt': FieldValue.serverTimestamp(),
       });
 
       transaction.set(
@@ -173,7 +182,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
                   },
                 }
               : {}),
-            status: 'AVAILABLE',
+            status: 'active',
             updatedAt: FieldValue.serverTimestamp(),
           },
           { merge: true },

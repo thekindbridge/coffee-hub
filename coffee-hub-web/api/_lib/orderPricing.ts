@@ -286,7 +286,6 @@ export const parseCreateOrderBody = (body: unknown) => {
   const payload = parseObjectPayload(body, 'Request payload is invalid.');
 
   return {
-    userId: ensureString(payload.userId ?? payload.user_id, 'User ID'),
     orderDraft: parseOrderDraft(payload.orderDraft),
   };
 };

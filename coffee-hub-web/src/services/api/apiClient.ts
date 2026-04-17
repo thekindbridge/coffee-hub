@@ -2,10 +2,25 @@ import { toAppServiceError } from '../platform/serviceError';
 
 const readJson = async (response: Response) => response.json().catch(() => ({}));
 
-export const getApi = async <TResponse>(path: string) => {
+const buildHeaders = (idToken?: string, includeJsonContentType = false) => {
+  const headers: Record<string, string> = {};
+
+  if (includeJsonContentType) {
+    headers['Content-Type'] = 'application/json';
+  }
+
+  if (idToken) {
+    headers.Authorization = `Bearer ${idToken}`;
+  }
+
+  return headers;
+};
+
+export const getApi = async <TResponse>(path: string, idToken?: string) => {
   try {
     const response = await fetch(path, {
       method: 'GET',
+      headers: buildHeaders(idToken),
     });
 
     const payload = await readJson(response);
@@ -32,10 +47,7 @@ export const postApi = async <TResponse>(
   try {
     const response = await fetch(path, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${idToken}`,
-      },
+      headers: buildHeaders(idToken, true),
       body: JSON.stringify(body),
     });
 

@@ -16,6 +16,7 @@ const parseRequestBody = (body: unknown) => {
   const token = typeof payload.token === 'string'
     ? payload.token.trim()
     : '';
+  const tokenType: 'expo' | 'fcm' = payload.tokenType === 'expo' ? 'expo' : 'fcm';
 
   if (!permission || !['default', 'denied', 'granted'].includes(permission)) {
     throw new ApiError(400, 'permission must be default, denied, or granted.');
@@ -24,6 +25,7 @@ const parseRequestBody = (body: unknown) => {
   return {
     permission: permission as 'default' | 'denied' | 'granted',
     token,
+    tokenType,
   };
 };
 
@@ -45,14 +47,15 @@ export default async function handler(request: VercelRequest, response: VercelRe
   }
 
   try {
-    const decodedToken = await verifyRequestUser(request);
-    const { permission, token } = parseRequestBody(request.body);
+    const { permission, token, tokenType } = parseRequestBody(request.body);
+    const resolvedUser = await verifyRequestUser(request);
 
     await syncNotificationRegistration(getAdminDb(), {
-      email: decodedToken.email || '',
+      email: resolvedUser.email || '',
       permission,
       token,
-      userId: decodedToken.uid,
+      tokenType,
+      userId: resolvedUser.uid,
     });
 
     response.status(200).json({ success: true });
