@@ -1,0 +1,33 @@
+{
+  "name": "coffee-hub-cap",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Capacitor Android wrapper for the Coffee Hub Vercel app.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "assets:generate": "npx @capacitor/assets generate --android --assetPath assets --iconBackgroundColor \"#3a2417\" --iconBackgroundColorDark \"#120c09\" --splashBackgroundColor \"#120c09\" --splashBackgroundColorDark \"#120c09\" --logoSplashScale 0.22",
+    "cap:sync": "npx cap sync android",
+    "cap:add:android": "npx cap add android",
+    "cap:open:android": "npx cap open android"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.3.1",
+    "@capacitor/app": "^8.1.0",
+    "@capacitor/browser": "^8.0.3",
+    "@capacitor/core": "^8.3.1",
+    "@capacitor/push-notifications": "^8.0.3",
+    "@capacitor/splash-screen": "^8.0.1"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^8.3.1",
+    "typescript": "^5.9.3",
+    "vite": "^8.0.8"
+  }
+}

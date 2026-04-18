@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Coffee Hub</string>
+    <string name="title_activity_main">Coffee Hub</string>
+    <string name="package_name">com.coffeehub.app</string>
+    <string name="custom_url_scheme">com.coffeehub.app</string>
+</resources>

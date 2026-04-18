@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="coffee_background">#120C09</color>
+    <color name="coffee_primary">#3A2417</color>
+    <color name="coffee_primary_dark">#120C09</color>
+    <color name="coffee_accent">#F7C38D</color>
+</resources>

@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#120c09" />
+    <title>Coffee Hub Offline</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+        background: #120c09;
+        color: #f5e7da;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+        background:
+          radial-gradient(circle at top, rgba(201, 133, 78, 0.3), transparent 32%),
+          linear-gradient(180deg, #1f130e 0%, #120c09 100%);
+      }
+
+      .card {
+        width: min(100%, 420px);
+        border-radius: 28px;
+        padding: 28px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03));
+        box-shadow: 0 24px 80px rgba(0, 0, 0, 0.42);
+        text-align: center;
+      }
+
+      img {
+        width: 96px;
+        height: 96px;
+        object-fit: contain;
+        margin-bottom: 20px;
+      }
+
+      .eyebrow {
+        margin: 0 0 10px;
+        font-size: 12px;
+        letter-spacing: 0.34em;
+        text-transform: uppercase;
+        color: #f7c38d;
+      }
+
+      h1 {
+        margin: 0 0 12px;
+        font-size: 2rem;
+      }
+
+      p {
+        margin: 0 0 22px;
+        line-height: 1.65;
+        color: rgba(245, 231, 218, 0.82);
+      }
+
+      button {
+        border: 0;
+        border-radius: 18px;
+        padding: 14px 18px;
+        width: 100%;
+        font: inherit;
+        font-weight: 700;
+        color: #1f130e;
+        background: linear-gradient(135deg, #f7d1aa 0%, #f0b377 100%);
+        box-shadow: 0 16px 40px rgba(0, 0, 0, 0.28);
+      }
+    </style>
+  </head>
+  <body>
+    <main class="card">
+      <img src="./logo.png" alt="Coffee Hub logo" />
+      <p class="eyebrow">Coffee Hub</p>
+      <h1>You&rsquo;re Offline</h1>
+      <p>
+        We couldn&rsquo;t reach the Coffee Hub app right now. Check your connection and
+        try loading the live site again.
+      </p>
+      <button type="button" onclick="window.location.href='https://coffee-hub-inkollu.vercel.app/'">
+        Retry Connection
+      </button>
+    </main>
+  </body>
+</html>
