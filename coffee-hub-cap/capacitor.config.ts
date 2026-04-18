@@ -27,8 +27,11 @@ const config: CapacitorConfig = {
   },
   plugins: {
     GoogleAuth: {
-      androidClientId: GOOGLE_WEB_CLIENT_ID,
+      // Native Android sign-in uses the web client ID so Google can mint
+      // an ID token that Firebase accepts via signInWithCredential.
       scopes: GOOGLE_AUTH_SCOPES,
+      serverClientId: GOOGLE_WEB_CLIENT_ID,
+      forceCodeForRefreshToken: true,
     },
     SplashScreen: {
       launchShowDuration: 2500,

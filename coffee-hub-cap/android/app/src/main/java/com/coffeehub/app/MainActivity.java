@@ -1,19 +1,13 @@
 package com.coffeehub.app;
 
-import android.content.ActivityNotFoundException;
-import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
-import android.net.Uri;
 import android.os.Bundle;
-import android.os.Handler;
-import android.os.Looper;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.webkit.CookieManager;
-import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.widget.FrameLayout;
@@ -21,10 +15,7 @@ import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import androidx.activity.OnBackPressedCallback;
-import com.getcapacitor.Bridge;
 import com.getcapacitor.BridgeActivity;
-import com.getcapacitor.BridgeWebViewClient;
-import com.getcapacitor.Logger;
 import com.getcapacitor.WebViewListener;
 
 public class MainActivity extends BridgeActivity {
@@ -33,28 +24,8 @@ public class MainActivity extends BridgeActivity {
     private static final int OVERLAY_BACKGROUND = Color.parseColor("#CC120C09");
     private static final int OVERLAY_CARD_BACKGROUND = Color.parseColor("#E61C120D");
     private static final int OVERLAY_TEXT = Color.parseColor("#FFF6EE");
-    private static final String APP_SCHEME = "https";
-    private static final String APP_HOST = "coffee-hub-inkollu.vercel.app";
-    private static final String GOOGLE_ACCOUNTS_HOST = "accounts.google.com";
-    private static final String FIREBASE_AUTH_HANDLER_PATH = "/__/auth/handler";
-    private static final long AUTH_RETURN_TIMEOUT_MS = 900L;
-    private static final String AUTH_LOG_TAG = Logger.tags("CoffeeHub", "Auth");
-
-    private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private FrameLayout authRedirectOverlay;
     private TextView authRedirectMessageView;
-    private boolean externalAuthInProgress = false;
-    private boolean loadingAuthReturnUrl = false;
-
-    private final Runnable authResumeFallback = new Runnable() {
-        @Override
-        public void run() {
-            if (externalAuthInProgress && !loadingAuthReturnUrl) {
-                externalAuthInProgress = false;
-                hideAuthRedirectOverlay();
-            }
-        }
-    };
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -63,38 +34,6 @@ public class MainActivity extends BridgeActivity {
         configureBackButton();
         installAuthRedirectOverlay();
         registerWebViewListeners();
-        installExternalAuthWebViewClient();
-    }
-
-    @Override
-    protected void onNewIntent(Intent intent) {
-        if (intent != null) {
-            setIntent(intent);
-        }
-
-        super.onNewIntent(intent);
-
-        if (intent == null) {
-            return;
-        }
-
-        mainHandler.post(() -> handleAppLinkReturn(intent));
-    }
-
-    @Override
-    public void onResume() {
-        super.onResume();
-
-        if (externalAuthInProgress && !loadingAuthReturnUrl) {
-            mainHandler.removeCallbacks(authResumeFallback);
-            mainHandler.postDelayed(authResumeFallback, AUTH_RETURN_TIMEOUT_MS);
-        }
-    }
-
-    @Override
-    public void onPause() {
-        mainHandler.removeCallbacks(authResumeFallback);
-        super.onPause();
     }
 
     private void configureWebView() {
@@ -119,14 +58,6 @@ public class MainActivity extends BridgeActivity {
         cookieManager.setAcceptCookie(true);
         cookieManager.setAcceptThirdPartyCookies(webView, true);
         cookieManager.flush();
-    }
-
-    private void installExternalAuthWebViewClient() {
-        if (getBridge() == null) {
-            return;
-        }
-
-        getBridge().setWebViewClient(new ExternalAuthWebViewClient(getBridge()));
     }
 
     private void configureBackButton() {
@@ -156,103 +87,14 @@ public class MainActivity extends BridgeActivity {
                 public void onPageCommitVisible(WebView view, String url) {
                     view.setBackgroundColor(COFFEE_BACKGROUND);
                     CookieManager.getInstance().flush();
-
-                    if (shouldFinishAuthFlow(url)) {
-                        loadingAuthReturnUrl = false;
-                        externalAuthInProgress = false;
-                        hideAuthRedirectOverlay();
-                    }
                 }
 
                 @Override
                 public void onReceivedError(WebView webView) {
                     CookieManager.getInstance().flush();
-
-                    if (loadingAuthReturnUrl) {
-                        loadingAuthReturnUrl = false;
-                        externalAuthInProgress = false;
-                        hideAuthRedirectOverlay();
-                    }
                 }
             }
         );
-    }
-
-    private void handleAppLinkReturn(Intent intent) {
-        if (!isFirebaseAuthHandlerIntent(intent) || getBridge() == null || getBridge().getWebView() == null) {
-            return;
-        }
-
-        Uri appLink = intent.getData();
-        if (appLink == null) {
-            return;
-        }
-
-        externalAuthInProgress = true;
-        loadingAuthReturnUrl = true;
-        mainHandler.removeCallbacks(authResumeFallback);
-        showAuthRedirectOverlay("Completing Google sign-in...");
-        CookieManager.getInstance().flush();
-        getBridge().getWebView().loadUrl(appLink.toString());
-    }
-
-    private boolean openExternalBrowserForAuth(Uri url) {
-        Intent intent = new Intent(Intent.ACTION_VIEW, url);
-        intent.addCategory(Intent.CATEGORY_BROWSABLE);
-
-        try {
-            externalAuthInProgress = true;
-            loadingAuthReturnUrl = false;
-            mainHandler.removeCallbacks(authResumeFallback);
-            showAuthRedirectOverlay("Opening secure Google sign-in...");
-            startActivity(intent);
-            return true;
-        } catch (ActivityNotFoundException error) {
-            externalAuthInProgress = false;
-            loadingAuthReturnUrl = false;
-            hideAuthRedirectOverlay();
-            Logger.error(AUTH_LOG_TAG, "Unable to open an external browser for Google sign-in.", error);
-            return false;
-        }
-    }
-
-    private boolean shouldFinishAuthFlow(String url) {
-        if ((!externalAuthInProgress && !loadingAuthReturnUrl) || url == null || url.isBlank()) {
-            return false;
-        }
-
-        Uri currentUrl = Uri.parse(url);
-        if (!isAppHost(currentUrl)) {
-            return false;
-        }
-
-        String path = currentUrl.getPath();
-        return path == null || !path.startsWith(FIREBASE_AUTH_HANDLER_PATH);
-    }
-
-    private boolean isFirebaseAuthHandlerIntent(Intent intent) {
-        if (intent == null || !Intent.ACTION_VIEW.equals(intent.getAction())) {
-            return false;
-        }
-
-        return isFirebaseAuthHandlerUrl(intent.getData());
-    }
-
-    private boolean isAppHost(Uri url) {
-        return url != null && APP_SCHEME.equalsIgnoreCase(url.getScheme()) && APP_HOST.equalsIgnoreCase(url.getHost());
-    }
-
-    private boolean isFirebaseAuthHandlerUrl(Uri url) {
-        if (!isAppHost(url)) {
-            return false;
-        }
-
-        String path = url != null ? url.getPath() : null;
-        return path != null && path.startsWith(FIREBASE_AUTH_HANDLER_PATH);
-    }
-
-    private boolean isGoogleAccountsUrl(Uri url) {
-        return url != null && url.toString().contains(GOOGLE_ACCOUNTS_HOST);
     }
 
     private void installAuthRedirectOverlay() {
@@ -319,29 +161,6 @@ public class MainActivity extends BridgeActivity {
         authRedirectMessageView = messageView;
     }
 
-    private void showAuthRedirectOverlay(String message) {
-        if (authRedirectOverlay == null) {
-            installAuthRedirectOverlay();
-        }
-
-        if (authRedirectOverlay == null) {
-            return;
-        }
-
-        if (authRedirectMessageView != null) {
-            authRedirectMessageView.setText(message);
-        }
-
-        authRedirectOverlay.bringToFront();
-        authRedirectOverlay.setVisibility(View.VISIBLE);
-    }
-
-    private void hideAuthRedirectOverlay() {
-        if (authRedirectOverlay != null) {
-            authRedirectOverlay.setVisibility(View.GONE);
-        }
-    }
-
     private int dpToPx(int value) {
         return Math.round(
             TypedValue.applyDimension(
@@ -350,23 +169,5 @@ public class MainActivity extends BridgeActivity {
                 getResources().getDisplayMetrics()
             )
         );
-    }
-
-    private final class ExternalAuthWebViewClient extends BridgeWebViewClient {
-
-        private ExternalAuthWebViewClient(Bridge bridge) {
-            super(bridge);
-        }
-
-        @Override
-        public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
-            Uri requestUrl = request != null ? request.getUrl() : null;
-
-            if (request != null && request.isForMainFrame() && isGoogleAccountsUrl(requestUrl)) {
-                return openExternalBrowserForAuth(requestUrl);
-            }
-
-            return super.shouldOverrideUrlLoading(view, request);
-        }
     }
 }
