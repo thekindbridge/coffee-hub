@@ -179,7 +179,7 @@ public class MainActivity extends BridgeActivity {
     }
 
     private void handleAppLinkReturn(Intent intent) {
-        if (!isAppLinkIntent(intent) || getBridge() == null || getBridge().getWebView() == null) {
+        if (!isFirebaseAuthHandlerIntent(intent) || getBridge() == null || getBridge().getWebView() == null) {
             return;
         }
 
@@ -191,7 +191,7 @@ public class MainActivity extends BridgeActivity {
         externalAuthInProgress = true;
         loadingAuthReturnUrl = true;
         mainHandler.removeCallbacks(authResumeFallback);
-        showAuthRedirectOverlay("Finishing Google sign-in...");
+        showAuthRedirectOverlay("Completing Google sign-in...");
         CookieManager.getInstance().flush();
         getBridge().getWebView().loadUrl(appLink.toString());
     }
@@ -230,16 +230,25 @@ public class MainActivity extends BridgeActivity {
         return path == null || !path.startsWith(FIREBASE_AUTH_HANDLER_PATH);
     }
 
-    private boolean isAppLinkIntent(Intent intent) {
+    private boolean isFirebaseAuthHandlerIntent(Intent intent) {
         if (intent == null || !Intent.ACTION_VIEW.equals(intent.getAction())) {
             return false;
         }
 
-        return isAppHost(intent.getData());
+        return isFirebaseAuthHandlerUrl(intent.getData());
     }
 
     private boolean isAppHost(Uri url) {
         return url != null && APP_SCHEME.equalsIgnoreCase(url.getScheme()) && APP_HOST.equalsIgnoreCase(url.getHost());
+    }
+
+    private boolean isFirebaseAuthHandlerUrl(Uri url) {
+        if (!isAppHost(url)) {
+            return false;
+        }
+
+        String path = url != null ? url.getPath() : null;
+        return path != null && path.startsWith(FIREBASE_AUTH_HANDLER_PATH);
     }
 
     private boolean isGoogleAccountsUrl(Uri url) {
