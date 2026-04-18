@@ -1,0 +1,14 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.coffeehub.app",
+      "sha256_cert_fingerprints": [
+        "F0:BF:8E:6E:83:17:86:65:63:2F:EA:03:82:D3:3D:54:93:A1:13:94:F1:F9:19:94:84:EB:18:43:72:60:AD:25"
+      ]
+    }
+  }
+]
