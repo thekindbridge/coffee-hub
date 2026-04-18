@@ -1,4 +1,10 @@
+/// <reference types="@codetrix-studio/capacitor-google-auth" />
+
 import type { CapacitorConfig } from '@capacitor/cli';
+
+const GOOGLE_WEB_CLIENT_ID =
+  '490208209104-kqj6tcv5iss5ej38iv0gj0pkgqtjct0p.apps.googleusercontent.com';
+const GOOGLE_AUTH_SCOPES = ['profile', 'email'];
 
 const config: CapacitorConfig = {
   appId: 'com.coffeehub.app',
@@ -20,6 +26,10 @@ const config: CapacitorConfig = {
     ],
   },
   plugins: {
+    GoogleAuth: {
+      androidClientId: GOOGLE_WEB_CLIENT_ID,
+      scopes: GOOGLE_AUTH_SCOPES,
+    },
     SplashScreen: {
       launchShowDuration: 2500,
       launchAutoHide: true,
