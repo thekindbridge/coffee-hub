@@ -5,17 +5,24 @@ import type { CapacitorConfig } from '@capacitor/cli';
 const GOOGLE_WEB_CLIENT_ID =
   '490208209104-kqj6tcv5iss5ej38iv0gj0pkgqtjct0p.apps.googleusercontent.com';
 const GOOGLE_AUTH_SCOPES = ['profile', 'email'];
+const DEFAULT_CAP_SERVER_URL = 'https://coffee-hub-inkollu.vercel.app/';
+const CAP_SERVER_URL = process.env.CAP_SERVER_URL?.trim() || DEFAULT_CAP_SERVER_URL;
+const CAP_SERVER_CLEAR_TEXT = CAP_SERVER_URL.startsWith('http://');
 
 const config: CapacitorConfig = {
   appId: 'com.coffeehub.app',
   appName: 'Coffee Hub',
   webDir: 'dist',
   backgroundColor: '#120c09',
+  // The Android shell normally loads the deployed web app. Override
+  // CAP_SERVER_URL for emulator/device debugging against a local server.
   server: {
-    url: 'https://coffee-hub-inkollu.vercel.app/',
-    cleartext: false,
+    url: CAP_SERVER_URL,
+    cleartext: CAP_SERVER_CLEAR_TEXT,
     errorPath: 'offline.html',
     allowNavigation: [
+      '10.0.2.2',
+      'localhost',
       'coffee-hub-inkollu.vercel.app',
       '*.vercel.app',
       '*.google.com',
