@@ -67,13 +67,15 @@
         color: rgba(245, 231, 218, 0.82);
       }
 
-      button {
+      .retry-link {
+        display: inline-block;
         border: 0;
         border-radius: 18px;
         padding: 14px 18px;
         width: 100%;
         font: inherit;
         font-weight: 700;
+        text-decoration: none;
         color: #1f130e;
         background: linear-gradient(135deg, #f7d1aa 0%, #f0b377 100%);
         box-shadow: 0 16px 40px rgba(0, 0, 0, 0.28);
@@ -89,9 +91,9 @@
         We couldn&rsquo;t reach the Coffee Hub app right now. Check your connection and
         try loading the live site again.
       </p>
-      <button type="button" onclick="window.location.href='https://coffee-hub-inkollu.vercel.app/'">
+      <a class="retry-link" href="https://coffee-hub-inkollu.vercel.app/">
         Retry Connection
-      </button>
+      </a>
     </main>
   </body>
 </html>
