@@ -18,8 +18,8 @@ export default defineConfig(() => {
               return 'vendor-google-maps';
             }
 
-            if (id.includes('firebase/auth')) {
-              return 'vendor-firebase-auth';
+            if (id.includes('@clerk')) {
+              return 'vendor-clerk';
             }
 
             if (id.includes('firebase/firestore')) {

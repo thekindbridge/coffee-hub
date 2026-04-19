@@ -13,6 +13,7 @@ export const useAuthActions = (): AuthActionsState => {
   const [loginError, setLoginError] = useState('');
 
   const handleLogin = async () => {
+    console.log('STEP 1: Login button clicked');
     setIsLoggingIn(true);
     setLoginError('');
 

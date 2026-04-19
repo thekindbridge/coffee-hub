@@ -1,7 +1,7 @@
 import type { DeliveryLocation } from '../../types';
 import { updateDeliveryTrackingRequest } from '../api/ordersService';
+import { getCurrentUserIdToken } from '../auth/authService';
 import { toAppServiceError } from '../platform/serviceError';
-import { getCurrentUserIdToken } from './authService';
 
 type PersistAgentTrackingLocationParams = {
   agentId: string;

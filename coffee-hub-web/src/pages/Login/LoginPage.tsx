@@ -49,7 +49,7 @@ export const LoginPage = ({
               <path fill="#EA4335" d="M12 10.2v3.9h5.4c-.2 1.3-1.6 3.9-5.4 3.9-3.2 0-5.9-2.7-5.9-6s2.6-6 5.9-6c1.8 0 3 .8 3.7 1.4l2.5-2.4C16.7 3.6 14.5 2.8 12 2.8 6.9 2.8 2.8 6.9 2.8 12s4.1 9.2 9.2 9.2c5.3 0 8.9-3.7 8.9-8.9 0-.6-.1-1.1-.2-1.6H12z" />
             </svg>
           </span>
-          <span className="relative">{isLoggingIn ? 'Signing in...' : 'Sign in with Google'}</span>
+          <span className="relative">{isLoggingIn ? 'Signing in...' : 'Continue with Google'}</span>
           <ArrowRight size={17} className="relative text-[#8e5327] transition-transform duration-300 group-hover:translate-x-1" />
         </motion.button>
 

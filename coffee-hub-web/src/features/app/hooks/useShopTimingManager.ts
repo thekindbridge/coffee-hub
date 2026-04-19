@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { updateShopTimingRequest } from '../../../services/api/shopService';
-import { getCurrentUserIdToken } from '../../../services/firebase/authService';
+import { getCurrentUserIdToken } from '../../../services/auth/authService';
 import type { ShopTimingDraft } from '../types';
 import {
   validateShopTiming,

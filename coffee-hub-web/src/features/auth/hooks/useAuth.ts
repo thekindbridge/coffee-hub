@@ -1,9 +1,4 @@
-import { useEffect, useState } from 'react';
-import {
-  getAuthSessionSnapshot,
-  initializeAuthState,
-  subscribeToAuthSession,
-} from '../../../services/firebase/authService';
+import { useAuth as useClerkAuth, useUser } from '@clerk/react';
 
 export type AuthState = {
   isLoggedIn: boolean;
@@ -13,85 +8,22 @@ export type AuthState = {
   normalizedCurrentEmail: string;
 };
 
+const normalizeEmail = (value: string) => value.trim().toLowerCase();
+
 export const useAuth = (): AuthState => {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [isAuthReady, setIsAuthReady] = useState(false);
-  const [currentUserId, setCurrentUserId] = useState('');
-  const [currentUserEmail, setCurrentUserEmail] = useState('');
+  const clerkAuth = useClerkAuth();
+  const clerkUser = useUser();
 
-  useEffect(() => {
-    let isActive = true;
-    let hasRecoveredAuthenticatedUser = false;
-    let fallbackTimeoutId = 0;
-
-    const applySession = (session: {
-      isLoggedIn: boolean;
-      currentUserId: string;
-      currentUserEmail: string;
-    }) => {
-      if (!isActive) {
-        return;
-      }
-
-      if (session.isLoggedIn) {
-        hasRecoveredAuthenticatedUser = true;
-        window.clearTimeout(fallbackTimeoutId);
-      }
-
-      setIsLoggedIn(session.isLoggedIn);
-      setCurrentUserId(session.currentUserId);
-      setCurrentUserEmail(session.currentUserEmail);
-      setIsAuthReady(true);
-    };
-
-    const recoverFromCurrentUser = () => {
-      if (!isActive) {
-        return;
-      }
-
-      const fallbackSession = getAuthSessionSnapshot();
-
-      if (fallbackSession.isLoggedIn) {
-        applySession(fallbackSession);
-        return;
-      }
-
-      setIsAuthReady(true);
-    };
-
-    const unsubscribe = subscribeToAuthSession(session => {
-      applySession(session);
-
-      if (!session.isLoggedIn && !hasRecoveredAuthenticatedUser) {
-        const fallbackSession = getAuthSessionSnapshot();
-        if (fallbackSession.isLoggedIn) {
-          applySession(fallbackSession);
-        }
-      }
-    });
-
-    fallbackTimeoutId = window.setTimeout(() => {
-      recoverFromCurrentUser();
-    }, 4000);
-
-    void initializeAuthState()
-      .catch(error => {
-        console.warn('AUTH INITIALIZATION FAILED', error);
-        recoverFromCurrentUser();
-      });
-
-    return () => {
-      isActive = false;
-      window.clearTimeout(fallbackTimeoutId);
-      unsubscribe();
-    };
-  }, []);
+  const currentUserEmail =
+    clerkUser.user?.primaryEmailAddress?.emailAddress ||
+    clerkUser.user?.emailAddresses?.[0]?.emailAddress ||
+    '';
 
   return {
-    isLoggedIn,
-    isAuthReady,
-    currentUserId,
+    isLoggedIn: Boolean(clerkAuth.isSignedIn && clerkAuth.userId),
+    isAuthReady: clerkAuth.isLoaded && clerkUser.isLoaded,
+    currentUserId: clerkAuth.userId || '',
     currentUserEmail,
-    normalizedCurrentEmail: currentUserEmail.trim().toLowerCase(),
+    normalizedCurrentEmail: normalizeEmail(currentUserEmail),
   };
 };

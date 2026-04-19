@@ -1,5 +1,4 @@
 import { getApp, getApps, initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 
 const nodeEnv = typeof process !== 'undefined' ? process.env : undefined;
@@ -31,15 +30,8 @@ const getRequiredEnv = (label: string, ...keys: string[]) => {
   return value;
 };
 
-export const FIREBASE_AUTH_DOMAIN = getRequiredEnv(
-  'VITE_AUTH_DOMAIN',
-  'VITE_AUTH_DOMAIN',
-  'VITE_FIREBASE_AUTH_DOMAIN',
-);
-
 const firebaseConfig = {
   apiKey: getRequiredEnv('VITE_API_KEY', 'VITE_API_KEY', 'VITE_FIREBASE_API_KEY'),
-  authDomain: FIREBASE_AUTH_DOMAIN,
   projectId: getRequiredEnv('VITE_PROJECT_ID', 'VITE_PROJECT_ID', 'VITE_FIREBASE_PROJECT_ID'),
   storageBucket: getRequiredEnv(
     'VITE_STORAGE_BUCKET',
@@ -55,5 +47,6 @@ const firebaseConfig = {
 };
 
 export const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
-export const auth = getAuth(app);
 export const db = getFirestore(app);
+
+console.log('Firestore client initialized');

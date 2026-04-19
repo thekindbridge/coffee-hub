@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { getCurrentUserIdToken } from '../../../services/firebase/authService';
+import { getCurrentUserIdToken } from '../../../services/auth/authService';
 import {
   pushNotificationsPlatformService,
   type ForegroundNotification,

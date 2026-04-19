@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import { createOrderRequest } from '../../../services/api/ordersService';
-import { getCurrentUserIdToken } from '../../../services/firebase/authService';
+import { getCurrentUserIdToken } from '../../../services/auth/authService';
 import { locationAdapter } from '../../../services/platform/locationAdapter';
 import { navigationAdapter } from '../../../services/platform/navigationAdapter';
 import { getAppServiceErrorMessage } from '../../../services/platform/serviceError';

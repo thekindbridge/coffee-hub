@@ -1,4 +1,4 @@
-import { loginWithGoogle } from '../browser/googleAuthService';
+import { loginWithGoogle } from '../auth/authService';
 
 export interface AuthAdapter {
   loginWithGoogle(): Promise<void>;

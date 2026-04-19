@@ -8,7 +8,7 @@ import {
 import {
   getCurrentUserIdToken,
   logoutCurrentUser,
-} from '../../../services/firebase/authService';
+} from '../../../services/auth/authService';
 import { persistActiveDeliverySession } from '../../../services/firebase/orderCounterService';
 import { dialogAdapter } from '../../../services/platform/dialogAdapter';
 import {

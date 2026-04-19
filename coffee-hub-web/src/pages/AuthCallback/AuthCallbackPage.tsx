@@ -1,9 +1,10 @@
+import { AuthenticateWithRedirectCallback } from '@clerk/react';
 import { motion } from 'motion/react';
 import { Coffee } from 'lucide-react';
 import { AuthShell } from '../../features/customer/components/AuthShell';
 import { SteamEffect } from '../../features/customer/components/SteamEffect';
 
-export const AuthLoadingPage = () => (
+export const AuthCallbackPage = () => (
   <AuthShell>
     <motion.section
       initial={{ opacity: 0, y: 18 }}
@@ -21,16 +22,20 @@ export const AuthLoadingPage = () => (
           COFFEE-HUB
         </p>
         <h2 className="mt-3 font-display text-3xl font-semibold text-[#fff7ee]">
-          Preparing your sign-in
+          Completing your sign-in
         </h2>
         <p className="mx-auto mt-3 max-w-xs text-sm leading-6 text-[#f3ddc5]/72">
-          Restoring your secure Clerk session and warming up your premium ordering experience.
+          Finishing secure Google authentication and restoring your session.
         </p>
         <div className="mx-auto mt-6 flex w-fit items-center gap-2 rounded-full border border-white/10 bg-black/10 px-4 py-2 text-xs font-medium text-[#f8e9d8]/85">
           <span className="h-2 w-2 rounded-full bg-[#ffb15d] animate-pulse" />
-          Loading authentication...
+          Finalizing authentication...
         </div>
       </div>
+      <AuthenticateWithRedirectCallback
+        signInFallbackRedirectUrl="/"
+        signUpFallbackRedirectUrl="/"
+      />
     </motion.section>
   </AuthShell>
 );

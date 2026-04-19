@@ -10,6 +10,7 @@ import { useShopTimingManager } from '../features/app/hooks/useShopTimingManager
 import { useInstallPrompt } from '../features/customer/hooks/useInstallPrompt';
 import { useAuthActions } from '../features/auth/hooks/useAuthActions';
 import { Loader } from '../components/ui/Loader';
+import { isAuthCallbackRoute } from '../services/auth/authService';
 import { lazyNamed } from '../utils/lazyNamed';
 import { AppRouter } from './router/AppRouter';
 
@@ -21,12 +22,17 @@ const LoginPage = lazyNamed(
   () => import('../pages/Login/LoginPage'),
   'LoginPage',
 );
+const AuthCallbackPage = lazyNamed(
+  () => import('../pages/AuthCallback/AuthCallbackPage'),
+  'AuthCallbackPage',
+);
 
 export default function App() {
   const session = useRealtimeAppData();
   const [orderStatus, setOrderStatus] = useState<Order | null>(null);
   const installPrompt = useInstallPrompt();
   const authActions = useAuthActions();
+  const isProcessingAuthCallback = isAuthCallbackRoute();
 
   const pushNotifications = usePushNotifications({
     isAuthReady: session.isAuthReady,
@@ -80,6 +86,14 @@ export default function App() {
     isDrawerOpen: profileManager.isStaffProfileOpen,
     shopTiming: session.shopTiming,
   });
+
+  if (isProcessingAuthCallback) {
+    return (
+      <Suspense fallback={<Loader fullScreen label="Finalizing your Google sign-in..." />}>
+        <AuthCallbackPage />
+      </Suspense>
+    );
+  }
 
   if (!session.isAuthReady) {
     return (
