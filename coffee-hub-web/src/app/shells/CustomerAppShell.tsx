@@ -57,12 +57,13 @@ const CartDrawer = lazyNamed(
   () => import('../../features/customer/components/CartDrawer'),
   'CartDrawer',
 );
-const CustomerProfileDrawer = lazyNamed(
-  () => import('../../features/customer/components/CustomerProfileDrawer'),
-  'CustomerProfileDrawer',
+const ProfileScreen = lazyNamed(
+  () => import('../../features/profile/ProfileScreen'),
+  'ProfileScreen',
 );
 
 export const CustomerAppShell = ({
+  accessManager,
   installPrompt,
   offersState,
   orderOperations,
@@ -71,7 +72,7 @@ export const CustomerAppShell = ({
   pushNotifications,
   session,
   setOrderStatus,
-  userMenu,
+  shopTimingManager,
 }: CustomerShellProps) => {
   const [hasLoadedCartDrawer, setHasLoadedCartDrawer] = useState(false);
   const [hasLoadedProfileDrawer, setHasLoadedProfileDrawer] = useState(false);
@@ -230,7 +231,6 @@ export const CustomerAppShell = ({
               <div className="hidden rounded-full border border-white/10 bg-white/5 px-3 py-2 text-[11px] font-medium text-ink-muted sm:block">
                 {session.currentUserEmail}
               </div>
-              {userMenu}
             </>
           )}
           title="Fresh food, brewed fast"
@@ -280,17 +280,44 @@ export const CustomerAppShell = ({
 
           {hasLoadedProfileDrawer && (
             <Suspense fallback={drawerLoader}>
-              <CustomerProfileDrawer
+              <ProfileScreen
+                adminAccessEntries={session.adminAccessEntries}
+                adminAccessError={accessManager.adminAccessError}
+                adminAccessInput={accessManager.adminAccessInput}
+                adminAccessRemovingId={accessManager.adminAccessRemovingId}
+                adminAccessSuccess={accessManager.adminAccessSuccess}
+                deliveryAccessEntries={session.deliveryAccessEntries}
+                deliveryAccessError={accessManager.deliveryAccessError}
+                deliveryAccessInput={accessManager.deliveryAccessInput}
+                deliveryAccessRemovingId={accessManager.deliveryAccessRemovingId}
+                deliveryAccessSuccess={accessManager.deliveryAccessSuccess}
+                isAdmin={session.isAdmin}
+                isAdminAccessSaving={accessManager.isAdminAccessSaving}
+                isDeliveryAccessSaving={accessManager.isDeliveryAccessSaving}
+                isDeliveryAgent={session.isDeliveryAgent}
                 isOpen={profileManager.isProfileOpen}
+                isMainAdmin={session.isMainAdmin}
                 isProfileAddressExpanded={profileManager.isProfileAddressExpanded}
                 isProfileSavedToastVisible={profileManager.isProfileSavedToastVisible}
                 isProfileSaving={profileManager.isProfileSaving}
                 isNotificationSyncing={pushNotifications.isSyncing}
                 notificationPermissionState={pushNotifications.permissionState}
                 notificationSyncError={pushNotifications.syncError}
+                profileDraft={profileManager.profileDraft}
+                profileError={profileManager.profileError}
+                profileSyncError={session.profileSyncError}
+                shopTiming={session.shopTiming}
+                shopTimingDraft={shopTimingManager.shopTimingDraft}
+                shopTimingError={shopTimingManager.shopTimingError}
+                shopTimingSuccess={shopTimingManager.shopTimingSuccess}
+                isShopTimingSaving={shopTimingManager.isShopTimingSaving}
+                onAddAdminAccess={() => void accessManager.handleAddAdminAccess()}
+                onAddDeliveryAccess={() => void accessManager.handleAddDeliveryAccess()}
+                onAdminAccessInputChange={accessManager.setAdminAccessInput}
                 onClose={() => {
                   profileManager.setIsProfileOpen(false);
                 }}
+                onDeliveryAccessInputChange={accessManager.setDeliveryAccessInput}
                 onEnablePushNotifications={() => {
                   void pushNotifications.requestPermission();
                 }}
@@ -303,9 +330,11 @@ export const CustomerAppShell = ({
                 }}
                 onProfileAddressExpandedChange={profileManager.setIsProfileAddressExpanded}
                 onProfileDraftChange={profileManager.setProfileDraft}
+                onRemoveAdminAccess={accessManager.handleRemoveAdminAccess}
+                onRemoveDeliveryAccess={accessManager.handleRemoveDeliveryAccess}
                 onSave={() => void profileManager.handleSaveProfile()}
-                profileDraft={profileManager.profileDraft}
-                profileError={profileManager.profileError}
+                onSaveShopTiming={() => void shopTimingManager.handleSaveShopTiming()}
+                onShopTimingDraftChange={shopTimingManager.handleShopTimingDraftChange}
               />
             </Suspense>
           )}

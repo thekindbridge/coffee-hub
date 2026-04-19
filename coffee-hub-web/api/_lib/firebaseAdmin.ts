@@ -10,10 +10,7 @@ import { createClerkClient, verifyToken, type ClerkClient } from '@clerk/backend
 import { ApiError } from './errors.js';
 
 type VerifiedRequestUser = {
-  admin?: boolean;
   email?: string;
-  role?: string;
-  roles?: string[];
   sessionId: string | null;
   tokenClaims: Record<string, unknown>;
   uid: string;
@@ -168,12 +165,6 @@ const getStringClaim = (claims: Record<string, unknown>, key: string) => (
   typeof claims[key] === 'string' ? claims[key] as string : ''
 );
 
-const getStringArrayClaim = (claims: Record<string, unknown>, key: string) => (
-  Array.isArray(claims[key])
-    ? claims[key].filter((value): value is string => typeof value === 'string')
-    : []
-);
-
 const resolvePrimaryEmail = async (userId: string, tokenClaims: Record<string, unknown>) => {
   const claimEmail = getStringClaim(tokenClaims, 'email');
   if (claimEmail) {
@@ -221,17 +212,33 @@ const verifyClerkToken = async (request: VercelRequest) => {
   });
 };
 
-const hasAdminClaim = (decodedToken: VerifiedRequestUser) => {
-  const role = typeof decodedToken.role === 'string' ? decodedToken.role.trim().toLowerCase() : '';
-  const roles = Array.isArray(decodedToken.roles)
-    ? decodedToken.roles.filter((value): value is string => typeof value === 'string')
-    : [];
-
-  return decodedToken.admin === true || role === 'admin' || roles.includes('admin');
-};
-
 const getConfiguredAdminEmail = () =>
   normalizeEmail(process.env.ADMIN_EMAIL || process.env.VITE_ADMIN_EMAIL || '');
+
+const getUserRoleById = async (userId: string) => {
+  if (!userId) {
+    return '';
+  }
+
+  const snapshot = await getAdminDb().collection('users').doc(userId).get();
+  const role = snapshot.data()?.role;
+  return typeof role === 'string' ? role.trim().toLowerCase() : '';
+};
+
+const getUserRoleByEmail = async (email: string) => {
+  const normalizedEmail = normalizeEmail(email);
+  if (!normalizedEmail) {
+    return '';
+  }
+
+  const snapshot = await getAdminDb()
+    .collection('users')
+    .where('email', '==', normalizedEmail)
+    .limit(1)
+    .get();
+  const role = snapshot.docs[0]?.data().role;
+  return typeof role === 'string' ? role.trim().toLowerCase() : '';
+};
 
 export const hasAdminAccess = async (email: string) => {
   const normalizedEmail = normalizeEmail(email);
@@ -243,8 +250,7 @@ export const hasAdminAccess = async (email: string) => {
     return true;
   }
 
-  const adminAccessDoc = await getAdminDb().collection('admin_access').doc(normalizedEmail).get();
-  return adminAccessDoc.exists;
+  return (await getUserRoleByEmail(normalizedEmail)) === 'admin';
 };
 
 export const verifyRequestUser = async (
@@ -264,10 +270,7 @@ export const verifyRequestUser = async (
     }
 
     return {
-      admin: tokenClaims.admin === true,
       email: await resolvePrimaryEmail(uid, tokenClaims),
-      role: getStringClaim(tokenClaims, 'role'),
-      roles: getStringArrayClaim(tokenClaims, 'roles'),
       sessionId: typeof tokenClaims.sid === 'string' ? tokenClaims.sid : null,
       tokenClaims,
       uid,
@@ -295,7 +298,10 @@ export const verifyAdminRequest = async (request: VercelRequest) => {
     throw new ApiError(403, 'Admin access requires an email-backed account.');
   }
 
-  if (!hasAdminClaim(decodedToken) && !(await hasAdminAccess(normalizedEmail))) {
+  const isConfiguredOwner = normalizedEmail === getConfiguredAdminEmail();
+  const hasFirestoreAdminRole = (await getUserRoleById(decodedToken.uid)) === 'admin';
+
+  if (!isConfiguredOwner && !hasFirestoreAdminRole) {
     throw new ApiError(403, 'Admin access required.');
   }
 

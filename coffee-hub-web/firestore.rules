@@ -16,12 +16,6 @@ service cloud.firestore {
       return 'coffeehubinkollu@gmail.com';
     }
 
-    function hasAdminClaim() {
-      return request.auth.token.admin == true ||
-        request.auth.token.role == 'admin' ||
-        (request.auth.token.roles is list && request.auth.token.roles.hasAny(['admin']));
-    }
-
     function isOwnEmail(email) {
       return isAuthenticated() &&
         requestEmail() is string &&
@@ -35,11 +29,8 @@ service cloud.firestore {
     function isAdmin() {
       return isAuthenticated() &&
         (
-          hasAdminClaim() ||
-          (requestEmail() is string && (
-            requestEmail() == ownerEmail() ||
-            exists(/databases/$(database)/documents/admin_access/$(requestEmail()))
-          ))
+          (requestEmail() is string && requestEmail() == ownerEmail()) ||
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
         );
     }
 
@@ -661,6 +652,7 @@ service cloud.firestore {
     function hasAllowedUserKeys(data) {
       return data.keys().hasOnly([
         'name',
+        'clerkId',
         'phone',
         'email',
         'notificationPermission',
@@ -678,6 +670,10 @@ service cloud.firestore {
         'createdAt',
         'updatedAt'
       ]);
+    }
+
+    function isValidUserRole(value) {
+      return value == null || value in ['customer', 'admin', 'agent'];
     }
 
     function isMatchingUserEmail(value) {
@@ -716,6 +712,7 @@ service cloud.firestore {
 
     function isValidUserRecord(data) {
       return hasAllowedUserKeys(data) &&
+        isOptionalString(data.clerkId, 120) &&
         isOptionalString(data.name, 120) &&
         isOptionalString(data.phone, 30) &&
         isMatchingUserEmail(data.email) &&
@@ -723,7 +720,7 @@ service cloud.firestore {
         isValidNotificationSettings(data.notificationSettings) &&
         isValidAddresses(data.addresses) &&
         isValidAddressEntries(data.addressEntries) &&
-        isOptionalString(data.role, 40) &&
+        isValidUserRole(data.role) &&
         isOptionalString(data.adminLocation, 120) &&
         isOptionalString(data.vehicleType, 80) &&
         isOptionalString(data.status, 40) &&
@@ -735,14 +732,16 @@ service cloud.firestore {
         isOptionalTimestamp(data.updatedAt);
     }
 
-    function isValidAdminAccessRecord(data, email) {
-      return data.keys().hasOnly(['email', 'role', 'createdAt', 'updatedAt']) &&
-        data.email is string &&
-        data.email == email &&
-        data.role is string &&
-        data.role == 'admin' &&
-        isOptionalTimestamp(data.createdAt) &&
-        isOptionalTimestamp(data.updatedAt);
+    function isValidOwnUserCreate(userId) {
+      return isValidUserRecord(request.resource.data) &&
+        request.resource.data.clerkId == userId &&
+        request.resource.data.role == 'customer';
+    }
+
+    function isValidOwnUserUpdate() {
+      return isValidUserRecord(request.resource.data) &&
+        request.resource.data.clerkId == resource.data.clerkId &&
+        request.resource.data.role == resource.data.role;
     }
 
     function isValidAgentAccessRecord(data, email) {
@@ -905,19 +904,17 @@ service cloud.firestore {
 
     // users: each signed-in user can only manage their own profile document
     match /users/{userId} {
-      allow read: if isOwner(userId);
-      allow create, update: if isOwner(userId) && isValidUserRecord(request.resource.data);
-      allow delete: if isOwner(userId);
-    }
-
-    // admin_access: readable by signed-in users, writable only by admins
-    match /admin_access/{email} {
-      allow read: if isAdmin() || isOwnEmail(email);
-      allow create, update: if isAdmin() && isValidAdminAccessRecord(request.resource.data, email);
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if
+        (isOwner(userId) && isValidOwnUserCreate(userId)) ||
+        (isAdmin() && isValidUserRecord(request.resource.data));
+      allow update: if
+        (isOwner(userId) && isValidOwnUserUpdate()) ||
+        (isAdmin() && isValidUserRecord(request.resource.data));
       allow delete: if isAdmin();
     }
 
-    // agents: readable for role checks, writable only by admins
+    // agents: delivery operations data, writable only by admins or the agent owner
     match /agents/{email} {
       allow read: if true;
       allow create: if

@@ -8,21 +8,17 @@ import type { DeliveryAgent } from '../../types';
 import type {
   CustomerProfile,
   NotificationSettings,
-  StaffProfile,
-  StaffRole,
 } from '../../features/app/types';
 import {
   EMPTY_PROFILE,
-  EMPTY_STAFF_PROFILE,
   ensureProfileAddresses,
   formatPhoneWithPrefix,
   mapProfileDocToProfile,
-  mapStaffProfileDocToProfile,
 } from '../../features/app/lib/firestoreMappers';
 import { toAppServiceError } from '../platform/serviceError';
 import { db } from './index';
 
-export const subscribeToCustomerProfile = (
+export const subscribeToUserProfile = (
   currentUserId: string,
   onData: (profile: CustomerProfile) => void,
   onError: (error: Error) => void,
@@ -30,142 +26,68 @@ export const subscribeToCustomerProfile = (
   doc(db, 'users', currentUserId),
   snapshot => {
     if (!snapshot.exists()) {
-      onData(EMPTY_PROFILE);
+      onData({
+        ...EMPTY_PROFILE,
+        clerkId: currentUserId,
+      });
       return;
     }
 
     onData(mapProfileDocToProfile(snapshot.data() as Record<string, unknown>));
   },
   error => {
-    onError(toAppServiceError(error, 'Unable to load customer profile.'));
+    onError(toAppServiceError(error, 'Unable to load your profile.'));
   },
 );
 
-export const subscribeToStaffProfile = (
-  currentUserId: string,
-  fallbackRole: StaffRole,
-  onData: (profile: StaffProfile) => void,
-  onError: (error: Error) => void,
-) => onSnapshot(
-  doc(db, 'users', currentUserId),
-  snapshot => {
-    if (!snapshot.exists()) {
-      onData({ ...EMPTY_STAFF_PROFILE, role: fallbackRole });
-      return;
-    }
-
-    onData(
-      mapStaffProfileDocToProfile(
-        snapshot.data() as Record<string, unknown>,
-        fallbackRole,
-      ),
-    );
-  },
-  error => {
-    onError(toAppServiceError(error, 'Unable to load staff profile.'));
-  },
-);
-
-export const saveCustomerProfile = async (
-  currentUserId: string,
-  profileDraft: CustomerProfile,
-) => {
-  try {
-    const trimmedAddresses = ensureProfileAddresses(profileDraft.addresses).map(address => address.trim());
-
-    await setDoc(
-      doc(db, 'users', currentUserId),
-      {
-        name: profileDraft.name.trim(),
-        phone: formatPhoneWithPrefix(profileDraft.phone),
-        email: profileDraft.email.trim(),
-        notificationSettings: profileDraft.notificationSettings,
-        addresses: {
-          address1: trimmedAddresses[0] || '',
-          address2: trimmedAddresses[1] || '',
-          address3: trimmedAddresses[2] || '',
-        },
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true },
-    );
-  } catch (error) {
-    throw toAppServiceError(error, 'Unable to save your profile.', 'network');
-  }
-};
-
-export const saveCustomerNotificationSettings = async (
-  currentUserId: string,
-  settings: NotificationSettings,
-) => {
-  try {
-    await setDoc(
-      doc(db, 'users', currentUserId),
-      {
-        notificationSettings: settings,
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true },
-    );
-  } catch (error) {
-    throw toAppServiceError(
-      error,
-      'Unable to save notification settings right now.',
-      'network',
-    );
-  }
-};
-
-export const saveStaffProfile = async ({
+export const saveUserProfile = async ({
   currentUserEmail,
   currentUserId,
   deliveryAgents,
-  isAdmin,
-  staffProfileDraft,
+  profileDraft,
 }: {
-  currentUserId: string;
   currentUserEmail: string;
-  isAdmin: boolean;
-  staffProfileDraft: StaffProfile;
+  currentUserId: string;
   deliveryAgents: DeliveryAgent[];
+  profileDraft: CustomerProfile;
 }) => {
   try {
-    const role: StaffRole = isAdmin ? 'admin' : 'agent';
-    const payload: Record<string, unknown> = {
-      role,
-      name: staffProfileDraft.name.trim(),
-      phone: formatPhoneWithPrefix(staffProfileDraft.phone),
-      email: staffProfileDraft.email.trim(),
-      notificationSettings: staffProfileDraft.notificationSettings,
+    const normalizedEmail = (profileDraft.email || currentUserEmail).trim().toLowerCase();
+    const trimmedAddresses = ensureProfileAddresses(profileDraft.addresses)
+      .map(address => address.trim());
+    const userPayload: Record<string, unknown> = {
+      addresses: {
+        address1: trimmedAddresses[0] || '',
+        address2: trimmedAddresses[1] || '',
+        address3: trimmedAddresses[2] || '',
+      },
+      clerkId: currentUserId,
+      email: normalizedEmail,
+      name: profileDraft.name.trim(),
+      notificationSettings: profileDraft.notificationSettings,
+      phone: formatPhoneWithPrefix(profileDraft.phone),
       updatedAt: serverTimestamp(),
     };
 
-    if (role === 'admin') {
-      payload.adminLocation = staffProfileDraft.adminLocation.trim();
+    if (profileDraft.role === 'admin') {
+      userPayload.adminLocation = profileDraft.adminLocation.trim();
     }
 
-    if (role === 'agent') {
-      payload.vehicleType = staffProfileDraft.vehicleType;
-      payload.status = staffProfileDraft.status;
+    if (profileDraft.role === 'agent') {
+      userPayload.status = profileDraft.status;
+      userPayload.vehicleType = profileDraft.vehicleType;
     }
 
-    await setDoc(doc(db, 'users', currentUserId), payload, { merge: true });
+    await setDoc(doc(db, 'users', currentUserId), userPayload, { merge: true });
 
-    if (role !== 'agent') {
+    if (profileDraft.role !== 'agent' || !normalizedEmail) {
       return;
-    }
-
-    const normalizedEmail = (staffProfileDraft.email || currentUserEmail || '')
-      .trim()
-      .toLowerCase();
-    if (!normalizedEmail) {
-      throw new Error('Agent email is required');
     }
 
     const existingAgent = deliveryAgents.find(
       agent => agent.id === normalizedEmail || agent.email?.toLowerCase() === normalizedEmail,
     );
-    const shouldMarkOffline = staffProfileDraft.status === 'Offline';
+    const shouldMarkOffline = profileDraft.status === 'Offline';
     const shouldPreserveBusyAssignment =
       existingAgent?.status === 'busy' && Boolean(existingAgent.current_order_id);
     const agentStatus = shouldMarkOffline
@@ -173,18 +95,17 @@ export const saveStaffProfile = async ({
       : shouldPreserveBusyAssignment
         ? 'BUSY'
         : 'AVAILABLE';
-
     const agentPayload: Record<string, unknown> = {
-      name: staffProfileDraft.name.trim(),
-      phone: formatPhoneWithPrefix(staffProfileDraft.phone),
-      email: normalizedEmail,
-      notificationSettings: staffProfileDraft.notificationSettings,
-      vehicle: staffProfileDraft.vehicleType,
-      status: agentStatus,
-      isActive: !shouldMarkOffline,
-      role: 'delivery',
       accessOnly: false,
+      email: normalizedEmail,
+      isActive: !shouldMarkOffline,
+      name: profileDraft.name.trim(),
+      notificationSettings: profileDraft.notificationSettings,
+      phone: formatPhoneWithPrefix(profileDraft.phone),
+      role: 'agent',
+      status: agentStatus,
       updatedAt: serverTimestamp(),
+      vehicle: profileDraft.vehicleType,
     };
 
     if (!existingAgent) {
@@ -193,21 +114,19 @@ export const saveStaffProfile = async ({
 
     await setDoc(doc(db, 'agents', normalizedEmail), agentPayload, { merge: true });
   } catch (error) {
-    throw toAppServiceError(error, 'Unable to save your staff profile.', 'network');
+    throw toAppServiceError(error, 'Unable to save your profile.', 'network');
   }
 };
 
-export const saveStaffNotificationSettings = async ({
+export const saveUserNotificationSettings = async ({
   currentUserEmail,
   currentUserId,
-  isAdmin,
-  staffProfileDraft,
+  profileDraft,
   settings,
 }: {
-  currentUserId: string;
   currentUserEmail: string;
-  isAdmin: boolean;
-  staffProfileDraft: StaffProfile;
+  currentUserId: string;
+  profileDraft: CustomerProfile;
   settings: NotificationSettings;
 }) => {
   try {
@@ -220,14 +139,11 @@ export const saveStaffNotificationSettings = async ({
       { merge: true },
     );
 
-    if (isAdmin) {
+    if (profileDraft.role !== 'agent') {
       return;
     }
 
-    const normalizedEmail = (staffProfileDraft.email || currentUserEmail || '')
-      .trim()
-      .toLowerCase();
-
+    const normalizedEmail = (profileDraft.email || currentUserEmail).trim().toLowerCase();
     if (!normalizedEmail) {
       return;
     }

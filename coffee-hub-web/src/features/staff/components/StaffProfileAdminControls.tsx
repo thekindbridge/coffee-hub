@@ -1,6 +1,6 @@
 import { Clock3 } from 'lucide-react';
 import { ADMIN_EMAIL } from '../../app/lib/constants';
-import type { AccessEntry, ShopTimingDraft, StaffProfile } from '../../app/types';
+import type { AccessEntry, ShopTimingDraft } from '../../app/types';
 import { formatShopTimingRange, type ShopTiming } from '../../../../shared/shopTiming';
 
 type StaffProfileAdminControlsProps = {

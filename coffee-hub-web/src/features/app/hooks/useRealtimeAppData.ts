@@ -1,65 +1,49 @@
-/**
- * useRealtimeAppData — thin aggregator hook.
- *
- * Composes all focused sub-hooks into a single return object,
- * preserving the same API as before for backward compatibility.
- *
- * Sub-hooks:
- *   useAuthState      → auth identity
- *   useAccessRoles    → admin/delivery role + access entries
- *   useMenuData       → real-time menu items
- *   useOrdersData     → admin + user orders with item hydration
- *   useProfileData    → customer & staff profile documents
- *   useDeliveryData   → agents, sessions, GPS tracker
- */
 import { useAuth } from '../../auth/hooks/useAuth';
 import { useAccessRoles } from './useAccessRoles';
+import { useDeliveryData } from './useDeliveryData';
 import { useMenuData } from './useMenuData';
 import { useOrdersData } from './useOrdersData';
 import { useProfileData } from './useProfileData';
-import { useDeliveryData } from './useDeliveryData';
 import { useShopTiming } from './useShopTiming';
 import { ADMIN_EMAIL } from '../lib/constants';
 
 export const useRealtimeAppData = () => {
   const auth = useAuth();
 
-  const roles = useAccessRoles(auth.currentUserEmail, auth.normalizedCurrentEmail);
+  const profiles = useProfileData({
+    currentUserEmail: auth.currentUserEmail,
+    currentUserId: auth.currentUserId,
+    currentUserName: auth.currentUserName,
+    isLoggedIn: auth.isLoggedIn,
+  });
 
+  const isAdmin = profiles.profileSaved.role === 'admin';
+  const isDeliveryAgent = profiles.profileSaved.role === 'agent';
+  const isMainAdmin = isAdmin && auth.normalizedCurrentEmail === ADMIN_EMAIL;
+  const accessEntries = useAccessRoles(isAdmin);
   const menu = useMenuData(auth.isLoggedIn);
-
-  const orders = useOrdersData(roles.isAdmin, auth.currentUserId);
-
+  const orders = useOrdersData(isAdmin, auth.currentUserId);
   const shopTiming = useShopTiming();
-
-  const profiles = useProfileData(
-    auth.currentUserId,
-    roles.isAdmin,
-    roles.isDeliveryAgent,
-    auth.normalizedCurrentEmail,
-    ADMIN_EMAIL,
-  );
-
   const delivery = useDeliveryData(
-    roles.isAdmin,
-    roles.isDeliveryAgent,
+    isAdmin,
+    isDeliveryAgent,
     auth.normalizedCurrentEmail,
   );
 
   return {
     // Auth
     isLoggedIn: auth.isLoggedIn,
-    isAuthReady: auth.isAuthReady,
+    isAuthReady: auth.isAuthReady && profiles.isProfileReady,
     currentUserId: auth.currentUserId,
     currentUserEmail: auth.currentUserEmail,
     normalizedCurrentEmail: auth.normalizedCurrentEmail,
 
     // Roles
-    isAdmin: roles.isAdmin,
-    isDeliveryAgent: roles.isDeliveryAgent,
-    isMainAdmin: roles.isMainAdmin,
-    adminAccessEntries: roles.adminAccessEntries,
-    deliveryAccessEntries: roles.deliveryAccessEntries,
+    isAdmin,
+    isDeliveryAgent,
+    isMainAdmin,
+    adminAccessEntries: accessEntries.adminAccessEntries,
+    deliveryAccessEntries: accessEntries.deliveryAccessEntries,
 
     // Menu
     menu: menu.menu,
@@ -78,9 +62,9 @@ export const useRealtimeAppData = () => {
     setUserOrders: orders.setUserOrders,
     isUserOrdersLoading: orders.isUserOrdersLoading,
 
-    // Profiles
+    // Profile
     profileSaved: profiles.profileSaved,
-    staffProfileSaved: profiles.staffProfileSaved,
+    profileSyncError: profiles.profileSyncError,
 
     // Delivery
     deliveryAgents: delivery.deliveryAgents,

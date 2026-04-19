@@ -1,27 +1,38 @@
 import { useEffect } from 'react';
 import type { PropsWithChildren } from 'react';
-import { useClerk } from '@clerk/react';
-import {
-  initializeAuthState,
-  syncAuthRuntime,
-} from '../../services/auth/authService';
+import { useAuth, useUser } from '@clerk/react';
+import { syncAuthRuntime } from '../../services/auth/authService';
 
 export const AppProviders = ({ children }: PropsWithChildren) => {
-  const clerk = useClerk();
+  const clerkAuth = useAuth();
+  const clerkUser = useUser();
+
+  const currentUserEmail =
+    clerkUser.user?.primaryEmailAddress?.emailAddress ||
+    clerkUser.user?.emailAddresses?.[0]?.emailAddress ||
+    '';
 
   useEffect(() => {
-    void initializeAuthState().catch(() => undefined);
-  }, []);
+    syncAuthRuntime({
+      currentUserEmail,
+      currentUserId: clerkAuth.userId || '',
+      getToken: clerkAuth.getToken,
+      isLoaded: clerkAuth.isLoaded && clerkUser.isLoaded,
+      isLoggedIn: Boolean(clerkAuth.isSignedIn && clerkAuth.userId),
+      signOut: clerkAuth.signOut,
+    });
 
-  useEffect(() => {
-    syncAuthRuntime(clerk);
+    return () => {
+      syncAuthRuntime(null);
+    };
   }, [
-    clerk,
-    clerk.client,
-    clerk.isSignedIn,
-    clerk.loaded,
-    clerk.session,
-    clerk.user,
+    clerkAuth.getToken,
+    clerkAuth.isLoaded,
+    clerkAuth.isSignedIn,
+    clerkAuth.signOut,
+    clerkAuth.userId,
+    clerkUser.isLoaded,
+    currentUserEmail,
   ]);
 
   return children;

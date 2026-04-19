@@ -209,11 +209,11 @@ export const syncNotificationRegistration = async (
   const agentSnapshot = normalizedEmail
     ? await adminDb.collection('agents').doc(normalizedEmail).get()
     : null;
-
-  const role = await hasAdminAccess(normalizedEmail)
-    ? 'admin'
-    : agentSnapshot?.exists
-      ? 'agent'
+  const existingRole = userSnapshot.data()?.role;
+  const role = existingRole === 'admin' || existingRole === 'agent'
+    ? existingRole
+    : await hasAdminAccess(normalizedEmail)
+      ? 'admin'
       : 'customer';
 
   if (normalizedToken) {

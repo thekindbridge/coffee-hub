@@ -7,9 +7,9 @@ import { Loader } from '../../components/ui/Loader';
 import { lazyNamed } from '../../utils/lazyNamed';
 import type { ShellSharedProps } from './types';
 
-const StaffProfileDrawer = lazyNamed(
-  () => import('../../features/staff/components/StaffProfileDrawer'),
-  'StaffProfileDrawer',
+const ProfileScreen = lazyNamed(
+  () => import('../../features/profile/ProfileScreen'),
+  'ProfileScreen',
 );
 const AdminDashboardPage = lazyNamed(
   () => import('../../pages/AdminDashboard/AdminDashboardPage'),
@@ -24,25 +24,26 @@ export const AdminAppShell = ({
   pushNotifications,
   session,
   shopTimingManager,
-  userMenu,
 }: ShellSharedProps) => {
   const [hasLoadedStaffDrawer, setHasLoadedStaffDrawer] = useState(false);
 
   useEffect(() => {
-    if (profileManager.isStaffProfileOpen) {
+    if (profileManager.isProfileOpen) {
       setHasLoadedStaffDrawer(true);
     }
-  }, [profileManager.isStaffProfileOpen]);
+  }, [profileManager.isProfileOpen]);
 
   const staffDrawerProps = {
-    isOpen: profileManager.isStaffProfileOpen,
+    isOpen: profileManager.isProfileOpen,
     isAdmin: session.isAdmin,
     isDeliveryAgent: session.isDeliveryAgent,
     isMainAdmin: session.isMainAdmin,
-    staffProfileDraft: profileManager.staffProfileDraft,
-    staffProfileError: profileManager.staffProfileError,
-    isStaffProfileSaving: profileManager.isStaffProfileSaving,
-    isStaffProfileSavedToastVisible: profileManager.isStaffProfileSavedToastVisible,
+    profileDraft: profileManager.profileDraft,
+    profileError: profileManager.profileError,
+    profileSyncError: session.profileSyncError,
+    isProfileAddressExpanded: profileManager.isProfileAddressExpanded,
+    isProfileSaving: profileManager.isProfileSaving,
+    isProfileSavedToastVisible: profileManager.isProfileSavedToastVisible,
     shopTiming: session.shopTiming,
     shopTimingDraft: shopTimingManager.shopTimingDraft,
     shopTimingError: shopTimingManager.shopTimingError,
@@ -63,19 +64,20 @@ export const AdminAppShell = ({
     notificationPermissionState: pushNotifications.permissionState,
     isNotificationSyncing: pushNotifications.isSyncing,
     notificationSyncError: pushNotifications.syncError,
-    onClose: () => profileManager.setIsStaffProfileOpen(false),
+    onClose: () => profileManager.setIsProfileOpen(false),
     onLogout: () => {
-      profileManager.setIsStaffProfileOpen(false);
+      profileManager.setIsProfileOpen(false);
       void orderOperations.handleLogout();
     },
     onEnablePushNotifications: () => {
       void pushNotifications.requestPermission();
     },
-    onNotificationSettingsChange: (settings: typeof profileManager.staffProfileDraft.notificationSettings) => {
-      void profileManager.handleSaveStaffNotificationSettings(settings);
+    onNotificationSettingsChange: (settings: typeof profileManager.profileDraft.notificationSettings) => {
+      void profileManager.handleSaveProfileNotificationSettings(settings);
     },
-    onSave: () => void profileManager.handleSaveStaffProfile(),
-    onStaffProfileDraftChange: profileManager.setStaffProfileDraft,
+    onSave: () => void profileManager.handleSaveProfile(),
+    onProfileDraftChange: profileManager.setProfileDraft,
+    onProfileAddressExpandedChange: profileManager.setIsProfileAddressExpanded,
     onShopTimingDraftChange: shopTimingManager.handleShopTimingDraftChange,
     onSaveShopTiming: () => void shopTimingManager.handleSaveShopTiming(),
     onAdminAccessInputChange: (value: string) => {
@@ -100,8 +102,12 @@ export const AdminAppShell = ({
         <RoleHeader
           eyebrow="Admin console"
           icon={User}
-          onProfileClick={profileManager.handleOpenStaffProfile}
-          rightSlot={userMenu}
+          onProfileClick={profileManager.handleOpenProfile}
+          rightSlot={(
+            <div className="hidden rounded-full border border-white/10 bg-white/5 px-3 py-2 text-[11px] font-medium text-ink-muted sm:block">
+              {session.currentUserEmail}
+            </div>
+          )}
           title="COFFEE-HUB operations"
         />
       )}
@@ -115,7 +121,7 @@ export const AdminAppShell = ({
             />
           )}
         >
-          <StaffProfileDrawer {...staffDrawerProps} />
+          <ProfileScreen {...staffDrawerProps} />
         </Suspense>
       ) : undefined}
     >

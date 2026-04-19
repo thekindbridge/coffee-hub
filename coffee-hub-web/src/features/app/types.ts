@@ -18,32 +18,33 @@ export const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
 };
 
 export type CustomerProfile = {
+  clerkId: string;
   name: string;
   phone: string;
   email: string;
+  role: UserRole;
   addresses: string[];
-  notificationSettings: NotificationSettings;
-};
-
-export type StaffRole = 'admin' | 'agent';
-export type AgentVehicleType = '' | 'Bike' | 'Scooter' | 'Cycle';
-export type AgentStatus = 'Available' | 'Offline';
-
-export type StaffProfile = {
-  role: StaffRole;
-  name: string;
-  phone: string;
-  email: string;
   adminLocation: string;
   vehicleType: AgentVehicleType;
   status: AgentStatus;
   notificationSettings: NotificationSettings;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type UserRole = 'customer' | 'admin' | 'agent';
+export type StaffRole = Extract<UserRole, 'admin' | 'agent'>;
+export type AgentVehicleType = '' | 'Bike' | 'Scooter' | 'Cycle';
+export type AgentStatus = 'Available' | 'Offline';
+
+export type StaffProfile = CustomerProfile & {
+  role: StaffRole;
 };
 
 export type AccessEntry = {
   id: string;
   email: string;
-  role: 'admin' | 'delivery';
+  role: 'admin' | 'agent';
   accessOnly?: boolean;
 };
 

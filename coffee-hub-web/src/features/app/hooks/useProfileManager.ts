@@ -2,21 +2,15 @@ import { useEffect, useState } from 'react';
 import type {
   CustomerProfile,
   NotificationSettings,
-  StaffProfile,
-  StaffRole,
 } from '../types';
 import {
   buildProfileDraft,
-  buildStaffProfileDraft,
   EMPTY_PROFILE,
-  EMPTY_STAFF_PROFILE,
 } from '../lib/firestoreMappers';
 import type { DeliveryAgent } from '../../../types';
 import {
-  saveCustomerNotificationSettings,
-  saveCustomerProfile,
-  saveStaffNotificationSettings,
-  saveStaffProfile,
+  saveUserNotificationSettings,
+  saveUserProfile,
 } from '../../../services/firebase/profileService';
 import { bodyScrollAdapter } from '../../../services/platform/bodyScrollAdapter';
 
@@ -26,49 +20,28 @@ type UseProfileManagerParams = {
   isAdmin: boolean;
   isDeliveryAgent: boolean;
   profileSaved: CustomerProfile;
-  staffProfileSaved: StaffProfile;
   deliveryAgents: DeliveryAgent[];
 };
 
 export type ProfileManagerState = {
-  // Customer profile
   isProfileOpen: boolean;
   profileDraft: CustomerProfile;
   isProfileAddressExpanded: boolean;
   profileError: string;
   isProfileSaving: boolean;
   isProfileSavedToastVisible: boolean;
-  // Staff profile
-  isStaffProfileOpen: boolean;
-  staffProfileDraft: StaffProfile;
-  staffProfileError: string;
-  isStaffProfileSaving: boolean;
-  isStaffProfileSavedToastVisible: boolean;
-  // Handlers
   handleOpenProfile: () => void;
-  handleOpenStaffProfile: () => void;
   handleSaveProfile: () => Promise<void>;
-  handleSaveStaffProfile: () => Promise<void>;
   handleSaveProfileNotificationSettings: (settings: NotificationSettings) => Promise<void>;
-  handleSaveStaffNotificationSettings: (settings: NotificationSettings) => Promise<void>;
   setIsProfileOpen: (open: boolean) => void;
   setProfileDraft: (draft: CustomerProfile) => void;
   setIsProfileAddressExpanded: (expanded: boolean) => void;
-  setIsStaffProfileOpen: (open: boolean) => void;
-  setStaffProfileDraft: (draft: StaffProfile) => void;
 };
 
-/**
- * Manages all customer-profile and staff-profile drawer state and Firestore writes.
- * Extracted from App.tsx to keep the root component slim.
- */
 export const useProfileManager = ({
   currentUserId,
   currentUserEmail,
-  isAdmin,
-  isDeliveryAgent,
   profileSaved,
-  staffProfileSaved,
   deliveryAgents,
 }: UseProfileManagerParams): ProfileManagerState => {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -78,57 +51,36 @@ export const useProfileManager = ({
   const [isProfileSaving, setIsProfileSaving] = useState(false);
   const [isProfileSavedToastVisible, setIsProfileSavedToastVisible] = useState(false);
 
-  const [isStaffProfileOpen, setIsStaffProfileOpen] = useState(false);
-  const [staffProfileDraft, setStaffProfileDraft] = useState<StaffProfile>(EMPTY_STAFF_PROFILE);
-  const [staffProfileError, setStaffProfileError] = useState('');
-  const [isStaffProfileSaving, setIsStaffProfileSaving] = useState(false);
-  const [isStaffProfileSavedToastVisible, setIsStaffProfileSavedToastVisible] = useState(false);
-
-  // Sync customer profile draft when drawer closes or saved profile changes
   useEffect(() => {
     if (!isProfileOpen) {
       setProfileDraft(buildProfileDraft(profileSaved));
       setIsProfileAddressExpanded(false);
+      setProfileError('');
+      setIsProfileSavedToastVisible(false);
     }
   }, [profileSaved, isProfileOpen]);
 
-  // Sync staff profile draft when drawer closes or saved profile changes
-  useEffect(() => {
-    if (!isStaffProfileOpen) {
-      setStaffProfileDraft(buildStaffProfileDraft(staffProfileSaved));
-      setStaffProfileError('');
-      setIsStaffProfileSavedToastVisible(false);
-    }
-  }, [staffProfileSaved, isStaffProfileOpen]);
-
-  // Auto-dismiss customer profile toast
   useEffect(() => {
     if (!isProfileSavedToastVisible) return;
     const id = setTimeout(() => setIsProfileSavedToastVisible(false), 1800);
     return () => clearTimeout(id);
   }, [isProfileSavedToastVisible]);
 
-  // Lock body scroll while either profile drawer is open
   useEffect(() => {
-    bodyScrollAdapter.setLocked(isProfileOpen || isStaffProfileOpen);
+    bodyScrollAdapter.setLocked(isProfileOpen);
     return () => { bodyScrollAdapter.setLocked(false); };
-  }, [isProfileOpen, isStaffProfileOpen]);
+  }, [isProfileOpen]);
 
   const handleOpenProfile = () => {
-    setProfileDraft(buildProfileDraft(profileSaved));
+    setProfileDraft(buildProfileDraft({
+      ...profileSaved,
+      email: profileSaved.email || currentUserEmail,
+      clerkId: profileSaved.clerkId || currentUserId,
+    }));
     setIsProfileAddressExpanded(false);
     setProfileError('');
     setIsProfileSavedToastVisible(false);
     setIsProfileOpen(true);
-  };
-
-  const handleOpenStaffProfile = () => {
-    const role: StaffRole = isAdmin ? 'admin' : 'agent';
-    const seededEmail = staffProfileSaved.email || currentUserEmail;
-    setStaffProfileDraft(buildStaffProfileDraft({ ...staffProfileSaved, role, email: seededEmail }));
-    setStaffProfileError('');
-    setIsStaffProfileSavedToastVisible(false);
-    setIsStaffProfileOpen(true);
   };
 
   const handleSaveProfile = async () => {
@@ -136,13 +88,26 @@ export const useProfileManager = ({
       setProfileError('Please sign in to save your profile.');
       return;
     }
+
     setIsProfileSaving(true);
     setProfileError('');
+
     try {
-      await saveCustomerProfile(currentUserId, profileDraft);
+      await saveUserProfile({
+        currentUserEmail,
+        currentUserId,
+        deliveryAgents,
+        profileDraft: {
+          ...profileDraft,
+          clerkId: currentUserId,
+          email: currentUserEmail,
+          role: profileSaved.role,
+        },
+      });
+
       setIsProfileSavedToastVisible(true);
     } catch (error) {
-      console.error('Failed to save customer profile', error);
+      console.error('Failed to save profile', error);
       setProfileError('Unable to save profile right now.');
     } finally {
       setIsProfileSaving(false);
@@ -163,73 +128,22 @@ export const useProfileManager = ({
     setProfileError('');
 
     try {
-      await saveCustomerNotificationSettings(currentUserId, settings);
+      await saveUserNotificationSettings({
+        currentUserEmail,
+        currentUserId,
+        profileDraft: {
+          ...profileDraft,
+          role: profileSaved.role,
+        },
+        settings,
+      });
     } catch (error) {
-      console.error('Failed to save customer notification settings', error);
+      console.error('Failed to save notification settings', error);
       setProfileDraft(prev => ({
         ...prev,
         notificationSettings: previousSettings,
       }));
       setProfileError('Unable to save notification settings right now.');
-    }
-  };
-
-  const handleSaveStaffProfile = async () => {
-    if (!currentUserId) {
-      setStaffProfileError('Please sign in to save your profile.');
-      return;
-    }
-    setIsStaffProfileSaving(true);
-    setStaffProfileError('');
-    try {
-      await saveStaffProfile({
-        currentUserEmail,
-        currentUserId,
-        deliveryAgents,
-        isAdmin,
-        staffProfileDraft,
-      });
-
-      setIsStaffProfileSavedToastVisible(true);
-    } catch (error) {
-      console.error('Failed to save staff profile', error);
-      setStaffProfileError('Unable to save profile right now.');
-    } finally {
-      setIsStaffProfileSaving(false);
-    }
-  };
-
-  const handleSaveStaffNotificationSettings = async (settings: NotificationSettings) => {
-    if (!currentUserId) {
-      setStaffProfileError('Please sign in to update notification settings.');
-      return;
-    }
-
-    const previousSettings = staffProfileDraft.notificationSettings;
-    setStaffProfileDraft(prev => ({
-      ...prev,
-      notificationSettings: settings,
-    }));
-    setStaffProfileError('');
-
-    try {
-      await saveStaffNotificationSettings({
-        currentUserEmail,
-        currentUserId,
-        isAdmin,
-        settings,
-        staffProfileDraft: {
-          ...staffProfileDraft,
-          notificationSettings: settings,
-        },
-      });
-    } catch (error) {
-      console.error('Failed to save staff notification settings', error);
-      setStaffProfileDraft(prev => ({
-        ...prev,
-        notificationSettings: previousSettings,
-      }));
-      setStaffProfileError('Unable to save notification settings right now.');
     }
   };
 
@@ -240,21 +154,11 @@ export const useProfileManager = ({
     profileError,
     isProfileSaving,
     isProfileSavedToastVisible,
-    isStaffProfileOpen,
-    staffProfileDraft,
-    staffProfileError,
-    isStaffProfileSaving,
-    isStaffProfileSavedToastVisible,
     handleOpenProfile,
-    handleOpenStaffProfile,
     handleSaveProfile,
-    handleSaveStaffProfile,
     handleSaveProfileNotificationSettings,
-    handleSaveStaffNotificationSettings,
     setIsProfileOpen,
     setProfileDraft,
     setIsProfileAddressExpanded,
-    setIsStaffProfileOpen,
-    setStaffProfileDraft,
   };
 };

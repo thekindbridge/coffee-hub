@@ -18,6 +18,7 @@ import type {
   NotificationSettings,
   StaffProfile,
   StaffRole,
+  UserRole,
 } from '../types';
 
 const FALLBACK_TIMESTAMP_ISO = new Date(0).toISOString();
@@ -191,10 +192,15 @@ const mapEmbeddedOrderItems = (orderId: string, value: unknown): OrderItem[] => 
 };
 
 export const EMPTY_PROFILE: CustomerProfile = {
+  clerkId: '',
   name: '',
   phone: '',
   email: '',
+  role: 'customer',
   addresses: ['', '', ''],
+  adminLocation: '',
+  vehicleType: '',
+  status: 'Available',
   notificationSettings: {
     orderUpdates: true,
     offers: false,
@@ -202,10 +208,12 @@ export const EMPTY_PROFILE: CustomerProfile = {
 };
 
 export const EMPTY_STAFF_PROFILE: StaffProfile = {
+  clerkId: '',
   role: 'admin',
   name: '',
   phone: '',
   email: '',
+  addresses: ['', '', ''],
   adminLocation: '',
   vehicleType: '',
   status: 'Available',
@@ -237,6 +245,23 @@ export const normalizeNotificationSettings = (
   };
 };
 
+export const normalizeUserRole = (value: unknown): UserRole => {
+  if (value === 'admin' || value === 'agent') {
+    return value;
+  }
+
+  return 'customer';
+};
+
+const normalizeProfileAgentStatus = (value: unknown): AgentStatus => {
+  if (typeof value === 'string') {
+    const normalized = value.toLowerCase();
+    if (normalized === 'offline') return 'Offline';
+  }
+
+  return 'Available';
+};
+
 export const mapProfileDocToProfile = (
   data?: Record<string, unknown>,
 ): CustomerProfile => {
@@ -249,14 +274,19 @@ export const mapProfileDocToProfile = (
     : {};
 
   return {
+    clerkId: (data.clerkId as string) || '',
     name: (data.name as string) || '',
     phone: (data.phone as string) || '',
     email: (data.email as string) || '',
+    role: normalizeUserRole(data.role),
     addresses: ensureProfileAddresses([
       (addressRecord.address1 as string) || '',
       (addressRecord.address2 as string) || '',
       (addressRecord.address3 as string) || '',
     ]),
+    adminLocation: (data.adminLocation as string) || '',
+    vehicleType: normalizeVehicleType(data.vehicleType),
+    status: normalizeProfileAgentStatus(data.status),
     notificationSettings: normalizeNotificationSettings(data.notificationSettings),
   };
 };
@@ -279,16 +309,14 @@ const normalizeAgentStatus = (value: unknown): AgentStatus => {
 export const mapStaffProfileDocToProfile = (
   data: Record<string, unknown> | undefined,
   fallbackRole: StaffRole,
-): StaffProfile => ({
-  role: normalizeStaffRole(data?.role, fallbackRole),
-  name: (data?.name as string) || '',
-  phone: (data?.phone as string) || '',
-  email: (data?.email as string) || '',
-  adminLocation: (data?.adminLocation as string) || '',
-  vehicleType: normalizeVehicleType(data?.vehicleType),
-  status: normalizeAgentStatus(data?.status),
-  notificationSettings: normalizeNotificationSettings(data?.notificationSettings),
-});
+): StaffProfile => {
+  const profile = mapProfileDocToProfile(data);
+  return {
+    ...profile,
+    role: normalizeStaffRole(data?.role, fallbackRole),
+    status: normalizeAgentStatus(data?.status),
+  };
+};
 
 const stripPhonePrefix = (phone: string) => phone.replace(/^\+91\s*/i, '');
 

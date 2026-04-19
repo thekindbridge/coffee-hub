@@ -1,7 +1,3 @@
-import { App as CapacitorApp } from '@capacitor/app';
-import { Browser } from '@capacitor/browser';
-import type { PluginListenerHandle } from '@capacitor/core';
-import { isBrowserEnvironment, isNativeAndroidAuthPlatform } from '../platform/authPlatform';
 import { AppServiceError, toAppServiceError } from '../platform/serviceError';
 
 export type AuthSessionSnapshot = {
@@ -10,335 +6,71 @@ export type AuthSessionSnapshot = {
   isLoggedIn: boolean;
 };
 
-const CLERK_CALLBACK_QUERY_PARAM = 'clerk_callback';
-const GOOGLE_OAUTH_STRATEGY = 'oauth_google';
-const NATIVE_REDIRECT_SCHEME = 'com.coffeehub.app';
-const NATIVE_REDIRECT_HOST = 'auth';
-const NATIVE_REDIRECT_PATH = '/callback';
-const NATIVE_REDIRECT_URL =
-  `${NATIVE_REDIRECT_SCHEME}://${NATIVE_REDIRECT_HOST}${NATIVE_REDIRECT_PATH}`;
+type ClerkTokenGetter = (options?: { skipCache?: boolean }) => Promise<string | null>;
+type ClerkSignOut = () => Promise<void>;
 
-type ClerkEmailAddress = {
-  emailAddress?: string;
-  id?: string;
+type ClerkAuthRuntime = {
+  currentUserEmail: string;
+  currentUserId: string;
+  getToken: ClerkTokenGetter;
+  isLoaded: boolean;
+  isLoggedIn: boolean;
+  signOut: ClerkSignOut;
 };
 
-type ClerkRuntime = {
-  client?: {
-    signIn: {
-      create: (params: {
-        actionCompleteRedirectUrl: string;
-        redirectUrl: string;
-        strategy: typeof GOOGLE_OAUTH_STRATEGY;
-      }) => Promise<GoogleSignInResource>;
-    };
-  };
-  isSignedIn?: boolean;
-  loaded?: boolean;
-  session?: {
-    getToken: (options?: { skipCache?: boolean }) => Promise<string | null>;
-  } | null;
-  signOut: () => Promise<void>;
-  user?: {
-    emailAddresses?: ClerkEmailAddress[];
-    id?: string;
-    primaryEmailAddress?: ClerkEmailAddress | null;
-    primaryEmailAddressId?: string | null;
-  } | null;
-};
-
-type GoogleSignInResource = {
-  firstFactorVerification: {
-    externalVerificationRedirectURL?: string | URL | null;
-  };
-};
-
-type LoadedClerkRuntime = ClerkRuntime & {
-  client: NonNullable<ClerkRuntime['client']>;
-};
-
-type NativeAuthPendingState = {
-  completed: boolean;
-  reject: (reason: AppServiceError) => void;
-  resolve: () => void;
-};
-
-let authRuntime: ClerkRuntime | null = null;
-let hasInitializedNativeBridge = false;
-let nativeAppUrlOpenListener: PluginListenerHandle | null = null;
-let nativeBrowserFinishedListener: PluginListenerHandle | null = null;
-let pendingNativeAuth: NativeAuthPendingState | null = null;
+let authRuntime: ClerkAuthRuntime | null = null;
 
 const normalizeEmail = (value: string) => value.trim().toLowerCase();
 
-const getPrimaryEmail = (clerk: ClerkRuntime | null) => {
-  const primaryEmailAddressId = clerk?.user?.primaryEmailAddressId || '';
-  const primaryEmail =
-    clerk?.user?.emailAddresses?.find(emailAddress => emailAddress.id === primaryEmailAddressId)
-      ?.emailAddress ||
-    clerk?.user?.primaryEmailAddress?.emailAddress ||
-    clerk?.user?.emailAddresses?.[0]?.emailAddress ||
-    '';
+const ensureAuthRuntime = () => {
+  if (!authRuntime?.isLoaded) {
+    throw new AppServiceError('Authentication is still loading. Please try again.', {
+      code: 'validation',
+    });
+  }
 
-  return primaryEmail;
+  return authRuntime;
 };
 
 const toClerkAuthError = (
   error: unknown,
   fallbackMessage: string,
   code: 'network' | 'permission' | 'unsupported' | 'validation' = 'network',
-) => {
-  if (
-    error &&
-    typeof error === 'object' &&
-    Array.isArray((error as { errors?: Array<{ longMessage?: string; message?: string }> }).errors)
-  ) {
-    const firstError = (error as { errors: Array<{ longMessage?: string; message?: string }> }).errors[0];
-    const message = firstError?.longMessage || firstError?.message;
+) => toAppServiceError(error, fallbackMessage, code);
 
-    if (message) {
-      return new AppServiceError(message, {
-        cause: error,
-        code,
-      });
-    }
-  }
-
-  return toAppServiceError(error, fallbackMessage, code);
+export const syncAuthRuntime = (runtime: ClerkAuthRuntime | null) => {
+  authRuntime = runtime;
 };
 
-const ensureLoadedClerk = () => {
-  if (!authRuntime?.loaded || !authRuntime.client) {
-    throw new AppServiceError('Authentication is still loading. Please try again.', {
-      code: 'validation',
-    });
-  }
-
-  return authRuntime as LoadedClerkRuntime;
-};
-
-const cleanupBrowserFinishedListener = async () => {
-  if (!nativeBrowserFinishedListener) {
-    return;
-  }
-
-  const listener = nativeBrowserFinishedListener;
-  nativeBrowserFinishedListener = null;
-  await listener.remove().catch(() => undefined);
-};
-
-const resetPendingNativeAuth = async () => {
-  pendingNativeAuth = null;
-  await cleanupBrowserFinishedListener();
-};
-
-const resolvePendingNativeAuth = async () => {
-  if (!pendingNativeAuth || pendingNativeAuth.completed) {
-    return;
-  }
-
-  pendingNativeAuth.completed = true;
-  pendingNativeAuth.resolve();
-  await resetPendingNativeAuth();
-};
-
-const rejectPendingNativeAuth = async (error: AppServiceError) => {
-  if (!pendingNativeAuth || pendingNativeAuth.completed) {
-    return;
-  }
-
-  pendingNativeAuth.completed = true;
-  pendingNativeAuth.reject(error);
-  await resetPendingNativeAuth();
-};
-
-const buildCurrentAppUrl = () => {
-  const currentUrl = new URL(window.location.href);
-  currentUrl.searchParams.delete(CLERK_CALLBACK_QUERY_PARAM);
-  return currentUrl.toString();
-};
-
-const buildWebCallbackUrl = () => {
-  const callbackUrl = new URL(window.location.origin);
-  callbackUrl.searchParams.set(CLERK_CALLBACK_QUERY_PARAM, '1');
-  return callbackUrl.toString();
-};
-
-const buildAppCallbackUrlFromNativeUrl = (nativeUrl: string) => {
-  const incomingUrl = new URL(nativeUrl);
-  const callbackUrl = new URL(window.location.origin);
-
-  callbackUrl.searchParams.set(CLERK_CALLBACK_QUERY_PARAM, '1');
-
-  incomingUrl.searchParams.forEach((value, key) => {
-    callbackUrl.searchParams.set(key, value);
-  });
-
-  callbackUrl.hash = incomingUrl.hash;
-
-  return callbackUrl.toString();
-};
-
-const isNativeAuthCallbackUrl = (url: string) => {
-  try {
-    const parsedUrl = new URL(url);
-    return (
-      parsedUrl.protocol === `${NATIVE_REDIRECT_SCHEME}:` &&
-      parsedUrl.host === NATIVE_REDIRECT_HOST &&
-      parsedUrl.pathname === NATIVE_REDIRECT_PATH
-    );
-  } catch {
-    return false;
-  }
-};
-
-const getExternalVerificationRedirectUrl = (signIn: GoogleSignInResource) => {
-  const redirectUrl = signIn.firstFactorVerification.externalVerificationRedirectURL?.toString() || '';
-
-  if (!redirectUrl) {
-    throw new AppServiceError('Google sign-in could not be started right now.', {
-      code: 'unsupported',
-    });
-  }
-
-  return redirectUrl;
-};
-
-const createGoogleOAuthSignIn = async (clerk: LoadedClerkRuntime) => {
-  try {
-    return await clerk.client.signIn.create({
-      strategy: GOOGLE_OAUTH_STRATEGY,
-      redirectUrl: isNativeAndroidAuthPlatform() ? NATIVE_REDIRECT_URL : buildWebCallbackUrl(),
-      actionCompleteRedirectUrl: buildCurrentAppUrl(),
-    });
-  } catch (error) {
-    throw toClerkAuthError(error, 'Unable to start Google sign-in right now.');
-  }
-};
-
-const beginNativeRedirectFlow = async (redirectUrl: string) => {
-  await cleanupBrowserFinishedListener();
-
-  nativeBrowserFinishedListener = await Browser.addListener('browserFinished', () => {
-    void rejectPendingNativeAuth(
-      new AppServiceError('Google sign-in was cancelled.', {
-        code: 'validation',
-      }),
-    );
-  });
-
-  await Browser.open({
-    url: redirectUrl,
-    toolbarColor: '#120c09',
-  });
-
-  return new Promise<void>((resolve, reject) => {
-    pendingNativeAuth = {
-      completed: false,
-      resolve,
-      reject,
-    };
-  });
-};
-
-const handleNativeAuthCallback = async (url: string) => {
-  if (!isBrowserEnvironment() || !isNativeAuthCallbackUrl(url)) {
-    return false;
-  }
-
-  const callbackUrl = buildAppCallbackUrlFromNativeUrl(url);
-
-  await resolvePendingNativeAuth();
-
-  if (window.location.href !== callbackUrl) {
-    window.location.replace(callbackUrl);
-  }
-
-  return true;
-};
-
-export const syncAuthRuntime = (clerk: ClerkRuntime | null) => {
-  authRuntime = clerk;
-};
-
-export const initializeAuthState = async () => {
-  if (!isBrowserEnvironment() || !isNativeAndroidAuthPlatform() || hasInitializedNativeBridge) {
-    return;
-  }
-
-  hasInitializedNativeBridge = true;
-
-  nativeAppUrlOpenListener = await CapacitorApp.addListener('appUrlOpen', event => {
-    void handleNativeAuthCallback(event.url);
-  });
-
-  const launchUrl = await CapacitorApp.getLaunchUrl();
-  if (launchUrl?.url) {
-    await handleNativeAuthCallback(launchUrl.url);
-  }
-};
-
-export const isAuthCallbackRoute = () => {
-  if (!isBrowserEnvironment()) {
-    return false;
-  }
-
-  return new URLSearchParams(window.location.search).get(CLERK_CALLBACK_QUERY_PARAM) === '1';
-};
-
-export const getAuthSessionSnapshot = (): AuthSessionSnapshot => {
-  const currentUserId = authRuntime?.user?.id || '';
-  const currentUserEmail = getPrimaryEmail(authRuntime);
-
-  return {
-    currentUserEmail,
-    currentUserId,
-    isLoggedIn: Boolean(authRuntime?.isSignedIn && currentUserId),
-  };
-};
+export const getAuthSessionSnapshot = (): AuthSessionSnapshot => ({
+  currentUserEmail: authRuntime?.currentUserEmail || '',
+  currentUserId: authRuntime?.currentUserId || '',
+  isLoggedIn: Boolean(authRuntime?.isLoggedIn && authRuntime.currentUserId),
+});
 
 export const getCurrentUserIdToken = async (forceRefresh = false) => {
-  const clerk = ensureLoadedClerk();
+  const runtime = ensureAuthRuntime();
+
+  if (!runtime.isLoggedIn) {
+    return '';
+  }
 
   try {
-    return (await clerk.session?.getToken({ skipCache: forceRefresh })) || '';
+    return (await runtime.getToken({ skipCache: forceRefresh })) || '';
   } catch (error) {
     throw toClerkAuthError(error, 'Unable to refresh your session.');
   }
 };
 
 export const logoutCurrentUser = async () => {
-  const clerk = ensureLoadedClerk();
+  const runtime = ensureAuthRuntime();
 
   try {
-    await clerk.signOut();
-    await resetPendingNativeAuth();
+    await runtime.signOut();
   } catch (error) {
     throw toClerkAuthError(error, 'Unable to log out right now.');
   }
 };
 
-export const loginWithGoogle = async () => {
-  if (!isBrowserEnvironment()) {
-    throw new AppServiceError('Google sign-in is only available in the app browser context.', {
-      code: 'unsupported',
-    });
-  }
-
-  const clerk = ensureLoadedClerk();
-  const signIn = await createGoogleOAuthSignIn(clerk);
-  const redirectUrl = getExternalVerificationRedirectUrl(signIn);
-
-  if (isNativeAndroidAuthPlatform()) {
-    try {
-      await beginNativeRedirectFlow(redirectUrl);
-      return;
-    } catch (error) {
-      throw toClerkAuthError(error, 'Unable to open secure Google sign-in.', 'network');
-    }
-  }
-
-  window.location.assign(redirectUrl);
-};
-
-export const getCurrentUserEmail = () => normalizeEmail(getPrimaryEmail(authRuntime));
+export const getCurrentUserEmail = () =>
+  normalizeEmail(authRuntime?.currentUserEmail || '');

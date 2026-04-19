@@ -10,9 +10,7 @@ import { registerServiceWorker } from './pwa/registerServiceWorker';
 registerServiceWorker();
 
 const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY?.trim();
-const EnvClerkProvider = ClerkProvider as ComponentType<PropsWithChildren<{
-  afterSignOutUrl?: string;
-}>>;
+const EnvClerkProvider = ClerkProvider as ComponentType<PropsWithChildren>;
 
 if (!PUBLISHABLE_KEY) {
   throw new Error('Missing VITE_CLERK_PUBLISHABLE_KEY. Add it to your environment before starting the app.');
@@ -20,7 +18,7 @@ if (!PUBLISHABLE_KEY) {
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <EnvClerkProvider afterSignOutUrl="/">
+    <EnvClerkProvider>
       <AppProviders>
         <App />
       </AppProviders>

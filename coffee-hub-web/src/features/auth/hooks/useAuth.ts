@@ -5,6 +5,7 @@ export type AuthState = {
   isAuthReady: boolean;
   currentUserId: string;
   currentUserEmail: string;
+  currentUserName: string;
   normalizedCurrentEmail: string;
 };
 
@@ -18,12 +19,17 @@ export const useAuth = (): AuthState => {
     clerkUser.user?.primaryEmailAddress?.emailAddress ||
     clerkUser.user?.emailAddresses?.[0]?.emailAddress ||
     '';
+  const currentUserName =
+    clerkUser.user?.fullName ||
+    [clerkUser.user?.firstName, clerkUser.user?.lastName].filter(Boolean).join(' ') ||
+    '';
 
   return {
     isLoggedIn: Boolean(clerkAuth.isSignedIn && clerkAuth.userId),
     isAuthReady: clerkAuth.isLoaded && clerkUser.isLoaded,
     currentUserId: clerkAuth.userId || '',
     currentUserEmail,
+    currentUserName,
     normalizedCurrentEmail: normalizeEmail(currentUserEmail),
   };
 };

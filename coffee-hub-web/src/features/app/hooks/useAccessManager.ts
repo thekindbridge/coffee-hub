@@ -42,6 +42,8 @@ const validateEmail = (email: string): string => {
   const isValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   return isValid ? '' : 'Enter a valid email address.';
 };
+const getErrorMessage = (err: unknown, fallback: string) =>
+  err instanceof Error && err.message ? err.message : fallback;
 
 /**
  * Manages admin access and delivery agent access CRUD operations.
@@ -98,7 +100,7 @@ export const useAccessManager = ({
       setAdminAccessSuccess('Admin access added.');
     } catch (err) {
       console.error('Failed to add admin access', err);
-      setAdminAccessError('Unable to add admin right now.');
+      setAdminAccessError(getErrorMessage(err, 'Unable to add admin right now.'));
     } finally {
       setIsAdminAccessSaving(false);
     }
@@ -116,7 +118,7 @@ export const useAccessManager = ({
       setAdminAccessSuccess('Admin access removed.');
     } catch (err) {
       console.error('Failed to remove admin access', err);
-      setAdminAccessError('Unable to remove admin right now.');
+      setAdminAccessError(getErrorMessage(err, 'Unable to remove admin right now.'));
     } finally {
       setAdminAccessRemovingId('');
     }
@@ -142,7 +144,7 @@ export const useAccessManager = ({
       setDeliveryAccessSuccess('Delivery agent access added.');
     } catch (err) {
       console.error('Failed to add delivery agent access', err);
-      setDeliveryAccessError('Unable to add delivery agent right now.');
+      setDeliveryAccessError(getErrorMessage(err, 'Unable to add delivery agent right now.'));
     } finally {
       setIsDeliveryAccessSaving(false);
     }
@@ -160,7 +162,7 @@ export const useAccessManager = ({
       setDeliveryAccessSuccess('Delivery agent access removed.');
     } catch (err) {
       console.error('Failed to remove delivery agent access', err);
-      setDeliveryAccessError('Unable to remove delivery agent right now.');
+      setDeliveryAccessError(getErrorMessage(err, 'Unable to remove delivery agent right now.'));
     } finally {
       setDeliveryAccessRemovingId('');
     }
