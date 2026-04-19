@@ -24,6 +24,7 @@ export const AdminAppShell = ({
   pushNotifications,
   session,
   shopTimingManager,
+  userMenu,
 }: ShellSharedProps) => {
   const [hasLoadedStaffDrawer, setHasLoadedStaffDrawer] = useState(false);
 
@@ -100,6 +101,7 @@ export const AdminAppShell = ({
           eyebrow="Admin console"
           icon={User}
           onProfileClick={profileManager.handleOpenStaffProfile}
+          rightSlot={userMenu}
           title="COFFEE-HUB operations"
         />
       )}

@@ -23,6 +23,7 @@ export const AgentAppShell = ({
   pushNotifications,
   session,
   shopTimingManager,
+  userMenu,
 }: ShellSharedProps) => {
   const [hasLoadedStaffDrawer, setHasLoadedStaffDrawer] = useState(false);
 
@@ -99,6 +100,7 @@ export const AgentAppShell = ({
           eyebrow="Delivery panel"
           icon={MapPin}
           onProfileClick={profileManager.handleOpenStaffProfile}
+          rightSlot={userMenu}
           title="Orders on the move"
         />
       )}

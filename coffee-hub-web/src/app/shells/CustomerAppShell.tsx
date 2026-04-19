@@ -71,6 +71,7 @@ export const CustomerAppShell = ({
   pushNotifications,
   session,
   setOrderStatus,
+  userMenu,
 }: CustomerShellProps) => {
   const [hasLoadedCartDrawer, setHasLoadedCartDrawer] = useState(false);
   const [hasLoadedProfileDrawer, setHasLoadedProfileDrawer] = useState(false);
@@ -225,9 +226,12 @@ export const CustomerAppShell = ({
           onBrandClick={() => customerExperience.setActiveTab('home')}
           onProfileClick={profileManager.handleOpenProfile}
           rightSlot={(
-            <div className="hidden rounded-full border border-white/10 bg-white/5 px-3 py-2 text-[11px] font-medium text-ink-muted sm:block">
-              {session.currentUserEmail}
-            </div>
+            <>
+              <div className="hidden rounded-full border border-white/10 bg-white/5 px-3 py-2 text-[11px] font-medium text-ink-muted sm:block">
+                {session.currentUserEmail}
+              </div>
+              {userMenu}
+            </>
           )}
           title="Fresh food, brewed fast"
         />

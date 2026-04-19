@@ -1,5 +1,5 @@
+import type { ReactNode } from 'react';
+
 export type LoginPageProps = {
-  onLogin: () => void;
-  isLoggingIn?: boolean;
-  loginError?: string;
+  authControls: ReactNode;
 };

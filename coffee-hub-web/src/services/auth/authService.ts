@@ -1,6 +1,6 @@
-import { App as CapacitorApp, type PluginListenerHandle } from '@capacitor/app';
+import { App as CapacitorApp } from '@capacitor/app';
 import { Browser } from '@capacitor/browser';
-import type { Clerk, ClientResource, SignInResource } from '@clerk/shared/types';
+import type { PluginListenerHandle } from '@capacitor/core';
 import { isBrowserEnvironment, isNativeAndroidAuthPlatform } from '../platform/authPlatform';
 import { AppServiceError, toAppServiceError } from '../platform/serviceError';
 
@@ -18,13 +18,52 @@ const NATIVE_REDIRECT_PATH = '/callback';
 const NATIVE_REDIRECT_URL =
   `${NATIVE_REDIRECT_SCHEME}://${NATIVE_REDIRECT_HOST}${NATIVE_REDIRECT_PATH}`;
 
+type ClerkEmailAddress = {
+  emailAddress?: string;
+  id?: string;
+};
+
+type ClerkRuntime = {
+  client?: {
+    signIn: {
+      create: (params: {
+        actionCompleteRedirectUrl: string;
+        redirectUrl: string;
+        strategy: typeof GOOGLE_OAUTH_STRATEGY;
+      }) => Promise<GoogleSignInResource>;
+    };
+  };
+  isSignedIn?: boolean;
+  loaded?: boolean;
+  session?: {
+    getToken: (options?: { skipCache?: boolean }) => Promise<string | null>;
+  } | null;
+  signOut: () => Promise<void>;
+  user?: {
+    emailAddresses?: ClerkEmailAddress[];
+    id?: string;
+    primaryEmailAddress?: ClerkEmailAddress | null;
+    primaryEmailAddressId?: string | null;
+  } | null;
+};
+
+type GoogleSignInResource = {
+  firstFactorVerification: {
+    externalVerificationRedirectURL?: string | URL | null;
+  };
+};
+
+type LoadedClerkRuntime = ClerkRuntime & {
+  client: NonNullable<ClerkRuntime['client']>;
+};
+
 type NativeAuthPendingState = {
   completed: boolean;
   reject: (reason: AppServiceError) => void;
   resolve: () => void;
 };
 
-let authRuntime: Clerk | null = null;
+let authRuntime: ClerkRuntime | null = null;
 let hasInitializedNativeBridge = false;
 let nativeAppUrlOpenListener: PluginListenerHandle | null = null;
 let nativeBrowserFinishedListener: PluginListenerHandle | null = null;
@@ -32,7 +71,7 @@ let pendingNativeAuth: NativeAuthPendingState | null = null;
 
 const normalizeEmail = (value: string) => value.trim().toLowerCase();
 
-const getPrimaryEmail = (clerk: Clerk | null) => {
+const getPrimaryEmail = (clerk: ClerkRuntime | null) => {
   const primaryEmailAddressId = clerk?.user?.primaryEmailAddressId || '';
   const primaryEmail =
     clerk?.user?.emailAddresses?.find(emailAddress => emailAddress.id === primaryEmailAddressId)
@@ -75,7 +114,7 @@ const ensureLoadedClerk = () => {
     });
   }
 
-  return authRuntime as Clerk & { client: ClientResource };
+  return authRuntime as LoadedClerkRuntime;
 };
 
 const cleanupBrowserFinishedListener = async () => {
@@ -153,7 +192,7 @@ const isNativeAuthCallbackUrl = (url: string) => {
   }
 };
 
-const getExternalVerificationRedirectUrl = (signIn: SignInResource) => {
+const getExternalVerificationRedirectUrl = (signIn: GoogleSignInResource) => {
   const redirectUrl = signIn.firstFactorVerification.externalVerificationRedirectURL?.toString() || '';
 
   if (!redirectUrl) {
@@ -165,7 +204,7 @@ const getExternalVerificationRedirectUrl = (signIn: SignInResource) => {
   return redirectUrl;
 };
 
-const createGoogleOAuthSignIn = async (clerk: Clerk & { client: ClientResource }) => {
+const createGoogleOAuthSignIn = async (clerk: LoadedClerkRuntime) => {
   try {
     return await clerk.client.signIn.create({
       strategy: GOOGLE_OAUTH_STRATEGY,
@@ -218,7 +257,7 @@ const handleNativeAuthCallback = async (url: string) => {
   return true;
 };
 
-export const syncAuthRuntime = (clerk: Clerk | null) => {
+export const syncAuthRuntime = (clerk: ClerkRuntime | null) => {
   authRuntime = clerk;
 };
 
@@ -303,4 +342,3 @@ export const loginWithGoogle = async () => {
 };
 
 export const getCurrentUserEmail = () => normalizeEmail(getPrimaryEmail(authRuntime));
-

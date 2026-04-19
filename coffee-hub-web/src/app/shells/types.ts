@@ -7,7 +7,7 @@ import type { ShopTimingManagerState } from '../../features/app/hooks/useShopTim
 import type { useInstallPrompt } from '../../features/customer/hooks/useInstallPrompt';
 import type { useOffers } from '../../features/offers/hooks/useOffers';
 import type { Order } from '../../types';
-import type { Dispatch, SetStateAction } from 'react';
+import type { Dispatch, ReactNode, SetStateAction } from 'react';
 
 export type SessionData = ReturnType<typeof useRealtimeAppData>;
 export type PushNotificationsState = ReturnType<typeof usePushNotifications>;
@@ -23,6 +23,7 @@ export type ShellSharedProps = {
   pushNotifications: PushNotificationsState;
   session: SessionData;
   shopTimingManager: ShopTimingManagerState;
+  userMenu: ReactNode;
 };
 
 export type CustomerShellProps = {
