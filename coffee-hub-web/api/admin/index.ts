@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
-import { flushNotificationsResponse } from '../../src/services/api/server/notificationsService.js';
+import { updateShopTimingResponse } from '../../src/services/api/server/adminService.js';
 import {
   methodNotAllowedResponse,
   sendApiResponse,
@@ -10,18 +10,19 @@ import {
 export default async function handler(request: VercelRequest, response: VercelResponse) {
   try {
     switch (request.method) {
-      case 'GET':
-        return sendApiResponse(response, await flushNotificationsResponse(request));
+      case 'POST':
+      case 'PUT':
+        return sendApiResponse(response, await updateShopTimingResponse(request));
       default:
-        return sendApiResponse(response, methodNotAllowedResponse(['GET']));
+        return sendApiResponse(response, methodNotAllowedResponse(['POST', 'PUT']));
     }
   } catch (error) {
     return sendApiResponse(
       response,
       toErrorResponse(
         error,
-        'Failed to flush notifications',
-        'Unable to flush notifications right now.',
+        'Unhandled admin endpoint error',
+        'Unable to process the admin request right now.',
       ),
     );
   }

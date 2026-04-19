@@ -2,7 +2,7 @@ import type {
   GetShopTimingResponse,
   UpdateShopTimingResponse,
 } from '../../types';
-import { getApi, postApi } from './apiClient';
+import { getApi, putApi } from './apiClient';
 
 export const getShopTimingRequest = () =>
   getApi<GetShopTimingResponse>('/api/shop/timing');
@@ -13,4 +13,4 @@ export const updateShopTimingRequest = (
     closeTime: string;
   },
   idToken: string,
-) => postApi<UpdateShopTimingResponse>('/api/admin/update-shop-timing', params, idToken);
+) => putApi<UpdateShopTimingResponse>('/api/admin?action=shop-timing', params, idToken);

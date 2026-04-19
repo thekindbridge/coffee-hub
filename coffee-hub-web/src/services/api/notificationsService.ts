@@ -9,7 +9,7 @@ export const registerPushToken = (
   },
   idToken: string,
 ) => postApi(
-  '/api/notifications/register-token',
+  '/api/notifications',
   params,
   idToken,
 );

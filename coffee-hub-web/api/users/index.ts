@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
-import { flushNotificationsResponse } from '../../src/services/api/server/notificationsService.js';
+import { syncUserProfileResponse } from '../../src/services/api/server/userService.js';
 import {
   methodNotAllowedResponse,
   sendApiResponse,
@@ -10,18 +10,18 @@ import {
 export default async function handler(request: VercelRequest, response: VercelResponse) {
   try {
     switch (request.method) {
-      case 'GET':
-        return sendApiResponse(response, await flushNotificationsResponse(request));
+      case 'POST':
+        return sendApiResponse(response, await syncUserProfileResponse(request));
       default:
-        return sendApiResponse(response, methodNotAllowedResponse(['GET']));
+        return sendApiResponse(response, methodNotAllowedResponse(['POST']));
     }
   } catch (error) {
     return sendApiResponse(
       response,
       toErrorResponse(
         error,
-        'Failed to flush notifications',
-        'Unable to flush notifications right now.',
+        'Unhandled user sync error',
+        'Unable to sync your profile right now.',
       ),
     );
   }

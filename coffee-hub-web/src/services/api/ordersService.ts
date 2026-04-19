@@ -5,14 +5,14 @@ import type {
   OrderStatusCode,
   UpdateOrderStatusResponse,
 } from '../../types';
-import { postApi } from './apiClient';
+import { postApi, putApi } from './apiClient';
 
 export const createOrderRequest = (
   params: {
     orderDraft: CheckoutOrderDraft;
   },
   idToken: string,
-) => postApi<CreateOrderResponse>('/api/orders/create', params, idToken);
+) => postApi<CreateOrderResponse>('/api/orders', params, idToken);
 
 export const updateOrderStatusRequest = (
   params: {
@@ -21,7 +21,7 @@ export const updateOrderStatusRequest = (
     rejectionReason?: string;
   },
   idToken: string,
-) => postApi<UpdateOrderStatusResponse>('/api/orders/update-status', params, idToken);
+) => putApi<UpdateOrderStatusResponse>('/api/orders?action=update-status', params, idToken);
 
 export const assignAgentToOrderRequest = (
   params: {
@@ -29,7 +29,7 @@ export const assignAgentToOrderRequest = (
     agentId: string;
   },
   idToken: string,
-) => postApi<UpdateOrderStatusResponse>('/api/orders/assign-agent', params, idToken);
+) => putApi<UpdateOrderStatusResponse>('/api/orders?action=assign-agent', params, idToken);
 
 export const cancelOrderRequest = (
   params: {
@@ -37,7 +37,7 @@ export const cancelOrderRequest = (
     orderId: string;
   },
   idToken: string,
-) => postApi<UpdateOrderStatusResponse>('/api/orders/cancel', params, idToken);
+) => putApi<UpdateOrderStatusResponse>('/api/orders?action=cancel', params, idToken);
 
 export const completeDeliveryRequest = (
   params: {
@@ -45,7 +45,7 @@ export const completeDeliveryRequest = (
     finalLocation: DeliveryLocation | null;
   },
   idToken: string,
-) => postApi<UpdateOrderStatusResponse>('/api/orders/complete-delivery', params, idToken);
+) => putApi<UpdateOrderStatusResponse>('/api/orders?action=complete-delivery', params, idToken);
 
 export const updateDeliveryTrackingRequest = (
   params: {
@@ -57,4 +57,4 @@ export const updateDeliveryTrackingRequest = (
     location?: DeliveryLocation | null;
   },
   idToken: string,
-) => postApi<{ success: true }>('/api/orders/update-delivery-tracking', params, idToken);
+) => putApi<{ success: true }>('/api/orders?action=update-delivery-tracking', params, idToken);

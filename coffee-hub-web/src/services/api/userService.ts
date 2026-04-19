@@ -13,4 +13,4 @@ type SyncUserProfileResponse = {
 export const syncUserProfileRequest = async (
   body: SyncUserProfileBody,
   idToken: string,
-) => postApi<SyncUserProfileResponse>('/api/users/sync', body, idToken);
+) => postApi<SyncUserProfileResponse>('/api/users', body, idToken);

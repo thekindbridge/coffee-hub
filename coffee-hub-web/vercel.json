@@ -6,7 +6,47 @@
     },
     {
       "source": "/api/create-order",
-      "destination": "/api/orders/create"
+      "destination": "/api/orders"
+    },
+    {
+      "source": "/api/orders/create",
+      "destination": "/api/orders?action=create"
+    },
+    {
+      "source": "/api/orders/update-status",
+      "destination": "/api/orders?action=update-status"
+    },
+    {
+      "source": "/api/orders/assign-agent",
+      "destination": "/api/orders?action=assign-agent"
+    },
+    {
+      "source": "/api/orders/cancel",
+      "destination": "/api/orders?action=cancel"
+    },
+    {
+      "source": "/api/orders/complete-delivery",
+      "destination": "/api/orders?action=complete-delivery"
+    },
+    {
+      "source": "/api/orders/update-delivery-tracking",
+      "destination": "/api/orders?action=update-delivery-tracking"
+    },
+    {
+      "source": "/api/orders/admin",
+      "destination": "/api/orders?scope=all"
+    },
+    {
+      "source": "/api/users/sync",
+      "destination": "/api/users"
+    },
+    {
+      "source": "/api/notifications/register-token",
+      "destination": "/api/notifications"
+    },
+    {
+      "source": "/api/admin/update-shop-timing",
+      "destination": "/api/admin?action=shop-timing"
     }
   ],
   "crons": [

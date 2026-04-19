@@ -16,11 +16,22 @@ const buildHeaders = (idToken?: string, includeJsonContentType = false) => {
   return headers;
 };
 
-export const getApi = async <TResponse>(path: string, idToken?: string) => {
+const requestApi = async <TResponse>({
+  body,
+  idToken,
+  method,
+  path,
+}: {
+  body?: unknown;
+  idToken?: string;
+  method: 'GET' | 'POST' | 'PUT';
+  path: string;
+}) => {
   try {
     const response = await fetch(path, {
-      method: 'GET',
-      headers: buildHeaders(idToken),
+      method,
+      headers: buildHeaders(idToken, body !== undefined),
+      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
     });
 
     const payload = await readJson(response);
@@ -37,32 +48,34 @@ export const getApi = async <TResponse>(path: string, idToken?: string) => {
       'network',
     );
   }
+};
+
+export const getApi = async <TResponse>(path: string, idToken?: string) => {
+  return requestApi<TResponse>({
+    idToken,
+    method: 'GET',
+    path,
+  });
 };
 
 export const postApi = async <TResponse>(
   path: string,
   body: unknown,
   idToken: string,
-) => {
-  try {
-    const response = await fetch(path, {
-      method: 'POST',
-      headers: buildHeaders(idToken, true),
-      body: JSON.stringify(body),
-    });
+) => requestApi<TResponse>({
+  body,
+  idToken,
+  method: 'POST',
+  path,
+});
 
-    const payload = await readJson(response);
-    if (!response.ok) {
-      const errorMessage = typeof payload?.error === 'string' ? payload.error : 'Request failed.';
-      throw toAppServiceError(errorMessage, errorMessage, 'network');
-    }
-
-    return payload as TResponse;
-  } catch (error) {
-    throw toAppServiceError(
-      error,
-      'Unable to reach the server right now. Please try again.',
-      'network',
-    );
-  }
-};
+export const putApi = async <TResponse>(
+  path: string,
+  body: unknown,
+  idToken: string,
+) => requestApi<TResponse>({
+  body,
+  idToken,
+  method: 'PUT',
+  path,
+});

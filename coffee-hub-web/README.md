@@ -53,14 +53,15 @@ npm run build
 
 - `GET /api/menu`
 - `GET /api/orders`
-- `POST /api/orders/create`
+- `POST /api/orders`
 - `POST /api/create-order`
-- `POST /api/orders/update-status`
-- `POST /api/orders/assign-agent`
-- `POST /api/orders/cancel`
-- `POST /api/orders/complete-delivery`
-- `POST /api/notifications/register-token`
-- `POST /api/admin/update-shop-timing`
+- `PUT /api/orders?action=update-status`
+- `PUT /api/orders?action=assign-agent`
+- `PUT /api/orders?action=cancel`
+- `PUT /api/orders?action=complete-delivery`
+- `PUT /api/orders?action=update-delivery-tracking`
+- `POST /api/notifications`
+- `PUT /api/admin?action=shop-timing`
 
 ## Environment
 
