@@ -1,10 +1,5 @@
-/// <reference types="@codetrix-studio/capacitor-google-auth" />
-
 import type { CapacitorConfig } from '@capacitor/cli';
 
-const GOOGLE_WEB_CLIENT_ID =
-  '490208209104-kqj6tcv5iss5ej38iv0gj0pkgqtjct0p.apps.googleusercontent.com';
-const GOOGLE_AUTH_SCOPES = ['profile', 'email'];
 const DEFAULT_CAP_SERVER_URL = 'https://coffee-hub-inkollu.vercel.app/';
 const CAP_SERVER_URL = process.env.CAP_SERVER_URL?.trim() || DEFAULT_CAP_SERVER_URL;
 const CAP_SERVER_CLEAR_TEXT = CAP_SERVER_URL.startsWith('http://');
@@ -28,18 +23,13 @@ const config: CapacitorConfig = {
       '*.google.com',
       '*.googleusercontent.com',
       '*.gstatic.com',
+      '*.clerk.accounts.dev',
+      '*.clerk.com',
       '*.firebaseapp.com',
       '*.googleapis.com',
     ],
   },
   plugins: {
-    GoogleAuth: {
-      // Native Android sign-in uses the web client ID so Google can mint
-      // an ID token that Firebase accepts via signInWithCredential.
-      scopes: GOOGLE_AUTH_SCOPES,
-      serverClientId: GOOGLE_WEB_CLIENT_ID,
-      forceCodeForRefreshToken: true,
-    },
     SplashScreen: {
       launchShowDuration: 2500,
       launchAutoHide: true,
