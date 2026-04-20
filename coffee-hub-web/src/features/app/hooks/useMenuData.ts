@@ -9,14 +9,14 @@ export type MenuData = {
 
 /**
  * Subscribes to the menu_items Firestore collection in real-time.
- * Only fetches when the user is logged in. Filters out unavailable items.
+ * Starts only after the Clerk session has resolved. Filters out unavailable items.
  */
-export const useMenuData = (isLoggedIn: boolean): MenuData => {
+export const useMenuData = (enabled: boolean): MenuData => {
   const [menu, setMenu] = useState<MenuItem[]>([]);
   const [isMenuLoading, setIsMenuLoading] = useState(true);
 
   useEffect(() => {
-    if (!isLoggedIn) {
+    if (!enabled) {
       setMenu([]);
       setIsMenuLoading(false);
       return;
@@ -34,7 +34,7 @@ export const useMenuData = (isLoggedIn: boolean): MenuData => {
       },
     );
     return unsubscribe;
-  }, [isLoggedIn]);
+  }, [enabled]);
 
   return { menu, isMenuLoading };
 };

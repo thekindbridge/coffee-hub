@@ -1,6 +1,7 @@
 import type { VercelRequest } from '@vercel/node';
 
 import {
+  createFirebaseCustomToken,
   getAdminDb,
   hasAdminAccess,
   verifyAdminRequest,
@@ -21,3 +22,8 @@ export const requireAdminRequest = async (request: VercelRequest) =>
 
 export const userHasAdminAccess = async (email: string) =>
   hasAdminAccess(email);
+
+export const createFirebaseSessionToken = async (
+  userId: string,
+  email: string,
+) => createFirebaseCustomToken(userId, email);

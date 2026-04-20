@@ -14,6 +14,7 @@ const normalizeEmail = (value: string) => value.trim().toLowerCase();
 export const useAuth = (): AuthState => {
   const clerkAuth = useClerkAuth();
   const clerkUser = useUser();
+  const isAuthReady = clerkAuth.isLoaded && clerkUser.isLoaded;
 
   const currentUserEmail =
     clerkUser.user?.primaryEmailAddress?.emailAddress ||
@@ -25,8 +26,8 @@ export const useAuth = (): AuthState => {
     '';
 
   return {
-    isLoggedIn: Boolean(clerkAuth.isSignedIn && clerkAuth.userId),
-    isAuthReady: clerkAuth.isLoaded && clerkUser.isLoaded,
+    isLoggedIn: isAuthReady && Boolean(clerkAuth.isSignedIn && clerkAuth.userId),
+    isAuthReady,
     currentUserId: clerkAuth.userId || '',
     currentUserEmail,
     currentUserName,

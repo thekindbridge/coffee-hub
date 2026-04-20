@@ -32,7 +32,10 @@ export default function App() {
     currentUserId: session.currentUserId,
   });
 
-  const offersState = useOffers({ includeInactive: session.isAdmin });
+  const offersState = useOffers({
+    enabled: session.isClerkReady,
+    includeInactive: session.isAdmin,
+  });
 
   const orderOperations = useOrderOperations({
     adminOrders: session.adminOrders,

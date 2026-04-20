@@ -8,7 +8,17 @@ service cloud.firestore {
     }
 
     function requestEmail() {
-      return request.auth.token.email;
+      return request.auth == null
+        ? ''
+        : (
+            request.auth.token.email is string
+              ? request.auth.token.email
+              : (
+                  request.auth.token.clerkEmail is string
+                    ? request.auth.token.clerkEmail
+                    : ''
+                )
+          );
     }
 
     // Update this value before deploy if the production owner changes.

@@ -12,7 +12,7 @@ type ShopTimingData = {
 
 const SHOP_TIMING_REFRESH_INTERVAL_MS = 15000;
 
-export const useShopTiming = (): ShopTimingData => {
+export const useShopTiming = (enabled: boolean): ShopTimingData => {
   const [shopTiming, setShopTiming] = useState<ShopTiming>(EMPTY_SHOP_TIMING);
   const [isShopTimingLoading, setIsShopTimingLoading] = useState(true);
 
@@ -31,6 +31,12 @@ export const useShopTiming = (): ShopTimingData => {
   }, []);
 
   useEffect(() => {
+    if (!enabled) {
+      setShopTiming(EMPTY_SHOP_TIMING);
+      setIsShopTimingLoading(true);
+      return undefined;
+    }
+
     void refreshShopTiming();
 
     const intervalId = window.setInterval(() => {
@@ -49,7 +55,7 @@ export const useShopTiming = (): ShopTimingData => {
       window.clearInterval(intervalId);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [refreshShopTiming]);
+  }, [enabled, refreshShopTiming]);
 
   return {
     shopTiming,

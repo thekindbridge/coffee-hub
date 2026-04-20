@@ -14,26 +14,33 @@ export const useRealtimeAppData = () => {
     currentUserEmail: auth.currentUserEmail,
     currentUserId: auth.currentUserId,
     currentUserName: auth.currentUserName,
+    isAuthReady: auth.isAuthReady,
     isLoggedIn: auth.isLoggedIn,
   });
+  const canReadProtectedData = auth.isAuthReady && profiles.isDataAccessReady && auth.isLoggedIn;
 
   const isAdmin = profiles.profileSaved.role === 'admin';
   const isDeliveryAgent = profiles.profileSaved.role === 'agent';
   const isMainAdmin = isAdmin && auth.normalizedCurrentEmail === ADMIN_EMAIL;
-  const accessEntries = useAccessRoles(isAdmin);
-  const menu = useMenuData(auth.isLoggedIn);
-  const orders = useOrdersData(isAdmin, auth.currentUserId);
-  const shopTiming = useShopTiming();
+  const accessEntries = useAccessRoles(canReadProtectedData && isAdmin);
+  const menu = useMenuData(auth.isAuthReady);
+  const orders = useOrdersData(
+    canReadProtectedData && isAdmin,
+    canReadProtectedData ? auth.currentUserId : '',
+  );
+  const shopTiming = useShopTiming(auth.isAuthReady);
   const delivery = useDeliveryData(
-    isAdmin,
-    isDeliveryAgent,
-    auth.normalizedCurrentEmail,
+    canReadProtectedData && isAdmin,
+    canReadProtectedData && isDeliveryAgent,
+    canReadProtectedData ? auth.normalizedCurrentEmail : '',
   );
 
   return {
     // Auth
+    isClerkReady: auth.isAuthReady,
     isLoggedIn: auth.isLoggedIn,
     isAuthReady: auth.isAuthReady && profiles.isProfileReady,
+    isDataAccessReady: profiles.isDataAccessReady,
     currentUserId: auth.currentUserId,
     currentUserEmail: auth.currentUserEmail,
     normalizedCurrentEmail: auth.normalizedCurrentEmail,

@@ -3,6 +3,7 @@ import type { VercelRequest } from '@vercel/node';
 
 import { ApiError } from '../../../../api/_lib/errors.js';
 import {
+  createFirebaseSessionToken,
   getServerDb,
   normalizeEmail,
   requireUserRequest,
@@ -114,6 +115,7 @@ export const syncUserProfileResponse = async (
     role: userSnapshot.exists ? existingRole : defaultRole,
     updatedAt: FieldValue.serverTimestamp(),
   };
+  const firebaseCustomToken = await createFirebaseSessionToken(requestUser.uid, email);
 
   await userRef.set(
     userSnapshot.exists
@@ -129,6 +131,7 @@ export const syncUserProfileResponse = async (
   return jsonResponse(
     200,
     {
+      firebaseCustomToken,
       profile: mapUserProfileResponse(
         requestUser.uid,
         syncedSnapshot.data() as Record<string, unknown>,

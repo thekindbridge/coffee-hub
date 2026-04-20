@@ -10,6 +10,7 @@ import {
 } from '../../../services/firebase/offersService';
 
 interface UseOffersOptions {
+  enabled?: boolean;
   includeInactive?: boolean;
 }
 
@@ -25,12 +26,22 @@ interface UseOffersResult {
   findActiveOfferByCode: (couponCode: string) => Promise<Offer | null>;
 }
 
-export const useOffers = ({ includeInactive = false }: UseOffersOptions = {}): UseOffersResult => {
+export const useOffers = ({
+  enabled = true,
+  includeInactive = false,
+}: UseOffersOptions = {}): UseOffersResult => {
   const [offers, setOffers] = useState<Offer[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
+    if (!enabled) {
+      setOffers([]);
+      setError('');
+      setIsLoading(true);
+      return undefined;
+    }
+
     setIsLoading(true);
     const unsubscribe = subscribeToOffers(
       includeInactive,
@@ -49,7 +60,7 @@ export const useOffers = ({ includeInactive = false }: UseOffersOptions = {}): U
     return () => {
       unsubscribe();
     };
-  }, [includeInactive]);
+  }, [enabled, includeInactive]);
 
   const createOffer = useCallback(async (offerInput: OfferInput) => {
     await createOfferRecord(offerInput);

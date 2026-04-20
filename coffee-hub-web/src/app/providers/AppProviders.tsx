@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useLayoutEffect } from 'react';
 import type { PropsWithChildren } from 'react';
 import { useAuth, useUser } from '@clerk/react';
 import { syncAuthRuntime } from '../../services/auth/authService';
@@ -12,13 +12,15 @@ export const AppProviders = ({ children }: PropsWithChildren) => {
     clerkUser.user?.emailAddresses?.[0]?.emailAddress ||
     '';
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    const isLoaded = clerkAuth.isLoaded && clerkUser.isLoaded;
+
     syncAuthRuntime({
       currentUserEmail,
       currentUserId: clerkAuth.userId || '',
       getToken: clerkAuth.getToken,
-      isLoaded: clerkAuth.isLoaded && clerkUser.isLoaded,
-      isLoggedIn: Boolean(clerkAuth.isSignedIn && clerkAuth.userId),
+      isLoaded,
+      isLoggedIn: isLoaded && Boolean(clerkAuth.isSignedIn && clerkAuth.userId),
       signOut: clerkAuth.signOut,
     });
 

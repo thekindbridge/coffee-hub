@@ -7,6 +7,7 @@ type SyncUserProfileBody = {
 };
 
 type SyncUserProfileResponse = {
+  firebaseCustomToken: string;
   profile: CustomerProfile;
 };
 

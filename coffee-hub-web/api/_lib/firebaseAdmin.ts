@@ -1,5 +1,7 @@
 import type { App } from 'firebase-admin/app';
 import { cert, getApps, initializeApp } from 'firebase-admin/app';
+import type { Auth } from 'firebase-admin/auth';
+import { getAuth as getAdminAuth } from 'firebase-admin/auth';
 import type { Firestore } from 'firebase-admin/firestore';
 import { getFirestore } from 'firebase-admin/firestore';
 import type { Messaging } from 'firebase-admin/messaging';
@@ -18,16 +20,44 @@ type VerifiedRequestUser = {
 
 let cachedAdminApp: App | null = null;
 let cachedAdminDb: Firestore | null = null;
+let cachedAdminAuth: Auth | null = null;
 let cachedAdminMessaging: Messaging | null = null;
 let cachedClerkClient: ClerkClient | null = null;
 
 const DEFAULT_CLERK_AUTHORIZED_PARTIES = [
   'https://coffee-hub-inkollu.vercel.app',
   'http://localhost:5173',
+  'http://localhost',
+  'https://localhost',
   'http://10.0.2.2:5173',
+  'capacitor://localhost',
+  'ionic://localhost',
 ];
 
 const normalizeEmail = (value: string) => value.trim().toLowerCase();
+
+const normalizeAuthorizedParty = (value: string) => {
+  const trimmedValue = value.trim();
+  if (!trimmedValue) {
+    return '';
+  }
+
+  if (trimmedValue.startsWith('capacitor://') || trimmedValue.startsWith('ionic://')) {
+    return trimmedValue.replace(/[/?#].*$/, '').replace(/\/+$/, '');
+  }
+
+  const normalizedValue = (
+    trimmedValue.startsWith('http://') || trimmedValue.startsWith('https://')
+      ? trimmedValue
+      : `https://${trimmedValue}`
+  ).replace(/\/+$/, '');
+
+  try {
+    return new URL(normalizedValue).origin;
+  } catch {
+    return normalizedValue;
+  }
+};
 
 const getRequiredEnv = (key: string, fallbacks: string[] = []) => {
   for (const candidate of [process.env[key], ...fallbacks]) {
@@ -111,16 +141,31 @@ const getClerkClient = () => {
 
 const getClerkAuthorizedParties = () => {
   const configuredValue = getOptionalEnv('CLERK_AUTHORIZED_PARTIES');
-  if (!configuredValue) {
-    return DEFAULT_CLERK_AUTHORIZED_PARTIES;
-  }
-
-  const values = configuredValue
-    .split(',')
-    .map(value => value.trim())
+  const configuredValues = configuredValue
+    ? configuredValue
+      .split(',')
+      .map(normalizeAuthorizedParty)
+      .filter(Boolean)
+    : [];
+  const envDerivedValues = [
+    process.env.APP_URL || '',
+    process.env.PUBLIC_APP_URL || '',
+    process.env.SITE_URL || '',
+    process.env.CAP_SERVER_URL || '',
+    process.env.VERCEL_URL || '',
+    process.env.VERCEL_BRANCH_URL || '',
+    process.env.VERCEL_PROJECT_PRODUCTION_URL || '',
+  ]
+    .map(normalizeAuthorizedParty)
     .filter(Boolean);
 
-  return values.length > 0 ? values : DEFAULT_CLERK_AUTHORIZED_PARTIES;
+  return Array.from(
+    new Set([
+      ...DEFAULT_CLERK_AUTHORIZED_PARTIES,
+      ...configuredValues,
+      ...envDerivedValues,
+    ]),
+  );
 };
 
 export const getAdminDb = () => {
@@ -131,12 +176,31 @@ export const getAdminDb = () => {
   return cachedAdminDb;
 };
 
+export const getAdminAuthClient = () => {
+  if (!cachedAdminAuth) {
+    cachedAdminAuth = getAdminAuth(getAdminApp());
+  }
+
+  return cachedAdminAuth;
+};
+
 export const getAdminMessaging = () => {
   if (!cachedAdminMessaging) {
     cachedAdminMessaging = getMessaging(getAdminApp());
   }
 
   return cachedAdminMessaging;
+};
+
+export const createFirebaseCustomToken = async (userId: string, email: string) => {
+  const normalizedEmail = normalizeEmail(email);
+
+  return getAdminAuthClient().createCustomToken(
+    userId,
+    normalizedEmail
+      ? { clerkEmail: normalizedEmail }
+      : undefined,
+  );
 };
 
 const getBearerToken = (request: VercelRequest) => {
