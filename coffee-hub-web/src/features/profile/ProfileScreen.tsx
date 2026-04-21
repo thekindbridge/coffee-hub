@@ -42,18 +42,11 @@ type ProfileScreenProps = {
   shopTimingError: string;
   shopTimingSuccess: string;
   isShopTimingSaving: boolean;
-  adminAccessEntries: AccessEntry[];
-  deliveryAccessEntries: AccessEntry[];
-  adminAccessInput: string;
-  deliveryAccessInput: string;
-  adminAccessError: string;
-  deliveryAccessError: string;
-  adminAccessSuccess: string;
-  deliveryAccessSuccess: string;
-  isAdminAccessSaving: boolean;
-  isDeliveryAccessSaving: boolean;
-  adminAccessRemovingId: string;
-  deliveryAccessRemovingId: string;
+  userRoleEntries: AccessEntry[];
+  roleChangeError: string;
+  roleChangeSuccess: string;
+  updatingUserRoleId: string;
+  updatingUserRoleValue: AccessEntry['role'] | '';
   onClose: () => void;
   onLogout: () => void;
   onSave: () => void;
@@ -63,12 +56,7 @@ type ProfileScreenProps = {
   onProfileAddressExpandedChange: (isExpanded: boolean) => void;
   onShopTimingDraftChange: (draft: ShopTimingDraft) => void;
   onSaveShopTiming: () => void;
-  onAdminAccessInputChange: (value: string) => void;
-  onDeliveryAccessInputChange: (value: string) => void;
-  onAddAdminAccess: () => void;
-  onRemoveAdminAccess: (entry: AccessEntry) => void;
-  onAddDeliveryAccess: () => void;
-  onRemoveDeliveryAccess: (entry: AccessEntry) => void;
+  onChangeUserRole: (entry: AccessEntry, role: AccessEntry['role']) => void;
 };
 
 const roleLabel = {
@@ -96,18 +84,11 @@ export const ProfileScreen = ({
   shopTimingError,
   shopTimingSuccess,
   isShopTimingSaving,
-  adminAccessEntries,
-  deliveryAccessEntries,
-  adminAccessInput,
-  deliveryAccessInput,
-  adminAccessError,
-  deliveryAccessError,
-  adminAccessSuccess,
-  deliveryAccessSuccess,
-  isAdminAccessSaving,
-  isDeliveryAccessSaving,
-  adminAccessRemovingId,
-  deliveryAccessRemovingId,
+  userRoleEntries,
+  roleChangeError,
+  roleChangeSuccess,
+  updatingUserRoleId,
+  updatingUserRoleValue,
   onClose,
   onLogout,
   onSave,
@@ -117,12 +98,7 @@ export const ProfileScreen = ({
   onProfileAddressExpandedChange,
   onShopTimingDraftChange,
   onSaveShopTiming,
-  onAdminAccessInputChange,
-  onDeliveryAccessInputChange,
-  onAddAdminAccess,
-  onRemoveAdminAccess,
-  onAddDeliveryAccess,
-  onRemoveDeliveryAccess,
+  onChangeUserRole,
 }: ProfileScreenProps) => {
   const role = isAdmin ? 'admin' : isDeliveryAgent ? 'agent' : 'customer';
   const nameLabel = isDeliveryAgent ? 'Agent Name' : 'Name';
@@ -386,26 +362,14 @@ export const ProfileScreen = ({
                   shopTimingError={shopTimingError}
                   shopTimingSuccess={shopTimingSuccess}
                   isShopTimingSaving={isShopTimingSaving}
-                  adminAccessEntries={adminAccessEntries}
-                  deliveryAccessEntries={deliveryAccessEntries}
-                  adminAccessInput={adminAccessInput}
-                  deliveryAccessInput={deliveryAccessInput}
-                  adminAccessError={adminAccessError}
-                  deliveryAccessError={deliveryAccessError}
-                  adminAccessSuccess={adminAccessSuccess}
-                  deliveryAccessSuccess={deliveryAccessSuccess}
-                  isAdminAccessSaving={isAdminAccessSaving}
-                  isDeliveryAccessSaving={isDeliveryAccessSaving}
-                  adminAccessRemovingId={adminAccessRemovingId}
-                  deliveryAccessRemovingId={deliveryAccessRemovingId}
+                  userRoleEntries={userRoleEntries}
+                  roleChangeError={roleChangeError}
+                  roleChangeSuccess={roleChangeSuccess}
+                  updatingUserRoleId={updatingUserRoleId}
+                  updatingUserRoleValue={updatingUserRoleValue}
                   onShopTimingDraftChange={onShopTimingDraftChange}
                   onSaveShopTiming={onSaveShopTiming}
-                  onAdminAccessInputChange={onAdminAccessInputChange}
-                  onDeliveryAccessInputChange={onDeliveryAccessInputChange}
-                  onAddAdminAccess={onAddAdminAccess}
-                  onRemoveAdminAccess={onRemoveAdminAccess}
-                  onAddDeliveryAccess={onAddDeliveryAccess}
-                  onRemoveDeliveryAccess={onRemoveDeliveryAccess}
+                  onChangeUserRole={onChangeUserRole}
                 />
 
                 <NotificationSettingsPanel

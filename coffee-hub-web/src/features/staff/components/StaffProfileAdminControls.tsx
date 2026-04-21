@@ -12,27 +12,26 @@ type StaffProfileAdminControlsProps = {
   shopTimingError: string;
   shopTimingSuccess: string;
   isShopTimingSaving: boolean;
-  adminAccessEntries: AccessEntry[];
-  deliveryAccessEntries: AccessEntry[];
-  adminAccessInput: string;
-  deliveryAccessInput: string;
-  adminAccessError: string;
-  deliveryAccessError: string;
-  adminAccessSuccess: string;
-  deliveryAccessSuccess: string;
-  isAdminAccessSaving: boolean;
-  isDeliveryAccessSaving: boolean;
-  adminAccessRemovingId: string;
-  deliveryAccessRemovingId: string;
+  userRoleEntries: AccessEntry[];
+  roleChangeError: string;
+  roleChangeSuccess: string;
+  updatingUserRoleId: string;
+  updatingUserRoleValue: AccessEntry['role'] | '';
   onShopTimingDraftChange: (draft: ShopTimingDraft) => void;
   onSaveShopTiming: () => void;
-  onAdminAccessInputChange: (value: string) => void;
-  onDeliveryAccessInputChange: (value: string) => void;
-  onAddAdminAccess: () => void;
-  onRemoveAdminAccess: (entry: AccessEntry) => void;
-  onAddDeliveryAccess: () => void;
-  onRemoveDeliveryAccess: (entry: AccessEntry) => void;
+  onChangeUserRole: (
+    entry: AccessEntry,
+    role: AccessEntry['role'],
+  ) => void;
 };
+
+const ROLE_LABEL: Record<AccessEntry['role'], string> = {
+  admin: 'Admin',
+  agent: 'Agent',
+  customer: 'Customer',
+};
+
+const ROLE_BUTTONS: AccessEntry['role'][] = ['admin', 'agent', 'customer'];
 
 export const StaffProfileAdminControls = ({
   isAdmin,
@@ -42,26 +41,14 @@ export const StaffProfileAdminControls = ({
   shopTimingError,
   shopTimingSuccess,
   isShopTimingSaving,
-  adminAccessEntries,
-  deliveryAccessEntries,
-  adminAccessInput,
-  deliveryAccessInput,
-  adminAccessError,
-  deliveryAccessError,
-  adminAccessSuccess,
-  deliveryAccessSuccess,
-  isAdminAccessSaving,
-  isDeliveryAccessSaving,
-  adminAccessRemovingId,
-  deliveryAccessRemovingId,
+  userRoleEntries,
+  roleChangeError,
+  roleChangeSuccess,
+  updatingUserRoleId,
+  updatingUserRoleValue,
   onShopTimingDraftChange,
   onSaveShopTiming,
-  onAdminAccessInputChange,
-  onDeliveryAccessInputChange,
-  onAddAdminAccess,
-  onRemoveAdminAccess,
-  onAddDeliveryAccess,
-  onRemoveDeliveryAccess,
+  onChangeUserRole,
 }: StaffProfileAdminControlsProps) => {
   if (!isAdmin) {
     return null;
@@ -140,140 +127,80 @@ export const StaffProfileAdminControls = ({
         <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-ink-muted">
           Management
         </p>
-        <h3 className="mt-1 text-lg font-semibold text-accent">Admin Management</h3>
+        <h3 className="mt-1 text-lg font-semibold text-accent">User Role Management</h3>
         <div className="mt-3 rounded-[20px] border border-white/10 bg-white/5 px-4 py-3 text-xs font-semibold text-ink-muted">
           {isMainAdmin
-            ? 'You can add or remove admin and delivery agent access.'
-            : 'View only. Only the main admin can update access.'}
+            ? 'Roles update directly in users/{uid}.role and sync to active sessions in real time.'
+            : 'Admins can update roles here. The configured main admin phone remains locked.'}
         </div>
-        <div className="mt-4 space-y-2">
-          {adminAccessEntries.length === 0 ? (
-            <p className="text-sm text-ink-muted">No admins added yet.</p>
+
+        <div className="mt-4 space-y-3">
+          {userRoleEntries.length === 0 ? (
+            <p className="text-sm text-ink-muted">No signed-in users are available yet.</p>
           ) : (
-            adminAccessEntries.map(entry => {
-              const isProtected = ADMIN_PHONE && entry.phone === ADMIN_PHONE;
+            userRoleEntries.map(entry => {
+              const isLocked = Boolean(ADMIN_PHONE && entry.phone === ADMIN_PHONE);
+              const isUpdating = updatingUserRoleId === entry.id;
+
               return (
                 <div
                   key={entry.id}
-                  className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/5 px-3 py-2"
+                  className="rounded-[22px] border border-white/10 bg-white/5 px-3 py-3"
                 >
-                  <span className="break-all text-sm font-semibold text-accent">
-                    {formatPhoneForDisplay(entry.phone)}
-                  </span>
-                  {isMainAdmin ? (
-                    <button
-                      onClick={() => onRemoveAdminAccess(entry)}
-                      disabled={isProtected || adminAccessRemovingId === entry.id}
-                      className="rounded-full border border-white/12 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-muted transition hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {isProtected
-                        ? 'Main'
-                        : adminAccessRemovingId === entry.id
-                          ? 'Removing'
-                          : 'Remove'}
-                    </button>
-                  ) : (
-                    <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-muted">
-                      View only
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="break-all text-sm font-semibold text-accent">
+                        {formatPhoneForDisplay(entry.phone)}
+                      </p>
+                      <p className="mt-1 text-[11px] uppercase tracking-[0.18em] text-ink-muted">
+                        {isLocked ? 'Main admin account' : 'Firestore user'}
+                      </p>
+                    </div>
+                    <span className="rounded-full border border-secondary/25 bg-secondary/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-secondary">
+                      {ROLE_LABEL[entry.role]}
                     </span>
-                  )}
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-3 gap-2">
+                    {ROLE_BUTTONS.map(roleOption => {
+                      const isActiveRole = entry.role === roleOption;
+                      const isDisabled = isLocked || isUpdating || isActiveRole;
+
+                      return (
+                        <button
+                          key={`${entry.id}-${roleOption}`}
+                          type="button"
+                          disabled={isDisabled}
+                          onClick={() => onChangeUserRole(entry, roleOption)}
+                          className={`rounded-[14px] border px-2 py-2 text-[10px] font-semibold uppercase tracking-[0.18em] transition ${
+                            isActiveRole
+                              ? 'border-secondary/35 bg-secondary/10 text-secondary'
+                              : 'border-white/10 bg-white/5 text-ink-muted hover:bg-white/8 hover:text-accent'
+                          } disabled:cursor-not-allowed disabled:opacity-55`}
+                        >
+                          {isUpdating && updatingUserRoleValue === roleOption
+                            ? 'Saving'
+                            : ROLE_LABEL[roleOption]}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               );
             })
           )}
         </div>
-        {adminAccessError && (
-          <div className="mt-3 rounded-[18px] border border-primary/25 bg-primary/10 px-3 py-2 text-xs font-semibold text-primary">
-            {adminAccessError}
-          </div>
-        )}
-        {adminAccessSuccess && (
-          <div className="mt-3 rounded-[18px] border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-300">
-            {adminAccessSuccess}
-          </div>
-        )}
-        <div className="mt-4 flex flex-col gap-2">
-          <input
-            type="tel"
-            className="coffee-input"
-            placeholder="Add Admin Phone Number"
-            value={adminAccessInput}
-            onChange={event => onAdminAccessInputChange(event.target.value)}
-            disabled={!isMainAdmin || isAdminAccessSaving}
-          />
-          <button
-            onClick={onAddAdminAccess}
-            disabled={!isMainAdmin || isAdminAccessSaving}
-            className="coffee-btn-primary w-full justify-center disabled:opacity-60"
-          >
-            {isAdminAccessSaving ? 'Adding...' : 'Add Admin'}
-          </button>
-        </div>
-      </div>
 
-      <div className="coffee-surface-soft rounded-[26px] p-4">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-ink-muted">
-          Delivery Agents
-        </p>
-        <h3 className="mt-1 text-lg font-semibold text-accent">
-          Delivery Agent Management
-        </h3>
-        <div className="mt-4 space-y-2">
-          {deliveryAccessEntries.length === 0 ? (
-            <p className="text-sm text-ink-muted">No delivery agents added yet.</p>
-          ) : (
-            deliveryAccessEntries.map(entry => (
-              <div
-                key={entry.id}
-                className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/5 px-3 py-2"
-              >
-                <span className="break-all text-sm font-semibold text-accent">
-                  {formatPhoneForDisplay(entry.phone)}
-                </span>
-                {isMainAdmin ? (
-                  <button
-                    onClick={() => onRemoveDeliveryAccess(entry)}
-                    disabled={deliveryAccessRemovingId === entry.id}
-                    className="rounded-full border border-white/12 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-muted transition hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {deliveryAccessRemovingId === entry.id ? 'Removing' : 'Remove'}
-                  </button>
-                ) : (
-                  <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-muted">
-                    View only
-                  </span>
-                )}
-              </div>
-            ))
-          )}
-        </div>
-        {deliveryAccessError && (
+        {roleChangeError && (
           <div className="mt-3 rounded-[18px] border border-primary/25 bg-primary/10 px-3 py-2 text-xs font-semibold text-primary">
-            {deliveryAccessError}
+            {roleChangeError}
           </div>
         )}
-        {deliveryAccessSuccess && (
+        {roleChangeSuccess && (
           <div className="mt-3 rounded-[18px] border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-300">
-            {deliveryAccessSuccess}
+            {roleChangeSuccess}
           </div>
         )}
-        <div className="mt-4 flex flex-col gap-2">
-          <input
-            type="tel"
-            className="coffee-input"
-            placeholder="Add Delivery Agent Phone"
-            value={deliveryAccessInput}
-            onChange={event => onDeliveryAccessInputChange(event.target.value)}
-            disabled={!isMainAdmin || isDeliveryAccessSaving}
-          />
-          <button
-            onClick={onAddDeliveryAccess}
-            disabled={!isMainAdmin || isDeliveryAccessSaving}
-            className="coffee-btn-primary w-full justify-center disabled:opacity-60"
-          >
-            {isDeliveryAccessSaving ? 'Adding...' : 'Add Delivery Agent'}
-          </button>
-        </div>
       </div>
     </>
   );

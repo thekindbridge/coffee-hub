@@ -20,11 +20,9 @@ export const requireAdminRequest = async (request: VercelRequest) =>
   verifyAdminRequest(request);
 
 export const userHasAdminAccess = async ({
-  email = '',
-  phone = '',
   uid = '',
 }: {
   email?: string;
   phone?: string;
   uid?: string;
-}) => hasAdminAccess({ email, phone, uid });
+}) => hasAdminAccess({ uid });

@@ -10,23 +10,30 @@ import {
   updateDoc,
   where,
 } from 'firebase/firestore';
-import { normalizePhoneNumber } from '../../../shared/phone';
-import type { AccessEntry } from '../../features/app/types';
+import { normalizePhoneNumber, safeNormalizePhoneNumber } from '../../../shared/phone';
+import type { AccessEntry, UserRole } from '../../features/app/types';
 import { toAppServiceError } from '../platform/serviceError';
 import { db } from './index';
 
-const mapAccessEntries = (
+const mapRoleEntries = (
   entries: AccessEntry[],
 ) => entries.sort((a, b) => a.phone.localeCompare(b.phone));
 
+const normalizeRole = (value: unknown): UserRole => {
+  if (value === 'admin' || value === 'agent') {
+    return value;
+  }
+
+  return 'customer';
+};
+
 const mapUserRoleEntries = (
   docs: Array<{ data: () => Record<string, unknown>; id: string }>,
-  role: AccessEntry['role'],
-) => mapAccessEntries(
+) => mapRoleEntries(
   docs.flatMap(docSnapshot => {
     const data = docSnapshot.data();
     const phoneValue = typeof data.phone === 'string'
-      ? normalizePhoneNumber(data.phone)
+      ? safeNormalizePhoneNumber(data.phone)
       : '';
     if (!phoneValue) {
       return [];
@@ -34,8 +41,9 @@ const mapUserRoleEntries = (
 
     return [{
       id: docSnapshot.id,
+      uid: docSnapshot.id,
       phone: phoneValue,
-      role,
+      role: normalizeRole(data.role),
     } satisfies AccessEntry];
   }),
 );
@@ -69,7 +77,7 @@ const updateUserRoleByPhone = async (
   return userDoc.id;
 };
 
-export const seedMainAdminAccess = async (adminPhone: string) => {
+export const seedMainAdminRole = async (adminPhone: string) => {
   const normalizedPhone = normalizePhoneNumber(adminPhone);
   if (!normalizedPhone) {
     return;
@@ -90,71 +98,66 @@ export const seedMainAdminAccess = async (adminPhone: string) => {
   }
 };
 
-export const subscribeToAdminAccessStatus = (
+export const subscribeToRoleStatus = (
   normalizedPhone: string,
-  onData: (hasAccess: boolean) => void,
+  role: Extract<UserRole, 'admin' | 'agent'>,
+  onData: (hasRole: boolean) => void,
   onError: (error: Error) => void,
 ) => onSnapshot(
   query(
     collection(db, 'users'),
     where('phone', '==', normalizePhoneNumber(normalizedPhone)),
-    where('role', '==', 'admin'),
+    where('role', '==', role),
     limit(1),
   ),
   snapshot => {
     onData(!snapshot.empty);
   },
   error => {
-    onError(toAppServiceError(error, 'Unable to verify admin role.'));
+    onError(toAppServiceError(error, `Unable to verify ${role} role.`));
   },
 );
 
-export const subscribeToDeliveryAccessStatus = (
-  normalizedPhone: string,
-  onData: (hasAccess: boolean) => void,
-  onError: (error: Error) => void,
-) => onSnapshot(
-  query(
-    collection(db, 'users'),
-    where('phone', '==', normalizePhoneNumber(normalizedPhone)),
-    where('role', '==', 'agent'),
-    limit(1),
-  ),
-  snapshot => {
-    onData(!snapshot.empty);
-  },
-  error => {
-    onError(toAppServiceError(error, 'Unable to verify delivery agent role.'));
-  },
-);
-
-export const subscribeToAdminAccessEntries = (
+export const subscribeToAdminRoleEntries = (
   onData: (entries: AccessEntry[]) => void,
   onError: (error: Error) => void,
 ) => onSnapshot(
   query(collection(db, 'users'), where('role', '==', 'admin')),
   snapshot => {
-    onData(mapUserRoleEntries(snapshot.docs, 'admin'));
+    onData(mapUserRoleEntries(snapshot.docs));
   },
   error => {
     onError(toAppServiceError(error, 'Unable to load admin role entries.'));
   },
 );
 
-export const subscribeToDeliveryAccessEntries = (
+export const subscribeToAgentRoleEntries = (
   onData: (entries: AccessEntry[]) => void,
   onError: (error: Error) => void,
 ) => onSnapshot(
   query(collection(db, 'users'), where('role', '==', 'agent')),
   snapshot => {
-    onData(mapUserRoleEntries(snapshot.docs, 'agent'));
+    onData(mapUserRoleEntries(snapshot.docs));
   },
   error => {
     onError(toAppServiceError(error, 'Unable to load delivery agent role entries.'));
   },
 );
 
-export const addAdminAccessEntry = async (phoneNumber: string) => {
+export const subscribeToUserRoleEntries = (
+  onData: (entries: AccessEntry[]) => void,
+  onError: (error: Error) => void,
+) => onSnapshot(
+  collection(db, 'users'),
+  snapshot => {
+    onData(mapUserRoleEntries(snapshot.docs));
+  },
+  error => {
+    onError(toAppServiceError(error, 'Unable to load user role entries.'));
+  },
+);
+
+export const addAdminRoleEntry = async (phoneNumber: string) => {
   try {
     await updateUserRoleByPhone(normalizePhoneNumber(phoneNumber), 'admin');
   } catch (error) {
@@ -162,7 +165,7 @@ export const addAdminAccessEntry = async (phoneNumber: string) => {
   }
 };
 
-export const removeAdminAccessEntry = async (entryId: string) => {
+export const removeAdminRoleEntry = async (entryId: string) => {
   try {
     await updateDoc(doc(db, 'users', entryId), {
       role: 'customer',
@@ -173,7 +176,7 @@ export const removeAdminAccessEntry = async (entryId: string) => {
   }
 };
 
-export const addDeliveryAccessEntry = async (phoneNumber: string) => {
+export const addAgentRoleEntry = async (phoneNumber: string) => {
   const normalizedPhone = normalizePhoneNumber(phoneNumber);
 
   try {
@@ -195,7 +198,7 @@ export const addDeliveryAccessEntry = async (phoneNumber: string) => {
   }
 };
 
-export const removeDeliveryAccessEntry = async (entryId: string) => {
+export const removeAgentRoleEntry = async (entryId: string) => {
   try {
     await updateDoc(doc(db, 'users', entryId), {
       role: 'customer',
@@ -203,5 +206,57 @@ export const removeDeliveryAccessEntry = async (entryId: string) => {
     });
   } catch (error) {
     throw toAppServiceError(error, 'Unable to remove delivery agent role.', 'network');
+  }
+};
+
+export const updateUserRoleEntry = async (
+  entryId: string,
+  phoneNumber: string,
+  role: UserRole,
+) => {
+  const normalizedPhone = normalizePhoneNumber(phoneNumber);
+
+  try {
+    await updateDoc(doc(db, 'users', entryId), {
+      phone: normalizedPhone,
+      role,
+      updatedAt: serverTimestamp(),
+    });
+
+    if (!normalizedPhone) {
+      return;
+    }
+
+    if (role === 'agent') {
+      await setDoc(
+        doc(db, 'agents', normalizedPhone),
+        {
+          accessOnly: false,
+          isActive: false,
+          phone: normalizedPhone,
+          role: 'agent',
+          status: 'OFFLINE',
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      );
+
+      return;
+    }
+
+    await setDoc(
+      doc(db, 'agents', normalizedPhone),
+      {
+        accessOnly: true,
+        isActive: false,
+        phone: normalizedPhone,
+        role,
+        status: 'OFFLINE',
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    );
+  } catch (error) {
+    throw toAppServiceError(error, 'Unable to update the user role.', 'network');
   }
 };

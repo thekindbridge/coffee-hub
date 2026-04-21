@@ -13,4 +13,4 @@ export const updateShopTimingRequest = (
     closeTime: string;
   },
   idToken: string,
-) => putApi<UpdateShopTimingResponse>('/api/admin?action=shop-timing', params, idToken);
+) => putApi<UpdateShopTimingResponse>('/api/shop/timing', params, idToken);

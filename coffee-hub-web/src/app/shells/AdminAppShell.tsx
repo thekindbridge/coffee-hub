@@ -50,18 +50,11 @@ export const AdminAppShell = ({
     shopTimingError: shopTimingManager.shopTimingError,
     shopTimingSuccess: shopTimingManager.shopTimingSuccess,
     isShopTimingSaving: shopTimingManager.isShopTimingSaving,
-    adminAccessEntries: session.adminAccessEntries,
-    deliveryAccessEntries: session.deliveryAccessEntries,
-    adminAccessInput: accessManager.adminAccessInput,
-    deliveryAccessInput: accessManager.deliveryAccessInput,
-    adminAccessError: accessManager.adminAccessError,
-    deliveryAccessError: accessManager.deliveryAccessError,
-    adminAccessSuccess: accessManager.adminAccessSuccess,
-    deliveryAccessSuccess: accessManager.deliveryAccessSuccess,
-    isAdminAccessSaving: accessManager.isAdminAccessSaving,
-    isDeliveryAccessSaving: accessManager.isDeliveryAccessSaving,
-    adminAccessRemovingId: accessManager.adminAccessRemovingId,
-    deliveryAccessRemovingId: accessManager.deliveryAccessRemovingId,
+    userRoleEntries: session.userRoleEntries,
+    roleChangeError: accessManager.roleChangeError,
+    roleChangeSuccess: accessManager.roleChangeSuccess,
+    updatingUserRoleId: accessManager.updatingUserRoleId,
+    updatingUserRoleValue: accessManager.updatingUserRoleValue,
     notificationPermissionState: pushNotifications.permissionState,
     isNotificationSyncing: pushNotifications.isSyncing,
     notificationSyncError: pushNotifications.syncError,
@@ -81,20 +74,15 @@ export const AdminAppShell = ({
     onProfileAddressExpandedChange: profileManager.setIsProfileAddressExpanded,
     onShopTimingDraftChange: shopTimingManager.handleShopTimingDraftChange,
     onSaveShopTiming: () => void shopTimingManager.handleSaveShopTiming(),
-    onAdminAccessInputChange: (value: string) => {
-      accessManager.setAdminAccessInput(value);
-      if (accessManager.adminAccessError) accessManager.setAdminAccessError('');
-      if (accessManager.adminAccessSuccess) accessManager.setAdminAccessSuccess('');
+    onChangeUserRole: (entry, role) => {
+      if (accessManager.roleChangeError) {
+        accessManager.setRoleChangeError('');
+      }
+      if (accessManager.roleChangeSuccess) {
+        accessManager.setRoleChangeSuccess('');
+      }
+      void accessManager.handleChangeUserRole(entry, role);
     },
-    onDeliveryAccessInputChange: (value: string) => {
-      accessManager.setDeliveryAccessInput(value);
-      if (accessManager.deliveryAccessError) accessManager.setDeliveryAccessError('');
-      if (accessManager.deliveryAccessSuccess) accessManager.setDeliveryAccessSuccess('');
-    },
-    onAddAdminAccess: () => void accessManager.handleAddAdminAccess(),
-    onRemoveAdminAccess: accessManager.handleRemoveAdminAccess,
-    onAddDeliveryAccess: () => void accessManager.handleAddDeliveryAccess(),
-    onRemoveDeliveryAccess: accessManager.handleRemoveDeliveryAccess,
   };
 
   return (

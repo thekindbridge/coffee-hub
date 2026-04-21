@@ -8,7 +8,6 @@ import type { Messaging } from 'firebase-admin/messaging';
 import { getMessaging } from 'firebase-admin/messaging';
 import type { VercelRequest } from '@vercel/node';
 import { safeNormalizePhoneNumber } from '../../shared/phone.js';
-
 import { ApiError } from './errors.js';
 
 type VerifiedRequestUser = {
@@ -142,9 +141,6 @@ const toAuthApiError = (error: unknown) => {
   return null;
 };
 
-const getConfiguredAdminPhone = () =>
-  safeNormalizePhoneNumber(process.env.ADMIN_PHONE || process.env.VITE_ADMIN_PHONE || '');
-
 const getStoredRoleByUid = async (userId: string) => {
   if (!userId) {
     return '';
@@ -155,20 +151,23 @@ const getStoredRoleByUid = async (userId: string) => {
   return typeof role === 'string' ? role.trim().toLowerCase() : '';
 };
 
+const getDecodedTokenPhone = (decodedToken: DecodedIdToken) => safeNormalizePhoneNumber(
+  decodedToken.phone_number ||
+  (
+    typeof (decodedToken as DecodedIdToken & { phone?: unknown }).phone === 'string'
+      ? (decodedToken as DecodedIdToken & { phone: string }).phone
+      : ''
+  ),
+);
+
 export const hasAdminAccess = async ({
-  phone = '',
   uid = '',
 }: {
   email?: string;
   phone?: string;
   uid?: string;
 }) => {
-  if (uid && (await getStoredRoleByUid(uid)) === 'admin') {
-    return true;
-  }
-
-  const normalizedPhone = safeNormalizePhoneNumber(phone);
-  return Boolean(normalizedPhone && normalizedPhone === getConfiguredAdminPhone());
+  return Boolean(uid && (await getStoredRoleByUid(uid)) === 'admin');
 };
 
 export const verifyRequestUser = async (
@@ -191,7 +190,7 @@ export const verifyRequestUser = async (
 
     return {
       email: normalizeEmail(decodedToken.email || ''),
-      phone: safeNormalizePhoneNumber(decodedToken.phone_number || ''),
+      phone: getDecodedTokenPhone(decodedToken),
       sessionId: typeof decodedToken.sid === 'string' ? decodedToken.sid : null,
       tokenClaims: decodedToken,
       uid,
@@ -214,7 +213,6 @@ export const verifyRequestUser = async (
 export const verifyAdminRequest = async (request: VercelRequest) => {
   const decodedToken = await verifyRequestUser(request);
   const isAdmin = await hasAdminAccess({
-    phone: decodedToken.phone,
     uid: decodedToken.uid,
   });
 

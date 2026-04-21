@@ -282,19 +282,7 @@ export const CustomerAppShell = ({
           {hasLoadedProfileDrawer && (
             <Suspense fallback={drawerLoader}>
               <ProfileScreen
-                adminAccessEntries={session.adminAccessEntries}
-                adminAccessError={accessManager.adminAccessError}
-                adminAccessInput={accessManager.adminAccessInput}
-                adminAccessRemovingId={accessManager.adminAccessRemovingId}
-                adminAccessSuccess={accessManager.adminAccessSuccess}
-                deliveryAccessEntries={session.deliveryAccessEntries}
-                deliveryAccessError={accessManager.deliveryAccessError}
-                deliveryAccessInput={accessManager.deliveryAccessInput}
-                deliveryAccessRemovingId={accessManager.deliveryAccessRemovingId}
-                deliveryAccessSuccess={accessManager.deliveryAccessSuccess}
                 isAdmin={session.isAdmin}
-                isAdminAccessSaving={accessManager.isAdminAccessSaving}
-                isDeliveryAccessSaving={accessManager.isDeliveryAccessSaving}
                 isDeliveryAgent={session.isDeliveryAgent}
                 isOpen={profileManager.isProfileOpen}
                 isMainAdmin={session.isMainAdmin}
@@ -307,18 +295,28 @@ export const CustomerAppShell = ({
                 profileDraft={profileManager.profileDraft}
                 profileError={profileManager.profileError}
                 profileSyncError={session.profileSyncError}
+                roleChangeError={accessManager.roleChangeError}
+                roleChangeSuccess={accessManager.roleChangeSuccess}
                 shopTiming={session.shopTiming}
                 shopTimingDraft={shopTimingManager.shopTimingDraft}
                 shopTimingError={shopTimingManager.shopTimingError}
                 shopTimingSuccess={shopTimingManager.shopTimingSuccess}
+                updatingUserRoleId={accessManager.updatingUserRoleId}
+                updatingUserRoleValue={accessManager.updatingUserRoleValue}
+                userRoleEntries={session.userRoleEntries}
                 isShopTimingSaving={shopTimingManager.isShopTimingSaving}
-                onAddAdminAccess={() => void accessManager.handleAddAdminAccess()}
-                onAddDeliveryAccess={() => void accessManager.handleAddDeliveryAccess()}
-                onAdminAccessInputChange={accessManager.setAdminAccessInput}
+                onChangeUserRole={(entry, role) => {
+                  if (accessManager.roleChangeError) {
+                    accessManager.setRoleChangeError('');
+                  }
+                  if (accessManager.roleChangeSuccess) {
+                    accessManager.setRoleChangeSuccess('');
+                  }
+                  void accessManager.handleChangeUserRole(entry, role);
+                }}
                 onClose={() => {
                   profileManager.setIsProfileOpen(false);
                 }}
-                onDeliveryAccessInputChange={accessManager.setDeliveryAccessInput}
                 onEnablePushNotifications={() => {
                   void pushNotifications.requestPermission();
                 }}
@@ -331,8 +329,6 @@ export const CustomerAppShell = ({
                 }}
                 onProfileAddressExpandedChange={profileManager.setIsProfileAddressExpanded}
                 onProfileDraftChange={profileManager.setProfileDraft}
-                onRemoveAdminAccess={accessManager.handleRemoveAdminAccess}
-                onRemoveDeliveryAccess={accessManager.handleRemoveDeliveryAccess}
                 onSave={() => void profileManager.handleSaveProfile()}
                 onSaveShopTiming={() => void shopTimingManager.handleSaveShopTiming()}
                 onShopTimingDraftChange={shopTimingManager.handleShopTimingDraftChange}

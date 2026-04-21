@@ -13,7 +13,11 @@ service cloud.firestore {
         : (
             request.auth.token.phone_number is string
               ? request.auth.token.phone_number
-              : ''
+              : (
+                  request.auth.token.phone is string
+                    ? request.auth.token.phone
+                    : ''
+                )
           );
     }
 
@@ -892,7 +896,7 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // users: each signed-in user can only manage their own profile document
+    // users: owners can update their own profile fields, while admins manage roles centrally
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
       allow create: if

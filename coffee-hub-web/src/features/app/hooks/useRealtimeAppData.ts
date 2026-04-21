@@ -1,5 +1,5 @@
 import { useAuth } from '../../auth/hooks/useAuth';
-import { useAccessRoles } from './useAccessRoles';
+import { useRoleDirectory } from './useRoleDirectory';
 import { useDeliveryData } from './useDeliveryData';
 import { useMenuData } from './useMenuData';
 import { useOrdersData } from './useOrdersData';
@@ -23,7 +23,7 @@ export const useRealtimeAppData = () => {
   const isAdmin = profiles.profileSaved.role === 'admin';
   const isDeliveryAgent = profiles.profileSaved.role === 'agent';
   const isMainAdmin = isAdmin && (!ADMIN_PHONE || auth.normalizedCurrentPhone === ADMIN_PHONE);
-  const accessEntries = useAccessRoles(canReadProtectedData && isAdmin);
+  const roleDirectory = useRoleDirectory(canReadProtectedData && isAdmin);
   const menu = useMenuData(auth.isAuthReady);
   const orders = useOrdersData(
     canReadProtectedData && isAdmin,
@@ -50,8 +50,9 @@ export const useRealtimeAppData = () => {
     isAdmin,
     isDeliveryAgent,
     isMainAdmin,
-    adminAccessEntries: accessEntries.adminAccessEntries,
-    deliveryAccessEntries: accessEntries.deliveryAccessEntries,
+    userRoleEntries: roleDirectory.userRoleEntries,
+    adminRoleEntries: roleDirectory.adminRoleEntries,
+    agentRoleEntries: roleDirectory.agentRoleEntries,
 
     // Menu
     menu: menu.menu,

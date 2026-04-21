@@ -43,8 +43,9 @@ export type StaffProfile = CustomerProfile & {
 
 export type AccessEntry = {
   id: string;
+  uid?: string;
   phone: string;
-  role: 'admin' | 'agent';
+  role: UserRole;
   accessOnly?: boolean;
 };
 

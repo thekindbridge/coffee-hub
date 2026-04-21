@@ -1,5 +1,5 @@
 import { onAuthStateChanged, signOut, type User as FirebaseUser } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, onSnapshot } from 'firebase/firestore';
 import { formatPhoneForDisplay, normalizePhoneNumber, safeNormalizePhoneNumber } from '../../../shared/phone';
 import type { UserRole } from '../../features/app/types';
 import { auth, db } from '../firebase';
@@ -52,49 +52,44 @@ const mapFirebaseUser = (
   };
 };
 
-const resolveStoredRole = async (uid: string): Promise<UserRole> => {
-  if (!uid) {
-    return 'customer';
-  }
-
-  try {
-    const snapshot = await getDoc(doc(db, 'users', uid));
-    return normalizeRole(snapshot.data()?.role);
-  } catch (error) {
-    console.error('Failed to resolve the stored user role', error);
-    return 'customer';
-  }
-};
-
 export const observeAuthSession = (onChange: (user: AuthUser | null) => void) => {
+  let unsubscribeRole = () => undefined;
   let sequence = 0;
 
-  return onAuthStateChanged(auth, firebaseUser => {
+  const unsubscribeAuth = onAuthStateChanged(auth, firebaseUser => {
     const currentSequence = ++sequence;
+    unsubscribeRole();
 
     if (!firebaseUser) {
       onChange(null);
       return;
     }
 
-    void resolveStoredRole(firebaseUser.uid)
-      .then(role => {
+    unsubscribeRole = onSnapshot(
+      doc(db, 'users', firebaseUser.uid),
+      snapshot => {
         if (currentSequence !== sequence) {
           return;
         }
 
-        onChange(mapFirebaseUser(firebaseUser, role));
-      })
-      .catch(error => {
-        console.error('Failed to hydrate the authenticated user session', error);
-
+        onChange(mapFirebaseUser(firebaseUser, normalizeRole(snapshot.data()?.role)));
+      },
+      error => {
+        console.error('Failed to subscribe to the authenticated user role', error);
         if (currentSequence !== sequence) {
           return;
         }
 
         onChange(mapFirebaseUser(firebaseUser));
-      });
+      },
+    );
   });
+
+  return () => {
+    ++sequence;
+    unsubscribeRole();
+    unsubscribeAuth();
+  };
 };
 
 export const requestOtp = async (
@@ -122,8 +117,7 @@ export const requestOtp = async (
 export const verifyOtp = async (otpCode: string): Promise<AuthUser> => {
   try {
     const firebaseUser = await resolvePhoneVerification(otpCode);
-    const role = await resolveStoredRole(firebaseUser.uid);
-    return mapFirebaseUser(firebaseUser, role);
+    return mapFirebaseUser(firebaseUser);
   } catch (error) {
     throw toAppServiceError(error, 'Unable to verify the OTP right now.', 'validation');
   }

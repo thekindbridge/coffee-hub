@@ -3,7 +3,7 @@ import type { Firestore, QueryDocumentSnapshot } from 'firebase-admin/firestore'
 import { safeNormalizePhoneNumber } from '../../shared/phone.js';
 
 import { normalizeOrderStatusCode, type OrderStatusCode } from '../../shared/orderStatus.js';
-import { getAdminMessaging, hasAdminAccess } from './firebaseAdmin.js';
+import { getAdminMessaging } from './firebaseAdmin.js';
 
 export type NotificationPreferenceKey = 'orderUpdates' | 'offers';
 
@@ -211,11 +211,9 @@ export const syncNotificationRegistration = async (
     ? await adminDb.collection('agents').doc(normalizedPhone).get()
     : null;
   const existingRole = userSnapshot.data()?.role;
-  const role = existingRole === 'admin' || existingRole === 'agent'
+  const role = existingRole === 'admin' || existingRole === 'agent' || existingRole === 'customer'
     ? existingRole
-    : await hasAdminAccess({ phone: normalizedPhone, uid: userId })
-      ? 'admin'
-      : 'customer';
+    : 'customer';
 
   if (normalizedToken) {
     const [duplicateUsers, duplicateAgents] = await Promise.all([

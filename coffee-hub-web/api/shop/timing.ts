@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
+import { updateShopTimingResponse } from '../../src/services/api/server/adminService.js';
 import { getShopTimingResponse } from '../../src/services/api/server/shopTimingService.js';
 import {
   methodNotAllowedResponse,
@@ -12,8 +13,10 @@ export default async function handler(request: VercelRequest, response: VercelRe
     switch (request.method) {
       case 'GET':
         return sendApiResponse(response, await getShopTimingResponse());
+      case 'PUT':
+        return sendApiResponse(response, await updateShopTimingResponse(request));
       default:
-        return sendApiResponse(response, methodNotAllowedResponse(['GET']));
+        return sendApiResponse(response, methodNotAllowedResponse(['GET', 'PUT']));
     }
   } catch (error) {
     return sendApiResponse(

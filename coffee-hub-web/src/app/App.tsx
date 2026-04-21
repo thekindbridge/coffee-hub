@@ -70,9 +70,9 @@ export default function App() {
   });
 
   const accessManager = useAccessManager({
-    isMainAdmin: session.isMainAdmin,
-    adminAccessEntries: session.adminAccessEntries,
-    deliveryAccessEntries: session.deliveryAccessEntries,
+    canManageRoles: session.isAdmin,
+    currentUserPhone: session.normalizedCurrentPhone,
+    userRoleEntries: session.userRoleEntries,
   });
 
   const shopTimingManager = useShopTimingManager({

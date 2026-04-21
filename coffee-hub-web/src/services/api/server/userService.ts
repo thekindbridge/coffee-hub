@@ -23,7 +23,7 @@ const getConfiguredAdminPhone = () =>
   safeNormalizePhoneNumber(process.env.ADMIN_PHONE || process.env.VITE_ADMIN_PHONE || '');
 
 const getConfiguredAgentPhone = () =>
-  safeNormalizePhoneNumber(process.env.AGENT_TEST_PHONE || '+919247774732');
+  safeNormalizePhoneNumber(process.env.AGENT_PHONE || process.env.VITE_AGENT_PHONE || '');
 
 const getBody = (request: VercelRequest) => {
   if (!request.body || typeof request.body !== 'object') {
