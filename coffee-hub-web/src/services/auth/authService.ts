@@ -1,22 +1,42 @@
-import { signOut } from 'firebase/auth';
-import { safeNormalizePhoneNumber } from '../../../shared/phone';
-import { auth } from '../firebase';
+import {
+  DEMO_AUTH_PIN,
+  buildDemoAuthToken,
+  normalizeDemoAdminPhones,
+  parseDemoAuthToken,
+  resolveDemoRole,
+  type DemoAuthRole,
+} from '../../../shared/demoAuth';
+import { formatPhoneForDisplay, normalizePhoneNumber } from '../../../shared/phone';
+import { storageAdapter } from '../platform/storageAdapter';
 import { AppServiceError, toAppServiceError } from '../platform/serviceError';
+
+const DEMO_AUTH_STORAGE_KEY = 'coffee-hub:web:demo-auth-session';
+
+const DEMO_ADMIN_NUMBERS = normalizeDemoAdminPhones([
+  import.meta.env.VITE_ADMIN_PHONE || '',
+  '+917893504891',
+]);
+
+export type AuthUser = {
+  displayName: string;
+  phone: string;
+  provider: 'demo-pin';
+  role: DemoAuthRole;
+  sessionId: string;
+  uid: string;
+};
 
 export type AuthSessionSnapshot = {
   currentUserId: string;
   currentUserPhone: string;
   isLoggedIn: boolean;
+  role: DemoAuthRole;
+  user: AuthUser | null;
 };
 
-const ensureAuthenticatedUser = () => {
-  if (!auth.currentUser) {
-    throw new AppServiceError('Authentication is still loading. Please try again.', {
-      code: 'validation',
-    });
-  }
-
-  return auth.currentUser;
+type StoredDemoAuthSession = {
+  token: string;
+  user: AuthUser;
 };
 
 const toFirebaseAuthError = (
@@ -25,33 +45,132 @@ const toFirebaseAuthError = (
   code: 'network' | 'permission' | 'unsupported' | 'validation' = 'network',
 ) => toAppServiceError(error, fallbackMessage, code);
 
-export const getAuthSessionSnapshot = (): AuthSessionSnapshot => ({
-  currentUserId: auth.currentUser?.uid || '',
-  currentUserPhone: safeNormalizePhoneNumber(auth.currentUser?.phoneNumber || ''),
-  isLoggedIn: Boolean(auth.currentUser?.uid),
-});
+const buildDisplayName = (phone: string) => formatPhoneForDisplay(phone) || 'COFFEE-HUB User';
 
-export const getCurrentUserIdToken = async (forceRefresh = false) => {
-  const currentUser = ensureAuthenticatedUser();
-
-  if (!currentUser.uid) {
-    return '';
+const readStoredSession = (): StoredDemoAuthSession | null => {
+  const rawValue = storageAdapter.read(DEMO_AUTH_STORAGE_KEY);
+  if (!rawValue) {
+    return null;
   }
 
   try {
-    return await currentUser.getIdToken(forceRefresh);
-  } catch (error) {
-    throw toFirebaseAuthError(error, 'Unable to refresh your session.');
+    const parsedValue = JSON.parse(rawValue) as Partial<StoredDemoAuthSession>;
+    const parsedToken = typeof parsedValue.token === 'string'
+      ? parsedValue.token.trim()
+      : '';
+    const parsedUser = parsedValue.user;
+    const tokenPayload = parseDemoAuthToken(parsedToken);
+
+    if (
+      !tokenPayload ||
+      !parsedUser ||
+      typeof parsedUser !== 'object' ||
+      typeof parsedUser.phone !== 'string' ||
+      typeof parsedUser.uid !== 'string' ||
+      typeof parsedUser.sessionId !== 'string'
+    ) {
+      storageAdapter.remove(DEMO_AUTH_STORAGE_KEY);
+      return null;
+    }
+
+    return {
+      token: parsedToken,
+      user: {
+        displayName: typeof parsedUser.displayName === 'string'
+          ? parsedUser.displayName
+          : buildDisplayName(tokenPayload.phone),
+        phone: tokenPayload.phone,
+        provider: 'demo-pin',
+        role: tokenPayload.role,
+        sessionId: tokenPayload.sessionId,
+        uid: tokenPayload.uid,
+      },
+    };
+  } catch {
+    storageAdapter.remove(DEMO_AUTH_STORAGE_KEY);
+    return null;
   }
+};
+
+const writeStoredSession = (session: StoredDemoAuthSession) => {
+  storageAdapter.write(DEMO_AUTH_STORAGE_KEY, JSON.stringify(session));
+};
+
+export const restoreAuthSession = () => readStoredSession()?.user || null;
+
+export const getAuthSessionSnapshot = (): AuthSessionSnapshot => {
+  const session = readStoredSession();
+
+  return {
+    currentUserId: session?.user.uid || '',
+    currentUserPhone: session?.user.phone || '',
+    isLoggedIn: Boolean(session?.user.uid),
+    role: session?.user.role || 'customer',
+    user: session?.user || null,
+  };
+};
+
+export const loginWithPin = async (
+  phoneNumber: string,
+  pin: string,
+) => {
+  const normalizedPin = pin.trim();
+  if (!normalizedPin) {
+    throw new AppServiceError('Enter your PIN to continue.', {
+      code: 'validation',
+    });
+  }
+
+  if (normalizedPin !== DEMO_AUTH_PIN) {
+    throw new AppServiceError('Invalid PIN', {
+      code: 'validation',
+    });
+  }
+
+  let normalizedPhone = '';
+
+  try {
+    normalizedPhone = normalizePhoneNumber(phoneNumber);
+  } catch (error) {
+    throw toFirebaseAuthError(error, 'Enter a valid mobile number.', 'validation');
+  }
+
+  const role = resolveDemoRole(normalizedPhone, DEMO_ADMIN_NUMBERS);
+  const sessionId = `demo-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  const user: AuthUser = {
+    displayName: buildDisplayName(normalizedPhone),
+    phone: normalizedPhone,
+    provider: 'demo-pin',
+    role,
+    sessionId,
+    uid: normalizedPhone,
+  };
+  const token = buildDemoAuthToken({
+    displayName: user.displayName,
+    phone: user.phone,
+    role: user.role,
+    sessionId: user.sessionId,
+    uid: user.uid,
+  });
+
+  writeStoredSession({ token, user });
+  return user;
+};
+
+export const getCurrentUserIdToken = async (_forceRefresh = false) => {
+  const session = readStoredSession();
+  if (!session?.token) {
+    throw new AppServiceError('Authentication is still loading. Please try again.', {
+      code: 'validation',
+    });
+  }
+
+  return session.token;
 };
 
 export const logoutCurrentUser = async () => {
-  try {
-    await signOut(auth);
-  } catch (error) {
-    throw toFirebaseAuthError(error, 'Unable to log out right now.');
-  }
+  storageAdapter.remove(DEMO_AUTH_STORAGE_KEY);
 };
 
 export const getCurrentUserPhone = () =>
-  safeNormalizePhoneNumber(auth.currentUser?.phoneNumber || '');
+  readStoredSession()?.user.phone || '';

@@ -4,6 +4,7 @@ import { getCurrentUserIdToken } from '../../../services/auth/authService';
 import { syncUserProfileRequest } from '../../../services/api/userService';
 import { subscribeToUserProfile } from '../../../services/firebase/profileService';
 import { EMPTY_PROFILE } from '../lib/firestoreMappers';
+import type { DemoAuthRole } from '../../../../shared/demoAuth';
 
 export type ProfileData = {
   isDataAccessReady: boolean;
@@ -16,12 +17,14 @@ export const useProfileData = ({
   currentUserId,
   currentUserName,
   currentUserPhone,
+  currentUserRole,
   isAuthReady,
   isLoggedIn,
 }: {
   currentUserId: string;
   currentUserName: string;
   currentUserPhone: string;
+  currentUserRole: DemoAuthRole;
   isAuthReady: boolean;
   isLoggedIn: boolean;
 }): ProfileData => {
@@ -35,7 +38,20 @@ export const useProfileData = ({
     uid: currentUserId,
     name: currentUserName,
     phone: currentUserPhone,
-  }), [currentUserId, currentUserName, currentUserPhone]);
+    role: currentUserRole,
+  }), [currentUserId, currentUserName, currentUserPhone, currentUserRole]);
+
+  const resolveRole = (nextRole: CustomerProfile['role']) => {
+    if (currentUserRole === 'admin') {
+      return 'admin';
+    }
+
+    if (nextRole === 'agent') {
+      return 'agent';
+    }
+
+    return 'customer';
+  };
 
   useEffect(() => {
     if (!isAuthReady) {
@@ -66,6 +82,7 @@ export const useProfileData = ({
           uid: profile.uid || currentUserId,
           name: profile.name || currentUserName,
           phone: profile.phone || currentUserPhone,
+          role: resolveRole(profile.role),
         });
         setHasProfileSnapshot(true);
       },
@@ -80,6 +97,7 @@ export const useProfileData = ({
     currentUserId,
     currentUserName,
     currentUserPhone,
+    currentUserRole,
     fallbackProfile,
     isAuthReady,
     isLoggedIn,
@@ -99,7 +117,7 @@ export const useProfileData = ({
       try {
         const idToken = await getCurrentUserIdToken(true);
         if (!idToken) {
-          throw new Error('Missing Firebase session token.');
+          throw new Error('Missing authentication token.');
         }
 
         const response = await syncUserProfileRequest(
@@ -119,6 +137,7 @@ export const useProfileData = ({
           uid: response.profile.uid || currentUserId,
           name: response.profile.name || currentUserName,
           phone: response.profile.phone || currentUserPhone,
+          role: resolveRole(response.profile.role),
         });
       } catch (error) {
         console.error('Failed to sync Firebase user profile', error);
@@ -141,6 +160,7 @@ export const useProfileData = ({
     currentUserId,
     currentUserName,
     currentUserPhone,
+    currentUserRole,
     fallbackProfile,
     isAuthReady,
     isLoggedIn,

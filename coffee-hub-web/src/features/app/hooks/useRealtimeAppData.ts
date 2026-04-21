@@ -14,6 +14,7 @@ export const useRealtimeAppData = () => {
     currentUserId: auth.currentUserId,
     currentUserName: auth.currentUserName,
     currentUserPhone: auth.currentUserPhone,
+    currentUserRole: auth.role,
     isAuthReady: auth.isAuthReady,
     isLoggedIn: auth.isLoggedIn,
   });

@@ -95,13 +95,17 @@ export const syncUserProfileResponse = async (
   const existingData = userSnapshot.exists
     ? userSnapshot.data() as Record<string, unknown>
     : {};
-  const existingRole = normalizeRole(existingData.role);
+  const claimedRole = normalizeRole(
+    (requestUser.tokenClaims as Record<string, unknown>).role,
+  );
   const shouldBeAdmin = authPhone === getConfiguredAdminPhone();
-  const resolvedRole: UserRole = shouldBeAdmin
+  const resolvedRole: UserRole = claimedRole === 'admin'
     ? 'admin'
-    : userSnapshot.exists
-      ? existingRole
-      : 'customer';
+    : shouldBeAdmin
+      ? 'admin'
+      : claimedRole === 'agent'
+        ? 'agent'
+        : 'customer';
   const name = getStringBodyValue(body, 'name', 120) ||
     (typeof existingData.name === 'string' ? existingData.name : '');
 

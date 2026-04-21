@@ -1,7 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import type { ChangeEvent, ClipboardEvent, KeyboardEvent } from 'react';
-import type { ConfirmationResult } from 'firebase/auth';
-import { ArrowRight, Coffee, KeyRound, Smartphone } from 'lucide-react';
+import { useState } from 'react';
+import { ArrowRight, Coffee, LockKeyhole, Smartphone } from 'lucide-react';
 import { motion } from 'motion/react';
 import {
   formatPhoneForDisplay,
@@ -10,171 +8,47 @@ import {
 } from '../../../../shared/phone';
 import { AuthShell } from '../../customer/components/AuthShell';
 import { SteamEffect } from '../../customer/components/SteamEffect';
-import {
-  clearRecaptcha,
-  getPhoneAuthErrorMessage,
-  initRecaptcha,
-  sendOTP,
-  verifyOTP,
-} from '../../../services/firebase/phoneAuthService';
-
-const OTP_LENGTH = 6;
-const RESEND_TIMEOUT_SECONDS = 30;
-const RECAPTCHA_CONTAINER_ID = 'firebase-phone-recaptcha';
-
-const createEmptyOtp = () => Array.from({ length: OTP_LENGTH }, () => '');
+import { useAuth } from '../hooks/useAuth';
 
 export const PhoneLoginScreen = () => {
+  const { login } = useAuth();
   const [phoneNumber, setPhoneNumber] = useState('');
-  const [otpDigits, setOtpDigits] = useState<string[]>(createEmptyOtp);
-  const [confirmationResult, setConfirmationResult] = useState<ConfirmationResult | null>(null);
-  const [isSendingOtp, setIsSendingOtp] = useState(false);
-  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
+  const [pin, setPin] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [infoMessage, setInfoMessage] = useState('');
-  const [resendAvailableIn, setResendAvailableIn] = useState(0);
-  const otpRefs = useRef<Array<HTMLInputElement | null>>([]);
 
-  const normalizedPhone = useMemo(() => {
+  const handleLogin = async () => {
+    let normalizedPhone = '';
+
     try {
-      return normalizePhoneNumber(phoneNumber);
+      normalizedPhone = normalizePhoneNumber(phoneNumber);
     } catch {
-      return '';
-    }
-  }, [phoneNumber]);
-  const otpValue = otpDigits.join('');
-  const isOtpStep = Boolean(confirmationResult);
-  const isBusy = isSendingOtp || isVerifyingOtp;
-
-  useEffect(() => () => {
-    clearRecaptcha();
-  }, []);
-
-  useEffect(() => {
-    if (!isOtpStep) {
-      return;
-    }
-
-    otpRefs.current[0]?.focus();
-  }, [isOtpStep]);
-
-  useEffect(() => {
-    if (resendAvailableIn <= 0) {
-      return;
-    }
-
-    const timeoutId = window.setTimeout(() => {
-      setResendAvailableIn(previousValue => Math.max(previousValue - 1, 0));
-    }, 1000);
-
-    return () => window.clearTimeout(timeoutId);
-  }, [resendAvailableIn]);
-
-  const handleSendOtp = async () => {
-    if (!normalizedPhone) {
       setError('Enter a valid mobile number.');
       return;
     }
 
-    setIsSendingOtp(true);
+    if (!pin.trim()) {
+      setError('Enter your PIN to continue.');
+      return;
+    }
+
+    setIsSubmitting(true);
     setError('');
     setInfoMessage('');
 
     try {
-      initRecaptcha(RECAPTCHA_CONTAINER_ID);
-      const nextConfirmationResult = await sendOTP(normalizedPhone);
-
-      setConfirmationResult(nextConfirmationResult);
-      setOtpDigits(createEmptyOtp());
-      setResendAvailableIn(RESEND_TIMEOUT_SECONDS);
-      setInfoMessage(`OTP sent to ${formatPhoneForDisplay(normalizedPhone)}.`);
-    } catch (caughtError) {
-      clearRecaptcha();
-      setError(
-        getPhoneAuthErrorMessage(
-          caughtError,
-          'Unable to send OTP right now. Please try again.',
-        ),
-      );
-    } finally {
-      setIsSendingOtp(false);
-    }
-  };
-
-  const handleOtpChange = (index: number, event: ChangeEvent<HTMLInputElement>) => {
-    const nextValue = event.target.value.replace(/\D/g, '').slice(-1);
-    const nextDigits = [...otpDigits];
-    nextDigits[index] = nextValue;
-    setOtpDigits(nextDigits);
-    setError('');
-
-    if (nextValue && index < OTP_LENGTH - 1) {
-      otpRefs.current[index + 1]?.focus();
-    }
-  };
-
-  const handleOtpKeyDown = (index: number, event: KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === 'Backspace' && !otpDigits[index] && index > 0) {
-      otpRefs.current[index - 1]?.focus();
-    }
-  };
-
-  const handleOtpPaste = (event: ClipboardEvent<HTMLInputElement>) => {
-    event.preventDefault();
-    const pastedValue = event.clipboardData.getData('text').replace(/\D/g, '').slice(0, OTP_LENGTH);
-    if (!pastedValue) {
-      return;
-    }
-
-    const nextDigits = createEmptyOtp();
-    pastedValue.split('').forEach((digit, index) => {
-      nextDigits[index] = digit;
-    });
-    setOtpDigits(nextDigits);
-
-    const focusIndex = Math.min(pastedValue.length, OTP_LENGTH) - 1;
-    if (focusIndex >= 0) {
-      otpRefs.current[focusIndex]?.focus();
-    }
-  };
-
-  const handleVerifyOtp = async () => {
-    if (!confirmationResult) {
-      setError('Request an OTP first.');
-      return;
-    }
-
-    if (otpValue.length !== OTP_LENGTH) {
-      setError('Enter the 6-digit OTP.');
-      return;
-    }
-
-    setIsVerifyingOtp(true);
-    setError('');
-    setInfoMessage('');
-
-    try {
-      await verifyOTP(confirmationResult, otpValue);
-      setInfoMessage('Phone verified successfully. Redirecting...');
+      await login(normalizedPhone, pin);
+      setInfoMessage(`Signed in as ${formatPhoneForDisplay(normalizedPhone)}.`);
     } catch (caughtError) {
       setError(
-        getPhoneAuthErrorMessage(
-          caughtError,
-          'Unable to verify OTP right now. Please try again.',
-        ),
+        caughtError instanceof Error
+          ? caughtError.message
+          : 'Unable to sign in right now. Please try again.',
       );
     } finally {
-      setIsVerifyingOtp(false);
+      setIsSubmitting(false);
     }
-  };
-
-  const resetPhoneFlow = () => {
-    setConfirmationResult(null);
-    setOtpDigits(createEmptyOtp());
-    setError('');
-    setInfoMessage('');
-    setResendAvailableIn(0);
-    clearRecaptcha();
   };
 
   return (
@@ -201,11 +75,11 @@ export const PhoneLoginScreen = () => {
             Inkollu
           </p>
           <p className="mt-3 text-sm font-medium text-[#f8e9d8] sm:text-[15px]">
-            Login with your mobile number to continue ordering.
+            Enter your mobile number and demo PIN to continue.
           </p>
 
-          {!isOtpStep ? (
-            <div className="mt-7 w-full space-y-3">
+          <div className="mt-7 w-full space-y-4">
+            <div className="space-y-3">
               <label className="block text-left text-[11px] font-semibold uppercase tracking-[0.22em] text-[#f0cfad]">
                 Mobile Number
               </label>
@@ -224,87 +98,51 @@ export const PhoneLoginScreen = () => {
                   onChange={event => {
                     setPhoneNumber(event.target.value);
                     setError('');
+                    setInfoMessage('');
                   }}
                   placeholder="9876543210"
-                  disabled={isBusy}
+                  disabled={isSubmitting}
                 />
               </div>
-              <button
-                type="button"
-                disabled={isBusy}
-                className="coffee-btn-primary w-full justify-center disabled:opacity-70"
-                onClick={() => void handleSendOtp()}
-              >
-                {isSendingOtp ? 'Sending OTP...' : 'Send OTP'}
-                {!isSendingOtp && <ArrowRight size={17} />}
-              </button>
-              <p className="text-left text-[11px] leading-5 text-[#f8e9d8]/78">
-                Firebase invisible reCAPTCHA protects this login step in the background.
-              </p>
             </div>
-          ) : (
-            <div className="mt-7 w-full space-y-4">
-              <div>
-                <label className="block text-left text-[11px] font-semibold uppercase tracking-[0.22em] text-[#f0cfad]">
-                  Enter OTP
-                </label>
-                <p className="mt-2 text-left text-xs text-[#f8e9d8]/78">
-                  We sent a 6-digit code to {formatPhoneForDisplay(normalizedPhone)}.
-                </p>
+
+            <div className="space-y-3">
+              <label className="block text-left text-[11px] font-semibold uppercase tracking-[0.22em] text-[#f0cfad]">
+                Demo PIN
+              </label>
+              <div className="relative">
+                <LockKeyhole className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted" />
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  className="coffee-input pl-10"
+                  value={pin}
+                  onChange={event => {
+                    setPin(event.target.value.replace(/\D/g, '').slice(0, 4));
+                    setError('');
+                    setInfoMessage('');
+                  }}
+                  placeholder="1234"
+                  disabled={isSubmitting}
+                />
               </div>
-
-              <div className="flex items-center justify-between gap-2">
-                {otpDigits.map((digit, index) => (
-                  <div key={`otp-${index}`} className="relative flex-1">
-                    <KeyRound className="pointer-events-none absolute left-1/2 top-2 h-3.5 w-3.5 -translate-x-1/2 text-ink-muted/55" />
-                    <input
-                      ref={element => {
-                        otpRefs.current[index] = element;
-                      }}
-                      type="text"
-                      inputMode="numeric"
-                      autoComplete={index === 0 ? 'one-time-code' : 'off'}
-                      className="coffee-input px-0 pb-3 pt-7 text-center text-lg tracking-[0.28em]"
-                      maxLength={1}
-                      value={digit}
-                      onChange={event => handleOtpChange(index, event)}
-                      onKeyDown={event => handleOtpKeyDown(index, event)}
-                      onPaste={handleOtpPaste}
-                      disabled={isBusy}
-                    />
-                  </div>
-                ))}
-              </div>
-
-              <button
-                type="button"
-                disabled={isBusy}
-                className="coffee-btn-primary w-full justify-center disabled:opacity-70"
-                onClick={() => void handleVerifyOtp()}
-              >
-                {isVerifyingOtp ? 'Verifying OTP...' : 'Verify OTP'}
-                {!isVerifyingOtp && <ArrowRight size={17} />}
-              </button>
-
-              <button
-                type="button"
-                disabled={isBusy || resendAvailableIn > 0}
-                className="coffee-btn-secondary w-full justify-center disabled:opacity-70"
-                onClick={() => void handleSendOtp()}
-              >
-                {resendAvailableIn > 0 ? `Resend OTP in ${resendAvailableIn}s` : 'Resend OTP'}
-              </button>
-
-              <button
-                type="button"
-                disabled={isBusy}
-                className="w-full rounded-[8px] px-3 py-2 text-xs font-semibold text-ink-muted transition hover:text-accent disabled:opacity-70"
-                onClick={resetPhoneFlow}
-              >
-                Change mobile number
-              </button>
             </div>
-          )}
+
+            <button
+              type="button"
+              disabled={isSubmitting}
+              className="coffee-btn-primary w-full justify-center disabled:opacity-70"
+              onClick={() => void handleLogin()}
+            >
+              {isSubmitting ? 'Signing in...' : 'Login'}
+              {!isSubmitting && <ArrowRight size={17} />}
+            </button>
+
+            <p className="text-left text-[11px] leading-5 text-[#f8e9d8]/78">
+              Demo mode only. Use PIN <span className="font-semibold text-[#fff8f1]">1234</span>.
+            </p>
+          </div>
 
           {infoMessage && (
             <div className="mt-4 w-full rounded-[18px] border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-300">
@@ -317,8 +155,6 @@ export const PhoneLoginScreen = () => {
             </div>
           )}
         </div>
-
-        <div id={RECAPTCHA_CONTAINER_ID} className="pointer-events-none absolute inset-x-0 bottom-0 h-0 overflow-hidden opacity-0" />
       </motion.section>
     </AuthShell>
   );
