@@ -7,29 +7,14 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function requestEmail() {
+    function requestPhone() {
       return request.auth == null
         ? ''
         : (
-            request.auth.token.email is string
-              ? request.auth.token.email
-              : (
-                  request.auth.token.clerkEmail is string
-                    ? request.auth.token.clerkEmail
-                    : ''
-                )
+            request.auth.token.phone_number is string
+              ? request.auth.token.phone_number
+              : ''
           );
-    }
-
-    // Update this value before deploy if the production owner changes.
-    function ownerEmail() {
-      return 'coffeehubinkollu@gmail.com';
-    }
-
-    function isOwnEmail(email) {
-      return isAuthenticated() &&
-        requestEmail() is string &&
-        requestEmail() == email;
     }
 
     function isOwner(userId) {
@@ -38,10 +23,7 @@ service cloud.firestore {
 
     function isAdmin() {
       return isAuthenticated() &&
-        (
-          (requestEmail() is string && requestEmail() == ownerEmail()) ||
-          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
-        );
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
     // Reusable field validators
@@ -190,7 +172,7 @@ service cloud.firestore {
     function isAgentDocumentOwner(agentId) {
       return isAuthenticated() && (
         request.auth.uid == agentId ||
-        (requestEmail() is string && requestEmail() == agentId)
+        (requestPhone() is string && requestPhone() == agentId)
       );
     }
 
@@ -202,10 +184,11 @@ service cloud.firestore {
           data.agentId,
           data.delivery_agent_id
         ] ||
-        (requestEmail() is string && requestEmail() in [
-          data.assignedAgentEmail,
-          data.deliveryAgentEmail,
-          data.agentEmail,
+        (requestPhone() is string && requestPhone() in [
+          data.assignedAgentPhone,
+          data.deliveryAgentPhone,
+          data.agentPhone,
+          data.delivery_agent_phone,
           data.assignedAgentId,
           data.deliveryAgentId,
           data.agentId,
@@ -662,7 +645,7 @@ service cloud.firestore {
     function hasAllowedUserKeys(data) {
       return data.keys().hasOnly([
         'name',
-        'clerkId',
+        'uid',
         'phone',
         'email',
         'notificationPermission',
@@ -686,14 +669,8 @@ service cloud.firestore {
       return value == null || value in ['customer', 'admin', 'agent'];
     }
 
-    function isMatchingUserEmail(value) {
-      return value == null || (
-        value is string &&
-        (
-          (requestEmail() is string && value == requestEmail()) ||
-          (!(requestEmail() is string) && value.size() == 0)
-        )
-      );
+    function isOptionalUserEmail(value) {
+      return value == null || (value is string && value.size() <= 320);
     }
 
     function isValidNotificationSettings(value) {
@@ -722,10 +699,10 @@ service cloud.firestore {
 
     function isValidUserRecord(data) {
       return hasAllowedUserKeys(data) &&
-        isOptionalString(data.clerkId, 120) &&
+        isOptionalString(data.uid, 120) &&
         isOptionalString(data.name, 120) &&
         isOptionalString(data.phone, 30) &&
-        isMatchingUserEmail(data.email) &&
+        isOptionalUserEmail(data.email) &&
         isOptionalString(data.notificationPermission, 20) &&
         isValidNotificationSettings(data.notificationSettings) &&
         isValidAddresses(data.addresses) &&
@@ -744,13 +721,15 @@ service cloud.firestore {
 
     function isValidOwnUserCreate(userId) {
       return isValidUserRecord(request.resource.data) &&
-        request.resource.data.clerkId == userId &&
+        request.resource.data.uid == userId &&
+        request.resource.data.phone == requestPhone() &&
         request.resource.data.role == 'customer';
     }
 
     function isValidOwnUserUpdate() {
       return isValidUserRecord(request.resource.data) &&
-        request.resource.data.clerkId == resource.data.clerkId &&
+        request.resource.data.uid == resource.data.uid &&
+        request.resource.data.phone == resource.data.phone &&
         request.resource.data.role == resource.data.role;
     }
 
@@ -855,7 +834,8 @@ service cloud.firestore {
     function isDeliverySessionAgent(data) {
       return data != null && (
         isAgentDocumentOwner(data.agentId) ||
-        (requestEmail() is string && requestEmail() == data.agentEmail)
+        (requestPhone() is string && requestPhone() == data.agentId) ||
+        (requestPhone() is string && requestPhone() == data.agentPhone)
       );
     }
 
@@ -925,14 +905,14 @@ service cloud.firestore {
     }
 
     // agents: delivery operations data, writable only by admins or the agent owner
-    match /agents/{email} {
+    match /agents/{agentId} {
       allow read: if true;
       allow create: if
-        (isAdmin() && isValidAgentAccessRecord(request.resource.data, email)) ||
-        isValidAgentSelfCreate(email);
+        (isAdmin() && isValidAgentAccessRecord(request.resource.data, agentId)) ||
+        isValidAgentSelfCreate(agentId);
       allow update: if
-        (isAdmin() && isValidAgentAccessRecord(request.resource.data, email)) ||
-        isValidAgentSelfUpdate(email);
+        (isAdmin() && isValidAgentAccessRecord(request.resource.data, agentId)) ||
+        isValidAgentSelfUpdate(agentId);
       allow delete: if isAdmin();
     }
 

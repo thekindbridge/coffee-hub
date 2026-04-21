@@ -28,13 +28,13 @@ export type DeliveryOrdersState = {
 type UseDeliveryOrdersParams = {
   isAdmin: boolean;
   isDeliveryAgent: boolean;
-  normalizedCurrentEmail: string;
+  normalizedCurrentPhone: string;
 };
 
 export const useDeliveryOrders = ({
   isAdmin,
   isDeliveryAgent,
-  normalizedCurrentEmail,
+  normalizedCurrentPhone,
 }: UseDeliveryOrdersParams): DeliveryOrdersState => {
   const [deliveryAgents, setDeliveryAgents] = useState<DeliveryAgent[]>([]);
   const [deliverySessions, setDeliverySessions] = useState<DeliverySession[]>([]);
@@ -65,18 +65,17 @@ export const useDeliveryOrders = ({
   }, [isAdmin, isDeliveryAgent]);
 
   const currentDeliveryAgent = useMemo(() => {
-    if (!normalizedCurrentEmail) {
+    if (!normalizedCurrentPhone) {
       return null;
     }
 
-    return deliveryAgents.find(agent => {
-      const agentEmail = agent.email?.trim().toLowerCase() || '';
-      return agent.id === normalizedCurrentEmail || agentEmail === normalizedCurrentEmail;
-    }) || null;
-  }, [deliveryAgents, normalizedCurrentEmail]);
+    return deliveryAgents.find(agent =>
+      agent.id === normalizedCurrentPhone || agent.phone === normalizedCurrentPhone,
+    ) || null;
+  }, [deliveryAgents, normalizedCurrentPhone]);
 
   const currentAgentId = isDeliveryAgent
-    ? (currentDeliveryAgent?.id || normalizedCurrentEmail)
+    ? (currentDeliveryAgent?.id || normalizedCurrentPhone)
     : '';
 
   const subscribeToHydratedOrders = (

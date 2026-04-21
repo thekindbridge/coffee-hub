@@ -1,36 +1,43 @@
-import { useAuth as useClerkAuth, useUser } from '@clerk/react';
+import { createContext, useContext } from 'react';
+import { safeNormalizePhoneNumber } from '../../../../shared/phone';
 
 export type AuthState = {
   isLoggedIn: boolean;
   isAuthReady: boolean;
   currentUserId: string;
-  currentUserEmail: string;
+  currentUserPhone: string;
   currentUserName: string;
-  normalizedCurrentEmail: string;
+  normalizedCurrentPhone: string;
 };
 
-const normalizeEmail = (value: string) => value.trim().toLowerCase();
+export const DEFAULT_AUTH_STATE: AuthState = {
+  isLoggedIn: false,
+  isAuthReady: false,
+  currentUserId: '',
+  currentUserPhone: '',
+  currentUserName: '',
+  normalizedCurrentPhone: '',
+};
 
-export const useAuth = (): AuthState => {
-  const clerkAuth = useClerkAuth();
-  const clerkUser = useUser();
-  const isAuthReady = clerkAuth.isLoaded && clerkUser.isLoaded;
+export const AuthContext = createContext<AuthState>(DEFAULT_AUTH_STATE);
 
-  const currentUserEmail =
-    clerkUser.user?.primaryEmailAddress?.emailAddress ||
-    clerkUser.user?.emailAddresses?.[0]?.emailAddress ||
-    '';
-  const currentUserName =
-    clerkUser.user?.fullName ||
-    [clerkUser.user?.firstName, clerkUser.user?.lastName].filter(Boolean).join(' ') ||
-    '';
+export const toAuthState = ({
+  currentUserId,
+  currentUserName,
+  currentUserPhone,
+  isAuthReady,
+  isLoggedIn,
+}: Omit<AuthState, 'normalizedCurrentPhone'>): AuthState => {
+  const normalizedCurrentPhone = safeNormalizePhoneNumber(currentUserPhone);
 
   return {
-    isLoggedIn: isAuthReady && Boolean(clerkAuth.isSignedIn && clerkAuth.userId),
+    isLoggedIn,
     isAuthReady,
-    currentUserId: clerkAuth.userId || '',
-    currentUserEmail,
+    currentUserId,
+    currentUserPhone: normalizedCurrentPhone,
     currentUserName,
-    normalizedCurrentEmail: normalizeEmail(currentUserEmail),
+    normalizedCurrentPhone,
   };
 };
+
+export const useAuth = (): AuthState => useContext(AuthContext);

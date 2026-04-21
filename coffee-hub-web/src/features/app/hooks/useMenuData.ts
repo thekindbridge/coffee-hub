@@ -9,7 +9,7 @@ export type MenuData = {
 
 /**
  * Subscribes to the menu_items Firestore collection in real-time.
- * Starts only after the Clerk session has resolved. Filters out unavailable items.
+ * Starts only after the Firebase auth session has resolved. Filters out unavailable items.
  */
 export const useMenuData = (enabled: boolean): MenuData => {
   const [menu, setMenu] = useState<MenuItem[]>([]);

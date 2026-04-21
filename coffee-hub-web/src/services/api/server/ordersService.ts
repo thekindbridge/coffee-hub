@@ -431,16 +431,18 @@ const parseCompleteDeliveryBody = (body: unknown) => {
   };
 };
 
-const isAssignedAgentEmail = (order: StoredOrderRecord, email: string) => {
-  const normalizedEmail = email.trim().toLowerCase();
-  return normalizedEmail && [
-    order.assignedAgentEmail,
-    order.deliveryAgentEmail,
-    order.agentEmail,
+const isAssignedAgentPhone = (order: StoredOrderRecord, phone: string) => {
+  const normalizedPhone = phone.trim();
+  return normalizedPhone && [
     order.assignedAgentId,
     order.deliveryAgentId,
+    order.agentId,
     order.delivery_agent_id,
-  ].some(value => `${value || ''}`.trim().toLowerCase() === normalizedEmail);
+    order.assignedAgentPhone,
+    order.deliveryAgentPhone,
+    order.agentPhone,
+    order.delivery_agent_phone,
+  ].some(value => `${value || ''}`.trim() === normalizedPhone);
 };
 
 const parseLocation = (value: unknown): DeliveryLocationPayload | null => {
@@ -510,12 +512,12 @@ const getAssignedAgentValues = (order: StoredOrderRecord) => [
   order.deliveryAgentId,
   order.agentId,
   order.delivery_agent_id,
-  order.assignedAgentEmail,
-  order.deliveryAgentEmail,
-  order.agentEmail,
-  order.delivery_agent_email,
+  order.assignedAgentPhone,
+  order.deliveryAgentPhone,
+  order.agentPhone,
+  order.delivery_agent_phone,
 ]
-  .map(value => `${value || ''}`.trim().toLowerCase())
+  .map(value => `${value || ''}`.trim())
   .filter(Boolean);
 
 const resolveLegacyPostAction = (request: VercelRequest): OrderMutationAction | 'create' | '' => {
@@ -1005,10 +1007,14 @@ const completeDeliveryResponse = async (
     }
 
     const currentOrder = orderSnapshot.data() as StoredOrderRecord;
-    const requesterEmail = (decodedToken.email || '').trim().toLowerCase();
-    const isAdmin = await userHasAdminAccess(requesterEmail);
+    const requesterPhone = (decodedToken.phone || '').trim();
+    const isAdmin = await userHasAdminAccess({
+      email: decodedToken.email,
+      phone: requesterPhone,
+      uid: decodedToken.uid,
+    });
 
-    if (!isAdmin && !isAssignedAgentEmail(currentOrder, requesterEmail)) {
+    if (!isAdmin && !isAssignedAgentPhone(currentOrder, requesterPhone)) {
       throw new ApiError(403, 'Only the assigned agent or an admin can complete this delivery.');
     }
 
@@ -1149,8 +1155,12 @@ const updateDeliveryTrackingResponse = async (
     orderId,
   } = parseDeliveryTrackingBody(request.body);
   const adminDb = getServerDb();
-  const requesterEmail = (decodedToken.email || '').trim().toLowerCase();
-  const isAdmin = requesterEmail ? await userHasAdminAccess(requesterEmail) : false;
+  const requesterPhone = (decodedToken.phone || '').trim();
+  const isAdmin = await userHasAdminAccess({
+    email: decodedToken.email,
+    phone: requesterPhone,
+    uid: decodedToken.uid,
+  });
   const orderRef = await resolveOrderReferenceByIdentifier(adminDb, orderDocId || orderId);
 
   await adminDb.runTransaction(async transaction => {
@@ -1164,7 +1174,7 @@ const updateDeliveryTrackingResponse = async (
     const assignedAgentValues = getAssignedAgentValues(order);
     const isAssignedAgent =
       assignedAgentValues.includes(agentId) ||
-      (requesterEmail ? assignedAgentValues.includes(requesterEmail) : false) ||
+      (requesterPhone ? assignedAgentValues.includes(requesterPhone) : false) ||
       decodedToken.uid === agentId;
 
     if (!isAdmin && !isAssignedAgent) {

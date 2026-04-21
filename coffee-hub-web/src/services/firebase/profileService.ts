@@ -28,7 +28,7 @@ export const subscribeToUserProfile = (
     if (!snapshot.exists()) {
       onData({
         ...EMPTY_PROFILE,
-        clerkId: currentUserId,
+        uid: currentUserId,
       });
       return;
     }
@@ -41,18 +41,18 @@ export const subscribeToUserProfile = (
 );
 
 export const saveUserProfile = async ({
-  currentUserEmail,
   currentUserId,
+  currentUserPhone,
   deliveryAgents,
   profileDraft,
 }: {
-  currentUserEmail: string;
   currentUserId: string;
+  currentUserPhone: string;
   deliveryAgents: DeliveryAgent[];
   profileDraft: CustomerProfile;
 }) => {
   try {
-    const normalizedEmail = (profileDraft.email || currentUserEmail).trim().toLowerCase();
+    const normalizedPhone = formatPhoneWithPrefix(currentUserPhone);
     const trimmedAddresses = ensureProfileAddresses(profileDraft.addresses)
       .map(address => address.trim());
     const userPayload: Record<string, unknown> = {
@@ -61,11 +61,11 @@ export const saveUserProfile = async ({
         address2: trimmedAddresses[1] || '',
         address3: trimmedAddresses[2] || '',
       },
-      clerkId: currentUserId,
-      email: normalizedEmail,
+      uid: currentUserId,
+      email: profileDraft.email.trim(),
       name: profileDraft.name.trim(),
       notificationSettings: profileDraft.notificationSettings,
-      phone: formatPhoneWithPrefix(profileDraft.phone),
+      phone: normalizedPhone,
       updatedAt: serverTimestamp(),
     };
 
@@ -80,12 +80,12 @@ export const saveUserProfile = async ({
 
     await setDoc(doc(db, 'users', currentUserId), userPayload, { merge: true });
 
-    if (profileDraft.role !== 'agent' || !normalizedEmail) {
+    if (profileDraft.role !== 'agent' || !normalizedPhone) {
       return;
     }
 
     const existingAgent = deliveryAgents.find(
-      agent => agent.id === normalizedEmail || agent.email?.toLowerCase() === normalizedEmail,
+      agent => agent.id === normalizedPhone || agent.phone === normalizedPhone,
     );
     const shouldMarkOffline = profileDraft.status === 'Offline';
     const shouldPreserveBusyAssignment =
@@ -97,11 +97,10 @@ export const saveUserProfile = async ({
         : 'AVAILABLE';
     const agentPayload: Record<string, unknown> = {
       accessOnly: false,
-      email: normalizedEmail,
       isActive: !shouldMarkOffline,
       name: profileDraft.name.trim(),
       notificationSettings: profileDraft.notificationSettings,
-      phone: formatPhoneWithPrefix(profileDraft.phone),
+      phone: normalizedPhone,
       role: 'agent',
       status: agentStatus,
       updatedAt: serverTimestamp(),
@@ -112,20 +111,20 @@ export const saveUserProfile = async ({
       agentPayload.createdAt = serverTimestamp();
     }
 
-    await setDoc(doc(db, 'agents', normalizedEmail), agentPayload, { merge: true });
+    await setDoc(doc(db, 'agents', normalizedPhone), agentPayload, { merge: true });
   } catch (error) {
     throw toAppServiceError(error, 'Unable to save your profile.', 'network');
   }
 };
 
 export const saveUserNotificationSettings = async ({
-  currentUserEmail,
   currentUserId,
+  currentUserPhone,
   profileDraft,
   settings,
 }: {
-  currentUserEmail: string;
   currentUserId: string;
+  currentUserPhone: string;
   profileDraft: CustomerProfile;
   settings: NotificationSettings;
 }) => {
@@ -143,16 +142,16 @@ export const saveUserNotificationSettings = async ({
       return;
     }
 
-    const normalizedEmail = (profileDraft.email || currentUserEmail).trim().toLowerCase();
-    if (!normalizedEmail) {
+    const normalizedPhone = formatPhoneWithPrefix(currentUserPhone);
+    if (!normalizedPhone) {
       return;
     }
 
     await setDoc(
-      doc(db, 'agents', normalizedEmail),
+      doc(db, 'agents', normalizedPhone),
       {
-        email: normalizedEmail,
         notificationSettings: settings,
+        phone: normalizedPhone,
         updatedAt: serverTimestamp(),
       },
       { merge: true },

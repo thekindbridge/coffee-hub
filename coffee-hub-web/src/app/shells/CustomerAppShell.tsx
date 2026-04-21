@@ -7,6 +7,7 @@ import {
   Menu as MenuIcon,
   Tag,
 } from 'lucide-react';
+import { formatPhoneForDisplay } from '../../../shared/phone';
 import { CURRENCY_SYMBOL } from '../../features/app/lib/constants';
 import { HomeFooter } from '../../components/common/HomeFooter';
 import { BottomNavigation } from '../../components/common/BottomNavigation';
@@ -229,7 +230,7 @@ export const CustomerAppShell = ({
           rightSlot={(
             <>
               <div className="hidden rounded-full border border-white/10 bg-white/5 px-3 py-2 text-[11px] font-medium text-ink-muted sm:block">
-                {session.currentUserEmail}
+                {formatPhoneForDisplay(session.currentUserPhone)}
               </div>
             </>
           )}

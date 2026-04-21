@@ -30,12 +30,12 @@ export type DeliveryData = {
 export const useDeliveryData = (
   isAdmin: boolean,
   isDeliveryAgent: boolean,
-  normalizedCurrentEmail: string,
+  normalizedCurrentPhone: string,
 ): DeliveryData => {
   const deliveryOrders = useDeliveryOrders({
     isAdmin,
     isDeliveryAgent,
-    normalizedCurrentEmail,
+    normalizedCurrentPhone,
   });
   const deliveryStatus = useDeliveryStatus(deliveryOrders.currentDeliveryOrder);
 

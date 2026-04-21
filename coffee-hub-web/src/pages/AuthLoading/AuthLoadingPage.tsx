@@ -24,7 +24,7 @@ export const AuthLoadingPage = () => (
           Preparing your sign-in
         </h2>
         <p className="mx-auto mt-3 max-w-xs text-sm leading-6 text-[#f3ddc5]/72">
-          Restoring your secure Clerk session and warming up your premium ordering experience.
+          Restoring your secure Firebase session and getting Coffee Hub ready for OTP login.
         </p>
         <div className="mx-auto mt-6 flex w-fit items-center gap-2 rounded-full border border-white/10 bg-black/10 px-4 py-2 text-xs font-medium text-[#f8e9d8]/85">
           <span className="h-2 w-2 rounded-full bg-[#ffb15d] animate-pulse" />

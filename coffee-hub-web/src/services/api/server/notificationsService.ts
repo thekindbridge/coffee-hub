@@ -66,8 +66,8 @@ export const registerNotificationTokenResponse = async (
   const resolvedUser = await requireUserRequest(request);
 
   await syncNotificationRegistration(getServerDb(), {
-    email: resolvedUser.email || '',
     permission,
+    phone: resolvedUser.phone || '',
     token,
     tokenType,
     userId: resolvedUser.uid,

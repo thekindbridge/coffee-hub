@@ -16,9 +16,9 @@ const AuthLoadingPage = lazyNamed(
   () => import('../pages/AuthLoading/AuthLoadingPage'),
   'AuthLoadingPage',
 );
-const LoginScreen = lazyNamed(
-  () => import('../features/auth/screens/LoginScreen'),
-  'LoginScreen',
+const PhoneLoginScreen = lazyNamed(
+  () => import('../features/auth/screens/PhoneLoginScreen'),
+  'PhoneLoginScreen',
 );
 
 export default function App() {
@@ -33,7 +33,7 @@ export default function App() {
   });
 
   const offersState = useOffers({
-    enabled: session.isClerkReady,
+    enabled: session.isAuthResolved,
     includeInactive: session.isAdmin,
   });
 
@@ -47,7 +47,7 @@ export default function App() {
     setNewOrderDocIds: session.setNewOrderDocIds,
     currentDeliveryOrder: session.currentDeliveryOrder,
     currentDeliveryAgent: session.currentDeliveryAgent,
-    normalizedCurrentEmail: session.normalizedCurrentEmail,
+    normalizedCurrentPhone: session.normalizedCurrentPhone,
     agentTrackerRef: session.agentTrackerRef,
     trackedOrderIdRef: session.trackedOrderIdRef,
     setIsAgentTracking: session.setIsAgentTracking,
@@ -62,7 +62,7 @@ export default function App() {
 
   const profileManager = useProfileManager({
     currentUserId: session.currentUserId,
-    currentUserEmail: session.currentUserEmail,
+    currentUserPhone: session.currentUserPhone,
     isAdmin: session.isAdmin,
     isDeliveryAgent: session.isDeliveryAgent,
     profileSaved: session.profileSaved,
@@ -92,7 +92,7 @@ export default function App() {
   if (!session.isLoggedIn) {
     return (
       <Suspense fallback={<Loader fullScreen label="Preparing sign in..." />}>
-        <LoginScreen />
+        <PhoneLoginScreen />
       </Suspense>
     );
   }

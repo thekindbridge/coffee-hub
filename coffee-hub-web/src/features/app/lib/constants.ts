@@ -1,5 +1,6 @@
 import type { Order } from '../../../types';
 import type { AgentTrackerStatus } from '../../../agent/agentTracker';
+import { safeNormalizePhoneNumber } from '../../../../shared/phone';
 import {
   ORDER_STATUS_DISPLAY,
   ORDER_STATUS_PROGRESS_FLOW,
@@ -11,7 +12,7 @@ export const ORDER_STATUSES: Order['status'][] = [
   ORDER_STATUS_DISPLAY.CANCELLED,
 ];
 
-export const ADMIN_EMAIL = (import.meta.env.VITE_ADMIN_EMAIL || '').trim().toLowerCase();
+export const ADMIN_PHONE = safeNormalizePhoneNumber(import.meta.env.VITE_ADMIN_PHONE || '');
 export const CURRENCY_SYMBOL = '\u20B9';
 export const STANDARD_DELIVERY_FEE = 50;
 export const AUTH_BACKGROUND_IMAGE =

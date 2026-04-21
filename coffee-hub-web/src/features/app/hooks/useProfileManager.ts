@@ -16,7 +16,7 @@ import { bodyScrollAdapter } from '../../../services/platform/bodyScrollAdapter'
 
 type UseProfileManagerParams = {
   currentUserId: string;
-  currentUserEmail: string;
+  currentUserPhone: string;
   isAdmin: boolean;
   isDeliveryAgent: boolean;
   profileSaved: CustomerProfile;
@@ -40,7 +40,7 @@ export type ProfileManagerState = {
 
 export const useProfileManager = ({
   currentUserId,
-  currentUserEmail,
+  currentUserPhone,
   profileSaved,
   deliveryAgents,
 }: UseProfileManagerParams): ProfileManagerState => {
@@ -74,8 +74,8 @@ export const useProfileManager = ({
   const handleOpenProfile = () => {
     setProfileDraft(buildProfileDraft({
       ...profileSaved,
-      email: profileSaved.email || currentUserEmail,
-      clerkId: profileSaved.clerkId || currentUserId,
+      phone: profileSaved.phone || currentUserPhone,
+      uid: profileSaved.uid || currentUserId,
     }));
     setIsProfileAddressExpanded(false);
     setProfileError('');
@@ -94,13 +94,13 @@ export const useProfileManager = ({
 
     try {
       await saveUserProfile({
-        currentUserEmail,
         currentUserId,
+        currentUserPhone,
         deliveryAgents,
         profileDraft: {
           ...profileDraft,
-          clerkId: currentUserId,
-          email: currentUserEmail,
+          uid: currentUserId,
+          phone: currentUserPhone,
           role: profileSaved.role,
         },
       });
@@ -129,10 +129,11 @@ export const useProfileManager = ({
 
     try {
       await saveUserNotificationSettings({
-        currentUserEmail,
         currentUserId,
+        currentUserPhone,
         profileDraft: {
           ...profileDraft,
+          phone: currentUserPhone,
           role: profileSaved.role,
         },
         settings,

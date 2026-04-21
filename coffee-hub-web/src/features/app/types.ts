@@ -18,7 +18,7 @@ export const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
 };
 
 export type CustomerProfile = {
-  clerkId: string;
+  uid: string;
   name: string;
   phone: string;
   email: string;
@@ -43,7 +43,7 @@ export type StaffProfile = CustomerProfile & {
 
 export type AccessEntry = {
   id: string;
-  email: string;
+  phone: string;
   role: 'admin' | 'agent';
   accessOnly?: boolean;
 };

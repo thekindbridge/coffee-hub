@@ -1,5 +1,6 @@
 import { Suspense, useEffect, useState } from 'react';
 import { MapPin } from 'lucide-react';
+import { formatPhoneForDisplay } from '../../../shared/phone';
 import { NotificationPermissionBanner } from '../../components/NotificationPermissionBanner';
 import { RoleHeader } from '../../components/common/RoleHeader';
 import { AppShellLayout } from '../../components/ui/AppShellLayout';
@@ -104,7 +105,7 @@ export const AgentAppShell = ({
           onProfileClick={profileManager.handleOpenProfile}
           rightSlot={(
             <div className="hidden rounded-full border border-white/10 bg-white/5 px-3 py-2 text-[11px] font-medium text-ink-muted sm:block">
-              {session.currentUserEmail}
+              {formatPhoneForDisplay(session.currentUserPhone)}
             </div>
           )}
           title="Orders on the move"

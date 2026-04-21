@@ -2,12 +2,10 @@ import type { CustomerProfile } from '../../features/app/types';
 import { postApi } from './apiClient';
 
 type SyncUserProfileBody = {
-  email: string;
-  name: string;
+  name?: string;
 };
 
 type SyncUserProfileResponse = {
-  firebaseCustomToken: string;
   profile: CustomerProfile;
 };
 

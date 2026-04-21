@@ -1,11 +1,10 @@
 import { FieldValue } from 'firebase-admin/firestore';
 import type { VercelRequest } from '@vercel/node';
+import { safeNormalizePhoneNumber } from '../../../../shared/phone.js';
 
 import { ApiError } from '../../../../api/_lib/errors.js';
 import {
-  createFirebaseSessionToken,
   getServerDb,
-  normalizeEmail,
   requireUserRequest,
 } from './authService.js';
 import {
@@ -20,8 +19,8 @@ const DEFAULT_NOTIFICATION_SETTINGS = {
   offers: false,
 };
 
-const getConfiguredAdminEmail = () =>
-  normalizeEmail(process.env.ADMIN_EMAIL || process.env.VITE_ADMIN_EMAIL || '');
+const getConfiguredAdminPhone = () =>
+  safeNormalizePhoneNumber(process.env.ADMIN_PHONE || process.env.VITE_ADMIN_PHONE || '');
 
 const getBody = (request: VercelRequest) => {
   if (!request.body || typeof request.body !== 'object') {
@@ -63,7 +62,6 @@ const mapUserProfileResponse = (
       typeof addresses.address2 === 'string' ? addresses.address2 : '',
       typeof addresses.address3 === 'string' ? addresses.address3 : '',
     ],
-    clerkId: typeof data.clerkId === 'string' ? data.clerkId : userId,
     email: typeof data.email === 'string' ? data.email : '',
     name: typeof data.name === 'string' ? data.name : '',
     notificationSettings:
@@ -75,6 +73,7 @@ const mapUserProfileResponse = (
     status: typeof data.status === 'string' && data.status.toLowerCase() === 'offline'
       ? 'Offline'
       : 'Available',
+    uid: typeof data.uid === 'string' ? data.uid : userId,
     vehicleType: typeof data.vehicleType === 'string' ? data.vehicleType : '',
   };
 };
@@ -83,15 +82,13 @@ export const syncUserProfileResponse = async (
   request: VercelRequest,
 ): Promise<ApiServiceResponse> => {
   const requestUser = await requireUserRequest(request);
-  const body = getBody(request);
-  const authEmail = normalizeEmail(requestUser.email || '');
-  const requestedEmail = normalizeEmail(getStringBodyValue(body, 'email', 320));
-  const email = authEmail || requestedEmail;
+  const authPhone = safeNormalizePhoneNumber(requestUser.phone || '');
 
-  if (!email) {
-    throw new ApiError(400, 'A verified email address is required.');
+  if (!authPhone) {
+    throw new ApiError(400, 'A verified mobile number is required.');
   }
 
+  const body = getBody(request);
   const adminDb = getServerDb();
   const userRef = adminDb.collection('users').doc(requestUser.uid);
   const userSnapshot = await userRef.get();
@@ -99,23 +96,27 @@ export const syncUserProfileResponse = async (
     ? userSnapshot.data() as Record<string, unknown>
     : {};
   const existingRole = normalizeRole(existingData.role);
-  const defaultRole: UserRole =
-    !userSnapshot.exists && email === getConfiguredAdminEmail() ? 'admin' : 'customer';
+  const shouldBeAdmin = authPhone === getConfiguredAdminPhone();
+  const resolvedRole: UserRole = shouldBeAdmin
+    ? 'admin'
+    : userSnapshot.exists
+      ? existingRole
+      : 'customer';
   const name = getStringBodyValue(body, 'name', 120) ||
     (typeof existingData.name === 'string' ? existingData.name : '');
 
   const baseProfile = {
-    clerkId: requestUser.uid,
-    email,
+    uid: requestUser.uid,
+    email: typeof existingData.email === 'string' ? existingData.email : '',
     name,
     notificationSettings:
       existingData.notificationSettings && typeof existingData.notificationSettings === 'object'
         ? existingData.notificationSettings
         : DEFAULT_NOTIFICATION_SETTINGS,
-    role: userSnapshot.exists ? existingRole : defaultRole,
+    phone: authPhone,
+    role: resolvedRole,
     updatedAt: FieldValue.serverTimestamp(),
   };
-  const firebaseCustomToken = await createFirebaseSessionToken(requestUser.uid, email);
 
   await userRef.set(
     userSnapshot.exists
@@ -131,7 +132,6 @@ export const syncUserProfileResponse = async (
   return jsonResponse(
     200,
     {
-      firebaseCustomToken,
       profile: mapUserProfileResponse(
         requestUser.uid,
         syncedSnapshot.data() as Record<string, unknown>,

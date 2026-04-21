@@ -10,15 +10,14 @@ import {
   updateDoc,
   where,
 } from 'firebase/firestore';
+import { normalizePhoneNumber } from '../../../shared/phone';
 import type { AccessEntry } from '../../features/app/types';
 import { toAppServiceError } from '../platform/serviceError';
 import { db } from './index';
 
 const mapAccessEntries = (
   entries: AccessEntry[],
-) => entries.sort((a, b) => a.email.localeCompare(b.email));
-
-const normalizeEmail = (value: string) => value.trim().toLowerCase();
+) => entries.sort((a, b) => a.phone.localeCompare(b.phone));
 
 const mapUserRoleEntries = (
   docs: Array<{ data: () => Record<string, unknown>; id: string }>,
@@ -26,24 +25,26 @@ const mapUserRoleEntries = (
 ) => mapAccessEntries(
   docs.flatMap(docSnapshot => {
     const data = docSnapshot.data();
-    const emailValue = ((data.email as string) || '').trim().toLowerCase();
-    if (!emailValue) {
+    const phoneValue = typeof data.phone === 'string'
+      ? normalizePhoneNumber(data.phone)
+      : '';
+    if (!phoneValue) {
       return [];
     }
 
     return [{
       id: docSnapshot.id,
-      email: emailValue,
+      phone: phoneValue,
       role,
     } satisfies AccessEntry];
   }),
 );
 
-const findUserDocByEmail = async (normalizedEmail: string) => {
+const findUserDocByPhone = async (normalizedPhone: string) => {
   const snapshot = await getDocs(
     query(
       collection(db, 'users'),
-      where('email', '==', normalizedEmail),
+      where('phone', '==', normalizedPhone),
       limit(1),
     ),
   );
@@ -51,13 +52,13 @@ const findUserDocByEmail = async (normalizedEmail: string) => {
   return snapshot.docs[0] || null;
 };
 
-const updateUserRoleByEmail = async (
-  normalizedEmail: string,
+const updateUserRoleByPhone = async (
+  normalizedPhone: string,
   role: 'admin' | 'agent',
 ) => {
-  const userDoc = await findUserDocByEmail(normalizedEmail);
+  const userDoc = await findUserDocByPhone(normalizedPhone);
   if (!userDoc) {
-    throw new Error('Ask this user to sign in once before assigning a role.');
+    throw new Error('Ask this user to log in with OTP once before assigning a role.');
   }
 
   await updateDoc(doc(db, 'users', userDoc.id), {
@@ -68,14 +69,14 @@ const updateUserRoleByEmail = async (
   return userDoc.id;
 };
 
-export const seedMainAdminAccess = async (adminEmail: string) => {
-  const normalizedEmail = normalizeEmail(adminEmail);
-  if (!normalizedEmail) {
+export const seedMainAdminAccess = async (adminPhone: string) => {
+  const normalizedPhone = normalizePhoneNumber(adminPhone);
+  if (!normalizedPhone) {
     return;
   }
 
   try {
-    const userDoc = await findUserDocByEmail(normalizedEmail);
+    const userDoc = await findUserDocByPhone(normalizedPhone);
     if (!userDoc) {
       return;
     }
@@ -90,13 +91,13 @@ export const seedMainAdminAccess = async (adminEmail: string) => {
 };
 
 export const subscribeToAdminAccessStatus = (
-  normalizedEmail: string,
+  normalizedPhone: string,
   onData: (hasAccess: boolean) => void,
   onError: (error: Error) => void,
 ) => onSnapshot(
   query(
     collection(db, 'users'),
-    where('email', '==', normalizeEmail(normalizedEmail)),
+    where('phone', '==', normalizePhoneNumber(normalizedPhone)),
     where('role', '==', 'admin'),
     limit(1),
   ),
@@ -109,13 +110,13 @@ export const subscribeToAdminAccessStatus = (
 );
 
 export const subscribeToDeliveryAccessStatus = (
-  normalizedEmail: string,
+  normalizedPhone: string,
   onData: (hasAccess: boolean) => void,
   onError: (error: Error) => void,
 ) => onSnapshot(
   query(
     collection(db, 'users'),
-    where('email', '==', normalizeEmail(normalizedEmail)),
+    where('phone', '==', normalizePhoneNumber(normalizedPhone)),
     where('role', '==', 'agent'),
     limit(1),
   ),
@@ -153,9 +154,9 @@ export const subscribeToDeliveryAccessEntries = (
   },
 );
 
-export const addAdminAccessEntry = async (normalizedEmail: string) => {
+export const addAdminAccessEntry = async (phoneNumber: string) => {
   try {
-    await updateUserRoleByEmail(normalizeEmail(normalizedEmail), 'admin');
+    await updateUserRoleByPhone(normalizePhoneNumber(phoneNumber), 'admin');
   } catch (error) {
     throw toAppServiceError(error, 'Unable to add admin role.', 'network');
   }
@@ -172,17 +173,17 @@ export const removeAdminAccessEntry = async (entryId: string) => {
   }
 };
 
-export const addDeliveryAccessEntry = async (normalizedEmail: string) => {
-  const email = normalizeEmail(normalizedEmail);
+export const addDeliveryAccessEntry = async (phoneNumber: string) => {
+  const normalizedPhone = normalizePhoneNumber(phoneNumber);
 
   try {
-    await updateUserRoleByEmail(email, 'agent');
+    await updateUserRoleByPhone(normalizedPhone, 'agent');
     await setDoc(
-      doc(db, 'agents', email),
+      doc(db, 'agents', normalizedPhone),
       {
         accessOnly: true,
-        email,
         isActive: false,
+        phone: normalizedPhone,
         role: 'agent',
         status: 'OFFLINE',
         updatedAt: serverTimestamp(),

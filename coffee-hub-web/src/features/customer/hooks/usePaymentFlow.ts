@@ -287,7 +287,7 @@ export const usePaymentFlow = ({
       customerLocation = captured;
     }
     if (cart.length === 0) { setCheckoutError('Your cart is empty.'); return null; }
-    if (!currentUserId) { setCheckoutError('Please sign in with Google to place an order.'); return null; }
+    if (!currentUserId) { setCheckoutError('Please sign in with your mobile number to place an order.'); return null; }
 
     const deliveryFeeValue = hasCartItems ? STANDARD_DELIVERY_FEE : 0;
     let discountValue = 0;

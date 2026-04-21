@@ -1,5 +1,6 @@
 import { Clock3 } from 'lucide-react';
-import { ADMIN_EMAIL } from '../../app/lib/constants';
+import { formatPhoneForDisplay } from '../../../../shared/phone';
+import { ADMIN_PHONE } from '../../app/lib/constants';
 import type { AccessEntry, ShopTimingDraft } from '../../app/types';
 import { formatShopTimingRange, type ShopTiming } from '../../../../shared/shopTiming';
 
@@ -150,14 +151,14 @@ export const StaffProfileAdminControls = ({
             <p className="text-sm text-ink-muted">No admins added yet.</p>
           ) : (
             adminAccessEntries.map(entry => {
-              const isProtected = entry.email === ADMIN_EMAIL;
+              const isProtected = ADMIN_PHONE && entry.phone === ADMIN_PHONE;
               return (
                 <div
                   key={entry.id}
                   className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/5 px-3 py-2"
                 >
                   <span className="break-all text-sm font-semibold text-accent">
-                    {entry.email}
+                    {formatPhoneForDisplay(entry.phone)}
                   </span>
                   {isMainAdmin ? (
                     <button
@@ -193,9 +194,9 @@ export const StaffProfileAdminControls = ({
         )}
         <div className="mt-4 flex flex-col gap-2">
           <input
-            type="email"
+            type="tel"
             className="coffee-input"
-            placeholder="Add Admin Email"
+            placeholder="Add Admin Phone Number"
             value={adminAccessInput}
             onChange={event => onAdminAccessInputChange(event.target.value)}
             disabled={!isMainAdmin || isAdminAccessSaving}
@@ -227,7 +228,7 @@ export const StaffProfileAdminControls = ({
                 className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/5 px-3 py-2"
               >
                 <span className="break-all text-sm font-semibold text-accent">
-                  {entry.email}
+                  {formatPhoneForDisplay(entry.phone)}
                 </span>
                 {isMainAdmin ? (
                   <button
@@ -258,9 +259,9 @@ export const StaffProfileAdminControls = ({
         )}
         <div className="mt-4 flex flex-col gap-2">
           <input
-            type="email"
+            type="tel"
             className="coffee-input"
-            placeholder="Add Delivery Agent"
+            placeholder="Add Delivery Agent Phone"
             value={deliveryAccessInput}
             onChange={event => onDeliveryAccessInputChange(event.target.value)}
             disabled={!isMainAdmin || isDeliveryAccessSaving}

@@ -5,6 +5,7 @@ import {
   removeAdminAccessEntry,
   removeDeliveryAccessEntry,
 } from '../../../services/firebase/accessService';
+import { normalizePhoneNumber } from '../../../../shared/phone';
 import type { AccessEntry } from '../types';
 
 type UseAccessManagerParams = {
@@ -36,11 +37,17 @@ export type AccessManagerState = {
   handleRemoveDeliveryAccess: (entry: AccessEntry) => Promise<void>;
 };
 
-const normalizeEmail = (value: string) => value.trim().toLowerCase();
-const validateEmail = (email: string): string => {
-  if (!email) return 'Enter an email address.';
-  const isValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-  return isValid ? '' : 'Enter a valid email address.';
+const normalizePhone = (value: string) => {
+  try {
+    return normalizePhoneNumber(value);
+  } catch {
+    return '';
+  }
+};
+
+const validatePhone = (phone: string): string => {
+  if (!phone) return 'Enter a phone number.';
+  return normalizePhone(phone) ? '' : 'Enter a valid phone number.';
 };
 const getErrorMessage = (err: unknown, fallback: string) =>
   err instanceof Error && err.message ? err.message : fallback;
@@ -84,10 +91,10 @@ export const useAccessManager = ({
       setAdminAccessError('Only the main admin can add new admins.');
       return;
     }
-    const normalizedEmail = normalizeEmail(adminAccessInput);
-    const error = validateEmail(normalizedEmail);
+    const normalizedPhone = normalizePhone(adminAccessInput);
+    const error = validatePhone(adminAccessInput);
     if (error) { setAdminAccessError(error); return; }
-    if (adminAccessEntries.some(e => e.email === normalizedEmail)) {
+    if (adminAccessEntries.some(entry => entry.phone === normalizedPhone)) {
       setAdminAccessError('This admin already has access.'); return;
     }
 
@@ -95,7 +102,7 @@ export const useAccessManager = ({
     setAdminAccessError('');
     setAdminAccessSuccess('');
     try {
-      await addAdminAccessEntry(normalizedEmail);
+      await addAdminAccessEntry(normalizedPhone);
       setAdminAccessInput('');
       setAdminAccessSuccess('Admin access added.');
     } catch (err) {
@@ -128,10 +135,10 @@ export const useAccessManager = ({
     if (!isMainAdmin) {
       setDeliveryAccessError('Only the main admin can add delivery agents.'); return;
     }
-    const normalizedEmail = normalizeEmail(deliveryAccessInput);
-    const error = validateEmail(normalizedEmail);
+    const normalizedPhone = normalizePhone(deliveryAccessInput);
+    const error = validatePhone(deliveryAccessInput);
     if (error) { setDeliveryAccessError(error); return; }
-    if (deliveryAccessEntries.some(e => e.email === normalizedEmail)) {
+    if (deliveryAccessEntries.some(entry => entry.phone === normalizedPhone)) {
       setDeliveryAccessError('This delivery agent already has access.'); return;
     }
 
@@ -139,7 +146,7 @@ export const useAccessManager = ({
     setDeliveryAccessError('');
     setDeliveryAccessSuccess('');
     try {
-      await addDeliveryAccessEntry(normalizedEmail);
+      await addDeliveryAccessEntry(normalizedPhone);
       setDeliveryAccessInput('');
       setDeliveryAccessSuccess('Delivery agent access added.');
     } catch (err) {

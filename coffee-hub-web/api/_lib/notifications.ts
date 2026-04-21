@@ -1,5 +1,6 @@
 import { FieldValue } from 'firebase-admin/firestore';
 import type { Firestore, QueryDocumentSnapshot } from 'firebase-admin/firestore';
+import { safeNormalizePhoneNumber } from '../../shared/phone.js';
 
 import { normalizeOrderStatusCode, type OrderStatusCode } from '../../shared/orderStatus.js';
 import { getAdminMessaging, hasAdminAccess } from './firebaseAdmin.js';
@@ -181,20 +182,20 @@ const clearInvalidRecipientToken = async (
 export const syncNotificationRegistration = async (
   adminDb: Firestore,
   {
-    email,
+    phone,
     permission,
     token,
     tokenType = 'fcm',
     userId,
   }: {
-    email: string;
+    phone: string;
     permission: 'default' | 'denied' | 'granted';
     token: string;
     tokenType?: NotificationTokenType;
     userId: string;
   },
 ) => {
-  const normalizedEmail = email.trim().toLowerCase();
+  const normalizedPhone = safeNormalizePhoneNumber(phone);
   const normalizedToken = token.trim();
   const tokenField = tokenType === 'expo' ? 'pushToken' : 'fcmToken';
   const tokenTimestampField = tokenType === 'expo'
@@ -206,13 +207,13 @@ export const syncNotificationRegistration = async (
     userSnapshot.data()?.notificationSettings,
   );
 
-  const agentSnapshot = normalizedEmail
-    ? await adminDb.collection('agents').doc(normalizedEmail).get()
+  const agentSnapshot = normalizedPhone
+    ? await adminDb.collection('agents').doc(normalizedPhone).get()
     : null;
   const existingRole = userSnapshot.data()?.role;
   const role = existingRole === 'admin' || existingRole === 'agent'
     ? existingRole
-    : await hasAdminAccess(normalizedEmail)
+    : await hasAdminAccess({ phone: normalizedPhone, uid: userId })
       ? 'admin'
       : 'customer';
 
@@ -237,7 +238,7 @@ export const syncNotificationRegistration = async (
             { merge: true },
           )),
       ...(duplicateAgents?.docs || [])
-        .filter(snapshot => snapshot.id !== normalizedEmail)
+        .filter(snapshot => snapshot.id !== normalizedPhone)
         .map(snapshot =>
           snapshot.ref.set(
             {
@@ -251,9 +252,9 @@ export const syncNotificationRegistration = async (
   }
 
   const userUpdate: Record<string, unknown> = {
-    email: normalizedEmail,
     notificationPermission: permission,
     notificationSettings: existingSettings,
+    phone: normalizedPhone,
     role,
     updatedAt: FieldValue.serverTimestamp(),
   };
@@ -263,17 +264,17 @@ export const syncNotificationRegistration = async (
 
   await userRef.set(userUpdate, { merge: true });
 
-  if (role === 'agent' && normalizedEmail && tokenType === 'fcm') {
+  if (role === 'agent' && normalizedPhone && tokenType === 'fcm') {
     const existingAgentSettings = normalizeNotificationSettings(
       agentSnapshot?.data()?.notificationSettings,
     );
 
-    await adminDb.collection('agents').doc(normalizedEmail).set(
+    await adminDb.collection('agents').doc(normalizedPhone).set(
       {
-        email: normalizedEmail,
         fcmToken: normalizedToken || FieldValue.delete(),
         fcmTokenUpdatedAt: FieldValue.serverTimestamp(),
         notificationSettings: existingAgentSettings,
+        phone: normalizedPhone,
         updatedAt: FieldValue.serverTimestamp(),
       },
       { merge: true },

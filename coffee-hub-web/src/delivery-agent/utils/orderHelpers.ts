@@ -64,9 +64,9 @@ export const normalizePhoneForTel = (phone: string) => phone.replace(/[^\d+]/g, 
 export const resolveDeliveryAgentId = (
   order: Order | null,
   deliveryAgent: DeliveryAgent | null,
-  normalizedCurrentEmail: string,
+  normalizedCurrentPhone: string,
 ) => (
   order?.delivery_agent_id ||
   deliveryAgent?.id ||
-  normalizedCurrentEmail
+  normalizedCurrentPhone
 );

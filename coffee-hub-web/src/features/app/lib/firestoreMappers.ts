@@ -20,6 +20,11 @@ import type {
   StaffRole,
   UserRole,
 } from '../types';
+import {
+  formatPhoneForDisplay,
+  normalizePhoneNumber,
+  safeNormalizePhoneNumber,
+} from '../../../../shared/phone';
 
 const FALLBACK_TIMESTAMP_ISO = new Date(0).toISOString();
 
@@ -192,7 +197,7 @@ const mapEmbeddedOrderItems = (orderId: string, value: unknown): OrderItem[] => 
 };
 
 export const EMPTY_PROFILE: CustomerProfile = {
-  clerkId: '',
+  uid: '',
   name: '',
   phone: '',
   email: '',
@@ -208,7 +213,7 @@ export const EMPTY_PROFILE: CustomerProfile = {
 };
 
 export const EMPTY_STAFF_PROFILE: StaffProfile = {
-  clerkId: '',
+  uid: '',
   role: 'admin',
   name: '',
   phone: '',
@@ -274,9 +279,9 @@ export const mapProfileDocToProfile = (
     : {};
 
   return {
-    clerkId: (data.clerkId as string) || '',
+    uid: (data.uid as string) || '',
     name: (data.name as string) || '',
-    phone: (data.phone as string) || '',
+    phone: safeNormalizePhoneNumber((data.phone as string) || ''),
     email: (data.email as string) || '',
     role: normalizeUserRole(data.role),
     addresses: ensureProfileAddresses([
@@ -318,28 +323,19 @@ export const mapStaffProfileDocToProfile = (
   };
 };
 
-const stripPhonePrefix = (phone: string) => phone.replace(/^\+91\s*/i, '');
-
 export const formatPhoneWithPrefix = (phone: string) => {
-  const trimmed = phone.trim();
-  if (!trimmed) {
-    return '';
-  }
-  if (trimmed.startsWith('+')) {
-    return trimmed;
-  }
-  return `+91 ${trimmed}`;
+  return normalizePhoneNumber(phone);
 };
 
 export const buildProfileDraft = (profile: CustomerProfile) => ({
   ...profile,
-  phone: stripPhonePrefix(profile.phone),
+  phone: formatPhoneForDisplay(profile.phone),
   addresses: ensureProfileAddresses(profile.addresses),
 });
 
 export const buildStaffProfileDraft = (profile: StaffProfile): StaffProfile => ({
   ...profile,
-  phone: stripPhonePrefix(profile.phone),
+  phone: formatPhoneForDisplay(profile.phone),
 });
 
 export const mapMenuDocToMenuItem = (snapshot: QueryDocumentSnapshot): MenuItem => {

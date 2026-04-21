@@ -12,7 +12,7 @@ export type AccessRolesData = {
 
 /**
  * Loads role-management lists for the admin profile panel.
- * The current user's active role is read from users/{clerkId}.role in useProfileData.
+ * The current user's active role is read from users/{uid}.role in useProfileData.
  */
 export const useAccessRoles = (isAdmin: boolean): AccessRolesData => {
   const [adminAccessEntries, setAdminAccessEntries] = useState<AccessEntry[]>([]);

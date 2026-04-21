@@ -1,9 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { signInWithCustomToken, signOut } from 'firebase/auth';
 import type { CustomerProfile } from '../types';
 import { getCurrentUserIdToken } from '../../../services/auth/authService';
 import { syncUserProfileRequest } from '../../../services/api/userService';
-import { auth as firebaseAuth } from '../../../services/firebase';
 import { subscribeToUserProfile } from '../../../services/firebase/profileService';
 import { EMPTY_PROFILE } from '../lib/firestoreMappers';
 
@@ -15,30 +13,29 @@ export type ProfileData = {
 };
 
 export const useProfileData = ({
-  currentUserEmail,
   currentUserId,
   currentUserName,
+  currentUserPhone,
   isAuthReady,
   isLoggedIn,
 }: {
-  currentUserEmail: string;
   currentUserId: string;
   currentUserName: string;
+  currentUserPhone: string;
   isAuthReady: boolean;
   isLoggedIn: boolean;
 }): ProfileData => {
   const [profileSaved, setProfileSaved] = useState<CustomerProfile>(EMPTY_PROFILE);
   const [hasProfileSnapshot, setHasProfileSnapshot] = useState(false);
-  const [isFirebaseReady, setIsFirebaseReady] = useState(false);
   const [isSyncingProfile, setIsSyncingProfile] = useState(false);
   const [profileSyncError, setProfileSyncError] = useState('');
 
   const fallbackProfile = useMemo(() => ({
     ...EMPTY_PROFILE,
-    clerkId: currentUserId,
-    email: currentUserEmail,
+    uid: currentUserId,
     name: currentUserName,
-  }), [currentUserEmail, currentUserId, currentUserName]);
+    phone: currentUserPhone,
+  }), [currentUserId, currentUserName, currentUserPhone]);
 
   useEffect(() => {
     if (!isAuthReady) {
@@ -48,33 +45,27 @@ export const useProfileData = ({
     if (!isLoggedIn || !currentUserId) {
       setProfileSaved(EMPTY_PROFILE);
       setHasProfileSnapshot(false);
-      setIsFirebaseReady(false);
       setIsSyncingProfile(false);
       setProfileSyncError('');
-
-      void signOut(firebaseAuth).catch(error => {
-        console.error('Failed to clear Firebase session', error);
-      });
-
-      return;
     }
   }, [currentUserId, isAuthReady, isLoggedIn]);
 
   useEffect(() => {
-    if (!isAuthReady || !isLoggedIn || !currentUserId || !isFirebaseReady) {
+    if (!isAuthReady || !isLoggedIn || !currentUserId) {
       return;
     }
 
     setHasProfileSnapshot(false);
-    const unsubscribe = subscribeToUserProfile(
+
+    return subscribeToUserProfile(
       currentUserId,
       profile => {
         setProfileSaved({
           ...fallbackProfile,
           ...profile,
-          clerkId: profile.clerkId || currentUserId,
-          email: profile.email || currentUserEmail,
+          uid: profile.uid || currentUserId,
           name: profile.name || currentUserName,
+          phone: profile.phone || currentUserPhone,
         });
         setHasProfileSnapshot(true);
       },
@@ -85,15 +76,12 @@ export const useProfileData = ({
         setProfileSyncError('Unable to load your profile. Some role features may be limited.');
       },
     );
-
-    return unsubscribe;
   }, [
-    currentUserEmail,
     currentUserId,
     currentUserName,
+    currentUserPhone,
     fallbackProfile,
     isAuthReady,
-    isFirebaseReady,
     isLoggedIn,
   ]);
 
@@ -105,19 +93,17 @@ export const useProfileData = ({
     let isCancelled = false;
 
     const syncProfile = async () => {
-      setIsFirebaseReady(false);
       setIsSyncingProfile(true);
       setProfileSyncError('');
 
       try {
         const idToken = await getCurrentUserIdToken(true);
         if (!idToken) {
-          throw new Error('Missing Clerk session token.');
+          throw new Error('Missing Firebase session token.');
         }
 
         const response = await syncUserProfileRequest(
           {
-            email: currentUserEmail,
             name: currentUserName,
           },
           idToken,
@@ -130,27 +116,13 @@ export const useProfileData = ({
         setProfileSaved({
           ...fallbackProfile,
           ...response.profile,
-          clerkId: response.profile.clerkId || currentUserId,
-          email: response.profile.email || currentUserEmail,
+          uid: response.profile.uid || currentUserId,
           name: response.profile.name || currentUserName,
+          phone: response.profile.phone || currentUserPhone,
         });
-        setHasProfileSnapshot(true);
-
-        if (!response.firebaseCustomToken) {
-          throw new Error('Missing Firebase custom token.');
-        }
-
-        if (firebaseAuth.currentUser?.uid !== currentUserId) {
-          await signInWithCustomToken(firebaseAuth, response.firebaseCustomToken);
-        }
-
-        if (!isCancelled) {
-          setIsFirebaseReady(true);
-        }
       } catch (error) {
-        console.error('Failed to sync Clerk user profile', error);
+        console.error('Failed to sync Firebase user profile', error);
         if (!isCancelled) {
-          setIsFirebaseReady(false);
           setProfileSyncError('Unable to sync your profile right now.');
         }
       } finally {
@@ -166,19 +138,19 @@ export const useProfileData = ({
       isCancelled = true;
     };
   }, [
-    currentUserEmail,
     currentUserId,
     currentUserName,
+    currentUserPhone,
     fallbackProfile,
     isAuthReady,
     isLoggedIn,
   ]);
 
   return {
-    isDataAccessReady: !isLoggedIn || isFirebaseReady,
+    isDataAccessReady: !isLoggedIn || Boolean(currentUserId),
     isProfileReady:
       !isLoggedIn ||
-      (!isSyncingProfile && (hasProfileSnapshot || Boolean(profileSyncError))),
+      ((!isSyncingProfile && hasProfileSnapshot) || Boolean(profileSyncError)),
     profileSaved,
     profileSyncError,
   };

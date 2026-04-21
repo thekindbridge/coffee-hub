@@ -2,7 +2,6 @@ import { AnimatePresence, motion } from 'motion/react';
 import {
   CheckCircle2,
   LogOut,
-  Mail,
   MapPin,
   Phone,
   ShieldCheck,
@@ -10,6 +9,7 @@ import {
   User,
   X,
 } from 'lucide-react';
+import { formatPhoneForDisplay } from '../../../shared/phone';
 import { NotificationSettingsPanel } from '../../components/NotificationSettingsPanel';
 import type { NotificationPermissionState } from '../../services/platform/notificationAdapter';
 import { StaffProfileAdminControls } from '../staff/components/StaffProfileAdminControls';
@@ -208,35 +208,20 @@ export const ProfileScreen = ({
                     </div>
                     <div>
                       <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-muted">
-                        Email
-                      </label>
-                      <div className="relative">
-                        <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted" />
-                        <input
-                          type="email"
-                          className="coffee-input pl-10 opacity-80"
-                          value={profileDraft.email}
-                          readOnly
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-muted">
-                        Phone Number
+                        Verified Mobile Number
                       </label>
                       <div className="relative">
                         <Phone className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted" />
-                        <span className="absolute left-9 top-1/2 -translate-y-1/2 text-sm font-semibold text-ink-muted">
-                          +91
-                        </span>
                         <input
                           type="tel"
-                          className="coffee-input pl-16"
-                          value={profileDraft.phone}
-                          onChange={event => onProfileDraftChange({ ...profileDraft, phone: event.target.value })}
-                          placeholder="9876543210"
+                          className="coffee-input pl-10 opacity-80"
+                          value={formatPhoneForDisplay(profileDraft.phone)}
+                          readOnly
                         />
                       </div>
+                      <p className="mt-2 text-xs text-ink-muted">
+                        This number comes from Firebase Phone Authentication and cannot be edited here.
+                      </p>
                     </div>
                   </div>
                 </div>

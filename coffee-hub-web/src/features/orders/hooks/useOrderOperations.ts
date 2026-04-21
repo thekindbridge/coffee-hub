@@ -39,7 +39,7 @@ type UseOrderOperationsParams = {
   setNewOrderDocIds: Dispatch<SetStateAction<string[]>>;
   currentDeliveryOrder: Order | null;
   currentDeliveryAgent: DeliveryAgent | null;
-  normalizedCurrentEmail: string;
+  normalizedCurrentPhone: string;
   agentTrackerRef: MutableRefObject<ReturnType<typeof createAgentTracker> | null>;
   trackedOrderIdRef: MutableRefObject<string>;
   setIsAgentTracking: Dispatch<SetStateAction<boolean>>;
@@ -60,7 +60,7 @@ export const useOrderOperations = ({
   setNewOrderDocIds,
   currentDeliveryOrder,
   currentDeliveryAgent,
-  normalizedCurrentEmail,
+  normalizedCurrentPhone,
   agentTrackerRef,
   trackedOrderIdRef,
   setIsAgentTracking,
@@ -107,7 +107,7 @@ export const useOrderOperations = ({
     const agentId =
       currentDeliveryOrder.delivery_agent_id ||
       currentDeliveryAgent?.id ||
-      normalizedCurrentEmail;
+      normalizedCurrentPhone;
     if (!agentId) {
       dialogAdapter.alert('Unable to identify the assigned delivery agent for this order.');
       return;
