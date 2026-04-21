@@ -22,6 +22,9 @@ const DEFAULT_NOTIFICATION_SETTINGS = {
 const getConfiguredAdminPhone = () =>
   safeNormalizePhoneNumber(process.env.ADMIN_PHONE || process.env.VITE_ADMIN_PHONE || '');
 
+const getConfiguredAgentPhone = () =>
+  safeNormalizePhoneNumber(process.env.AGENT_TEST_PHONE || '+919247774732');
+
 const getBody = (request: VercelRequest) => {
   if (!request.body || typeof request.body !== 'object') {
     return {};
@@ -42,6 +45,18 @@ const getStringBodyValue = (
 const normalizeRole = (value: unknown): UserRole => {
   if (value === 'admin' || value === 'agent') {
     return value;
+  }
+
+  return 'customer';
+};
+
+const resolveSeededRole = (phone: string): UserRole => {
+  if (phone === getConfiguredAdminPhone()) {
+    return 'admin';
+  }
+
+  if (phone === getConfiguredAgentPhone()) {
+    return 'agent';
   }
 
   return 'customer';
@@ -95,23 +110,24 @@ export const syncUserProfileResponse = async (
   const existingData = userSnapshot.exists
     ? userSnapshot.data() as Record<string, unknown>
     : {};
-  const claimedRole = normalizeRole(
-    (requestUser.tokenClaims as Record<string, unknown>).role,
-  );
-  const shouldBeAdmin = authPhone === getConfiguredAdminPhone();
-  const resolvedRole: UserRole = claimedRole === 'admin'
-    ? 'admin'
-    : shouldBeAdmin
-      ? 'admin'
-      : claimedRole === 'agent'
-        ? 'agent'
-        : 'customer';
+  const storedRoleValue = typeof existingData.role === 'string'
+    ? existingData.role.trim().toLowerCase()
+    : '';
+  const resolvedRole: UserRole = userSnapshot.exists
+    ? storedRoleValue === 'admin' || storedRoleValue === 'agent' || storedRoleValue === 'customer'
+      ? storedRoleValue as UserRole
+      : resolveSeededRole(authPhone)
+    : resolveSeededRole(authPhone);
   const name = getStringBodyValue(body, 'name', 120) ||
     (typeof existingData.name === 'string' ? existingData.name : '');
+  const isActive = typeof existingData.isActive === 'boolean'
+    ? existingData.isActive
+    : true;
 
   const baseProfile = {
     uid: requestUser.uid,
     email: typeof existingData.email === 'string' ? existingData.email : '',
+    isActive,
     name,
     notificationSettings:
       existingData.notificationSettings && typeof existingData.notificationSettings === 'object'

@@ -14,6 +14,7 @@ interface ImportMetaEnv {
   readonly VITE_FIREBASE_MESSAGING_SENDER_ID?: string;
   readonly VITE_FIREBASE_APP_ID?: string;
   readonly VITE_FIREBASE_VAPID_KEY?: string;
+  readonly VITE_FIREBASE_PHONE_TEST_MODE?: string;
   readonly VITE_ADMIN_PHONE?: string;
   readonly VITE_GOOGLE_MAP_KEY: string;
 }

@@ -7,11 +7,6 @@ import { getFirestore } from 'firebase-admin/firestore';
 import type { Messaging } from 'firebase-admin/messaging';
 import { getMessaging } from 'firebase-admin/messaging';
 import type { VercelRequest } from '@vercel/node';
-import {
-  isDemoAuthToken,
-  parseDemoAuthToken,
-  type DemoAuthRole,
-} from '../../shared/demoAuth.js';
 import { safeNormalizePhoneNumber } from '../../shared/phone.js';
 
 import { ApiError } from './errors.js';
@@ -150,10 +145,7 @@ const toAuthApiError = (error: unknown) => {
 const getConfiguredAdminPhone = () =>
   safeNormalizePhoneNumber(process.env.ADMIN_PHONE || process.env.VITE_ADMIN_PHONE || '');
 
-const getConfiguredAdminEmail = () =>
-  normalizeEmail(process.env.ADMIN_EMAIL || process.env.VITE_ADMIN_EMAIL || '');
-
-const getUserRoleById = async (userId: string) => {
+const getStoredRoleByUid = async (userId: string) => {
   if (!userId) {
     return '';
   }
@@ -163,38 +155,7 @@ const getUserRoleById = async (userId: string) => {
   return typeof role === 'string' ? role.trim().toLowerCase() : '';
 };
 
-const getUserRoleByPhone = async (phone: string) => {
-  const normalizedPhone = safeNormalizePhoneNumber(phone);
-  if (!normalizedPhone) {
-    return '';
-  }
-
-  const snapshot = await getAdminDb()
-    .collection('users')
-    .where('phone', '==', normalizedPhone)
-    .limit(1)
-    .get();
-  const role = snapshot.docs[0]?.data().role;
-  return typeof role === 'string' ? role.trim().toLowerCase() : '';
-};
-
-const getUserRoleByEmail = async (email: string) => {
-  const normalizedEmail = normalizeEmail(email);
-  if (!normalizedEmail) {
-    return '';
-  }
-
-  const snapshot = await getAdminDb()
-    .collection('users')
-    .where('email', '==', normalizedEmail)
-    .limit(1)
-    .get();
-  const role = snapshot.docs[0]?.data().role;
-  return typeof role === 'string' ? role.trim().toLowerCase() : '';
-};
-
 export const hasAdminAccess = async ({
-  email = '',
   phone = '',
   uid = '',
 }: {
@@ -202,75 +163,12 @@ export const hasAdminAccess = async ({
   phone?: string;
   uid?: string;
 }) => {
-  const normalizedEmail = normalizeEmail(email);
-  const normalizedPhone = safeNormalizePhoneNumber(phone);
-
-  if (uid && (await getUserRoleById(uid)) === 'admin') {
+  if (uid && (await getStoredRoleByUid(uid)) === 'admin') {
     return true;
   }
 
-  if (normalizedPhone) {
-    if (normalizedPhone === getConfiguredAdminPhone()) {
-      return true;
-    }
-
-    if ((await getUserRoleByPhone(normalizedPhone)) === 'admin') {
-      return true;
-    }
-  }
-
-  if (normalizedEmail) {
-    if (normalizedEmail === getConfiguredAdminEmail()) {
-      return true;
-    }
-
-    if ((await getUserRoleByEmail(normalizedEmail)) === 'admin') {
-      return true;
-    }
-  }
-
-  return false;
-};
-
-const getTokenRole = (tokenClaims: DecodedIdToken): DemoAuthRole | '' => {
-  const roleValue = (tokenClaims as Record<string, unknown>).role;
-  if (roleValue === 'admin' || roleValue === 'agent' || roleValue === 'customer') {
-    return roleValue;
-  }
-
-  return '';
-};
-
-const verifyDemoRequestUser = (
-  token: string,
-  expectedUserId?: string,
-): VerifiedRequestUser => {
-  const decodedToken = parseDemoAuthToken(token);
-  const uid = decodedToken?.uid?.trim() || '';
-
-  if (!decodedToken || !uid) {
-    throw new ApiError(401, 'Invalid demo authentication token.');
-  }
-
-  if (expectedUserId && uid !== expectedUserId) {
-    throw new ApiError(403, 'Authenticated user does not match the order owner.');
-  }
-
-  return {
-    email: '',
-    phone: decodedToken.phone,
-    sessionId: decodedToken.sessionId,
-    tokenClaims: {
-      auth_time: Math.floor(decodedToken.issuedAt / 1000),
-      firebase: {
-        sign_in_provider: decodedToken.authType,
-      },
-      phone_number: decodedToken.phone,
-      role: decodedToken.role,
-      uid,
-    } as unknown as DecodedIdToken,
-    uid,
-  };
+  const normalizedPhone = safeNormalizePhoneNumber(phone);
+  return Boolean(normalizedPhone && normalizedPhone === getConfiguredAdminPhone());
 };
 
 export const verifyRequestUser = async (
@@ -278,10 +176,6 @@ export const verifyRequestUser = async (
   expectedUserId?: string,
 ): Promise<VerifiedRequestUser> => {
   const bearerToken = getBearerToken(request);
-
-  if (isDemoAuthToken(bearerToken)) {
-    return verifyDemoRequestUser(bearerToken, expectedUserId);
-  }
 
   try {
     const decodedToken = await getAdminAuthClient().verifyIdToken(bearerToken, true);
@@ -319,18 +213,7 @@ export const verifyRequestUser = async (
 
 export const verifyAdminRequest = async (request: VercelRequest) => {
   const decodedToken = await verifyRequestUser(request);
-  const claimedRole = getTokenRole(decodedToken.tokenClaims);
-
-  if (claimedRole) {
-    if (claimedRole !== 'admin') {
-      throw new ApiError(403, 'Admin access required.');
-    }
-
-    return decodedToken;
-  }
-
   const isAdmin = await hasAdminAccess({
-    email: decodedToken.email,
     phone: decodedToken.phone,
     uid: decodedToken.uid,
   });

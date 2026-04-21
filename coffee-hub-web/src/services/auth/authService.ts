@@ -1,176 +1,150 @@
+import { onAuthStateChanged, signOut, type User as FirebaseUser } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
+import { formatPhoneForDisplay, normalizePhoneNumber, safeNormalizePhoneNumber } from '../../../shared/phone';
+import type { UserRole } from '../../features/app/types';
+import { auth, db } from '../firebase';
 import {
-  DEMO_AUTH_PIN,
-  buildDemoAuthToken,
-  normalizeDemoAdminPhones,
-  parseDemoAuthToken,
-  resolveDemoRole,
-  type DemoAuthRole,
-} from '../../../shared/demoAuth';
-import { formatPhoneForDisplay, normalizePhoneNumber } from '../../../shared/phone';
-import { storageAdapter } from '../platform/storageAdapter';
+  clearPendingPhoneVerification,
+  requestPhoneVerification,
+  resolvePhoneVerification,
+  type PendingPhoneVerification,
+  type RecaptchaMode,
+} from '../firebase/phoneAuthService';
 import { AppServiceError, toAppServiceError } from '../platform/serviceError';
 
-const DEMO_AUTH_STORAGE_KEY = 'coffee-hub:web:demo-auth-session';
-
-const DEMO_ADMIN_NUMBERS = normalizeDemoAdminPhones([
-  import.meta.env.VITE_ADMIN_PHONE || '',
-  '+917893504891',
-]);
+export const PHONE_AUTH_RECAPTCHA_CONTAINER_ID = 'firebase-phone-auth-recaptcha';
 
 export type AuthUser = {
   displayName: string;
+  email: string;
   phone: string;
-  provider: 'demo-pin';
-  role: DemoAuthRole;
-  sessionId: string;
+  photoURL: string | null;
+  provider: 'phone';
+  role: UserRole;
   uid: string;
 };
 
-export type AuthSessionSnapshot = {
-  currentUserId: string;
-  currentUserPhone: string;
-  isLoggedIn: boolean;
-  role: DemoAuthRole;
-  user: AuthUser | null;
-};
-
-type StoredDemoAuthSession = {
-  token: string;
-  user: AuthUser;
-};
-
-const toFirebaseAuthError = (
-  error: unknown,
-  fallbackMessage: string,
-  code: 'network' | 'permission' | 'unsupported' | 'validation' = 'network',
-) => toAppServiceError(error, fallbackMessage, code);
-
-const buildDisplayName = (phone: string) => formatPhoneForDisplay(phone) || 'COFFEE-HUB User';
-
-const readStoredSession = (): StoredDemoAuthSession | null => {
-  const rawValue = storageAdapter.read(DEMO_AUTH_STORAGE_KEY);
-  if (!rawValue) {
-    return null;
+const normalizeRole = (value: unknown): UserRole => {
+  if (value === 'admin' || value === 'agent') {
+    return value;
   }
 
-  try {
-    const parsedValue = JSON.parse(rawValue) as Partial<StoredDemoAuthSession>;
-    const parsedToken = typeof parsedValue.token === 'string'
-      ? parsedValue.token.trim()
-      : '';
-    const parsedUser = parsedValue.user;
-    const tokenPayload = parseDemoAuthToken(parsedToken);
-
-    if (
-      !tokenPayload ||
-      !parsedUser ||
-      typeof parsedUser !== 'object' ||
-      typeof parsedUser.phone !== 'string' ||
-      typeof parsedUser.uid !== 'string' ||
-      typeof parsedUser.sessionId !== 'string'
-    ) {
-      storageAdapter.remove(DEMO_AUTH_STORAGE_KEY);
-      return null;
-    }
-
-    return {
-      token: parsedToken,
-      user: {
-        displayName: typeof parsedUser.displayName === 'string'
-          ? parsedUser.displayName
-          : buildDisplayName(tokenPayload.phone),
-        phone: tokenPayload.phone,
-        provider: 'demo-pin',
-        role: tokenPayload.role,
-        sessionId: tokenPayload.sessionId,
-        uid: tokenPayload.uid,
-      },
-    };
-  } catch {
-    storageAdapter.remove(DEMO_AUTH_STORAGE_KEY);
-    return null;
-  }
+  return 'customer';
 };
 
-const writeStoredSession = (session: StoredDemoAuthSession) => {
-  storageAdapter.write(DEMO_AUTH_STORAGE_KEY, JSON.stringify(session));
-};
+const buildDisplayName = (phone: string) =>
+  formatPhoneForDisplay(phone) || 'COFFEE-HUB User';
 
-export const restoreAuthSession = () => readStoredSession()?.user || null;
-
-export const getAuthSessionSnapshot = (): AuthSessionSnapshot => {
-  const session = readStoredSession();
+const mapFirebaseUser = (
+  firebaseUser: FirebaseUser,
+  role: UserRole = 'customer',
+): AuthUser => {
+  const phone = safeNormalizePhoneNumber(firebaseUser.phoneNumber || '');
 
   return {
-    currentUserId: session?.user.uid || '',
-    currentUserPhone: session?.user.phone || '',
-    isLoggedIn: Boolean(session?.user.uid),
-    role: session?.user.role || 'customer',
-    user: session?.user || null,
+    displayName: firebaseUser.displayName?.trim() || buildDisplayName(phone),
+    email: firebaseUser.email?.trim().toLowerCase() || '',
+    phone,
+    photoURL: firebaseUser.photoURL,
+    provider: 'phone',
+    role,
+    uid: firebaseUser.uid,
   };
 };
 
-export const loginWithPin = async (
+const resolveStoredRole = async (uid: string): Promise<UserRole> => {
+  if (!uid) {
+    return 'customer';
+  }
+
+  try {
+    const snapshot = await getDoc(doc(db, 'users', uid));
+    return normalizeRole(snapshot.data()?.role);
+  } catch (error) {
+    console.error('Failed to resolve the stored user role', error);
+    return 'customer';
+  }
+};
+
+export const observeAuthSession = (onChange: (user: AuthUser | null) => void) => {
+  let sequence = 0;
+
+  return onAuthStateChanged(auth, firebaseUser => {
+    const currentSequence = ++sequence;
+
+    if (!firebaseUser) {
+      onChange(null);
+      return;
+    }
+
+    void resolveStoredRole(firebaseUser.uid)
+      .then(role => {
+        if (currentSequence !== sequence) {
+          return;
+        }
+
+        onChange(mapFirebaseUser(firebaseUser, role));
+      })
+      .catch(error => {
+        console.error('Failed to hydrate the authenticated user session', error);
+
+        if (currentSequence !== sequence) {
+          return;
+        }
+
+        onChange(mapFirebaseUser(firebaseUser));
+      });
+  });
+};
+
+export const requestOtp = async (
   phoneNumber: string,
-  pin: string,
-) => {
-  const normalizedPin = pin.trim();
-  if (!normalizedPin) {
-    throw new AppServiceError('Enter your PIN to continue.', {
-      code: 'validation',
-    });
-  }
-
-  if (normalizedPin !== DEMO_AUTH_PIN) {
-    throw new AppServiceError('Invalid PIN', {
-      code: 'validation',
-    });
-  }
-
+  recaptchaMode: RecaptchaMode = 'invisible',
+): Promise<PendingPhoneVerification> => {
   let normalizedPhone = '';
 
   try {
     normalizedPhone = normalizePhoneNumber(phoneNumber);
   } catch (error) {
-    throw toFirebaseAuthError(error, 'Enter a valid mobile number.', 'validation');
+    throw toAppServiceError(error, 'Enter a valid mobile number.', 'validation');
   }
 
-  const role = resolveDemoRole(normalizedPhone, DEMO_ADMIN_NUMBERS);
-  const sessionId = `demo-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-  const user: AuthUser = {
-    displayName: buildDisplayName(normalizedPhone),
-    phone: normalizedPhone,
-    provider: 'demo-pin',
-    role,
-    sessionId,
-    uid: normalizedPhone,
-  };
-  const token = buildDemoAuthToken({
-    displayName: user.displayName,
-    phone: user.phone,
-    role: user.role,
-    sessionId: user.sessionId,
-    uid: user.uid,
-  });
-
-  writeStoredSession({ token, user });
-  return user;
+  try {
+    return await requestPhoneVerification(normalizedPhone, {
+      containerId: PHONE_AUTH_RECAPTCHA_CONTAINER_ID,
+      recaptchaMode,
+    });
+  } catch (error) {
+    throw toAppServiceError(error, 'Unable to send the OTP right now.', 'network');
+  }
 };
 
-export const getCurrentUserIdToken = async (_forceRefresh = false) => {
-  const session = readStoredSession();
-  if (!session?.token) {
-    throw new AppServiceError('Authentication is still loading. Please try again.', {
+export const verifyOtp = async (otpCode: string): Promise<AuthUser> => {
+  try {
+    const firebaseUser = await resolvePhoneVerification(otpCode);
+    const role = await resolveStoredRole(firebaseUser.uid);
+    return mapFirebaseUser(firebaseUser, role);
+  } catch (error) {
+    throw toAppServiceError(error, 'Unable to verify the OTP right now.', 'validation');
+  }
+};
+
+export const cancelOtp = () => {
+  clearPendingPhoneVerification();
+};
+
+export const getCurrentUserIdToken = async (forceRefresh = false) => {
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
+    throw new AppServiceError('Please sign in to continue.', {
       code: 'validation',
     });
   }
 
-  return session.token;
+  return currentUser.getIdToken(forceRefresh);
 };
 
 export const logoutCurrentUser = async () => {
-  storageAdapter.remove(DEMO_AUTH_STORAGE_KEY);
+  clearPendingPhoneVerification();
+  await signOut(auth);
 };
-
-export const getCurrentUserPhone = () =>
-  readStoredSession()?.user.phone || '';

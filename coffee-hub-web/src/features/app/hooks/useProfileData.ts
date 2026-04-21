@@ -4,7 +4,7 @@ import { getCurrentUserIdToken } from '../../../services/auth/authService';
 import { syncUserProfileRequest } from '../../../services/api/userService';
 import { subscribeToUserProfile } from '../../../services/firebase/profileService';
 import { EMPTY_PROFILE } from '../lib/firestoreMappers';
-import type { DemoAuthRole } from '../../../../shared/demoAuth';
+import type { UserRole } from '../types';
 
 export type ProfileData = {
   isDataAccessReady: boolean;
@@ -24,7 +24,7 @@ export const useProfileData = ({
   currentUserId: string;
   currentUserName: string;
   currentUserPhone: string;
-  currentUserRole: DemoAuthRole;
+  currentUserRole: UserRole;
   isAuthReady: boolean;
   isLoggedIn: boolean;
 }): ProfileData => {
@@ -42,11 +42,11 @@ export const useProfileData = ({
   }), [currentUserId, currentUserName, currentUserPhone, currentUserRole]);
 
   const resolveRole = (nextRole: CustomerProfile['role']) => {
-    if (currentUserRole === 'admin') {
+    if (nextRole === 'admin' || currentUserRole === 'admin') {
       return 'admin';
     }
 
-    if (nextRole === 'agent') {
+    if (nextRole === 'agent' || currentUserRole === 'agent') {
       return 'agent';
     }
 
