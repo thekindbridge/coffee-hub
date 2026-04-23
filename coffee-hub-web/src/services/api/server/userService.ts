@@ -50,6 +50,11 @@ const normalizeRole = (value: unknown): UserRole => {
   return 'customer';
 };
 
+const logResolvedRole = (phone: string, role: UserRole) => {
+  console.log('Phone:', phone);
+  console.log('Assigned Role:', role);
+};
+
 const resolveSeededRole = (phone: string): UserRole => {
   if (phone === getConfiguredAdminPhone()) {
     return 'admin';
@@ -110,19 +115,16 @@ export const syncUserProfileResponse = async (
   const existingData = userSnapshot.exists
     ? userSnapshot.data() as Record<string, unknown>
     : {};
-  const storedRoleValue = typeof existingData.role === 'string'
-    ? existingData.role.trim().toLowerCase()
-    : '';
   const resolvedRole: UserRole = userSnapshot.exists
-    ? storedRoleValue === 'admin' || storedRoleValue === 'agent' || storedRoleValue === 'customer'
-      ? storedRoleValue as UserRole
-      : resolveSeededRole(authPhone)
+    ? normalizeRole(existingData.role)
     : resolveSeededRole(authPhone);
   const name = getStringBodyValue(body, 'name', 120) ||
     (typeof existingData.name === 'string' ? existingData.name : '');
   const isActive = typeof existingData.isActive === 'boolean'
     ? existingData.isActive
     : true;
+
+  logResolvedRole(authPhone, resolvedRole);
 
   const baseProfile = {
     uid: requestUser.uid,
