@@ -30,6 +30,11 @@ type AuthUserOverrides = {
   role?: UserRole;
 };
 
+const normalize = (value: string) => value.replace(/\s+/g, '');
+
+const normalizePhoneForComparison = (value: string) =>
+  safeNormalizePhoneNumber(normalize(value)) || normalize(value).trim();
+
 const normalizeRole = (value: unknown): UserRole => {
   if (value === 'admin' || value === 'agent') {
     return value;
@@ -38,12 +43,37 @@ const normalizeRole = (value: unknown): UserRole => {
   return 'customer';
 };
 
+const getConfiguredAdminPhone = () =>
+  normalizePhoneForComparison(import.meta.env.VITE_ADMIN_PHONE || '');
+
+const getConfiguredAgentPhone = () =>
+  normalizePhoneForComparison(import.meta.env.VITE_AGENT_PHONE || '');
+
 const buildDisplayName = (phone: string) =>
   formatPhoneForDisplay(phone) || 'COFFEE-HUB User';
 
-const logResolvedRole = (phone: string, role: UserRole) => {
-  console.log('Phone:', phone);
-  console.log('Assigned Role:', role);
+const resolveRoleFromPhone = (phone: string): UserRole => {
+  const normalizedPhone = normalizePhoneForComparison(phone);
+  const adminPhone = getConfiguredAdminPhone();
+  const agentPhone = getConfiguredAgentPhone();
+  const isAdmin = Boolean(normalizedPhone && adminPhone) && normalizedPhone === adminPhone;
+  const isAgent = Boolean(normalizedPhone && agentPhone) && normalizedPhone === agentPhone;
+  let role: UserRole;
+
+  if (isAdmin) {
+    role = 'admin';
+  } else if (isAgent) {
+    role = 'agent';
+  } else {
+    role = 'customer';
+  }
+
+  console.log('PHONE:', normalizedPhone);
+  console.log('ADMIN_PHONE:', adminPhone);
+  console.log('AGENT_PHONE:', agentPhone);
+  console.log('ROLE:', role);
+
+  return role;
 };
 
 const mapFirebaseUser = (
@@ -87,31 +117,35 @@ const resolveAuthenticatedUser = (
     const storedPhone = safeNormalizePhoneNumber(
       typeof storedData?.phone === 'string' ? storedData.phone : authPhone,
     );
+    const fallbackResolvedPhone = storedPhone || authPhone;
+    const fallbackResolvedRole = resolveRoleFromPhone(fallbackResolvedPhone);
+    let resolvedPhone = fallbackResolvedPhone;
+    let resolvedRole = fallbackResolvedRole;
 
-    if (userSnapshot.exists()) {
-      const role = normalizeRole(storedData?.role);
-      logResolvedRole(storedPhone || authPhone, role);
-      return mapFirebaseUser(firebaseUser, {
-        phone: storedPhone || authPhone,
-        role,
-      });
+    try {
+      const idToken = await firebaseUser.getIdToken(true);
+      const response = await syncUserProfileRequest(
+        {
+          name:
+            firebaseUser.displayName?.trim() ||
+            (typeof storedData?.name === 'string' ? storedData.name : '') ||
+            buildDisplayName(authPhone),
+        },
+        idToken,
+      );
+
+      resolvedPhone = safeNormalizePhoneNumber(response.profile.phone || fallbackResolvedPhone) ||
+        fallbackResolvedPhone;
+      resolvedRole = response.profile.role
+        ? normalizeRole(response.profile.role)
+        : fallbackResolvedRole;
+    } catch (error) {
+      console.error('Failed to sync authenticated user profile before rendering', error);
     }
 
-    const idToken = await firebaseUser.getIdToken(true);
-    const response = await syncUserProfileRequest(
-      {
-        name: firebaseUser.displayName?.trim() || buildDisplayName(authPhone),
-      },
-      idToken,
-    );
-    const syncedPhone = safeNormalizePhoneNumber(response.profile.phone || authPhone);
-    const role = normalizeRole(response.profile.role);
-
-    logResolvedRole(syncedPhone || authPhone, role);
-
     return mapFirebaseUser(firebaseUser, {
-      phone: syncedPhone || authPhone,
-      role,
+      phone: resolvedPhone,
+      role: resolvedRole,
     });
   })();
 
@@ -149,7 +183,11 @@ export const observeAuthSession = (onChange: (user: AuthUser | null) => void) =>
           return;
         }
 
-        onChange(mapFirebaseUser(firebaseUser));
+        const fallbackPhone = safeNormalizePhoneNumber(firebaseUser.phoneNumber || '');
+        onChange(mapFirebaseUser(firebaseUser, {
+          phone: fallbackPhone,
+          role: resolveRoleFromPhone(fallbackPhone),
+        }));
       }
 
       if (currentSequence !== sequence) {
@@ -167,9 +205,7 @@ export const observeAuthSession = (onChange: (user: AuthUser | null) => void) =>
           const phone = safeNormalizePhoneNumber(
             typeof data?.phone === 'string' ? data.phone : firebaseUser.phoneNumber || '',
           );
-          const role = normalizeRole(data?.role);
-
-          logResolvedRole(phone, role);
+          const role = resolveRoleFromPhone(phone);
 
           onChange(mapFirebaseUser(firebaseUser, {
             phone,
@@ -182,7 +218,11 @@ export const observeAuthSession = (onChange: (user: AuthUser | null) => void) =>
             return;
           }
 
-          onChange(mapFirebaseUser(firebaseUser));
+          const fallbackPhone = safeNormalizePhoneNumber(firebaseUser.phoneNumber || '');
+          onChange(mapFirebaseUser(firebaseUser, {
+            phone: fallbackPhone,
+            role: resolveRoleFromPhone(fallbackPhone),
+          }));
         },
       );
     })();

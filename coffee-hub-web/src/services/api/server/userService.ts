@@ -19,11 +19,16 @@ const DEFAULT_NOTIFICATION_SETTINGS = {
   offers: false,
 };
 
+const normalize = (value: string) => value.replace(/\s+/g, '');
+
+const normalizePhoneForComparison = (value: string) =>
+  safeNormalizePhoneNumber(normalize(value)) || normalize(value).trim();
+
 const getConfiguredAdminPhone = () =>
-  safeNormalizePhoneNumber(process.env.ADMIN_PHONE || process.env.VITE_ADMIN_PHONE || '');
+  normalizePhoneForComparison(process.env.VITE_ADMIN_PHONE || process.env.ADMIN_PHONE || '');
 
 const getConfiguredAgentPhone = () =>
-  safeNormalizePhoneNumber(process.env.AGENT_PHONE || process.env.VITE_AGENT_PHONE || '');
+  normalizePhoneForComparison(process.env.VITE_AGENT_PHONE || process.env.AGENT_PHONE || '');
 
 const getBody = (request: VercelRequest) => {
   if (!request.body || typeof request.body !== 'object') {
@@ -50,21 +55,28 @@ const normalizeRole = (value: unknown): UserRole => {
   return 'customer';
 };
 
-const logResolvedRole = (phone: string, role: UserRole) => {
-  console.log('Phone:', phone);
-  console.log('Assigned Role:', role);
-};
+const resolveRoleFromPhone = (phone: string): UserRole => {
+  const normalizedPhone = normalizePhoneForComparison(phone);
+  const adminPhone = getConfiguredAdminPhone();
+  const agentPhone = getConfiguredAgentPhone();
+  const isAdmin = Boolean(normalizedPhone && adminPhone) && normalizedPhone === adminPhone;
+  const isAgent = Boolean(normalizedPhone && agentPhone) && normalizedPhone === agentPhone;
+  let role: UserRole;
 
-const resolveSeededRole = (phone: string): UserRole => {
-  if (phone === getConfiguredAdminPhone()) {
-    return 'admin';
+  if (isAdmin) {
+    role = 'admin';
+  } else if (isAgent) {
+    role = 'agent';
+  } else {
+    role = 'customer';
   }
 
-  if (phone === getConfiguredAgentPhone()) {
-    return 'agent';
-  }
+  console.log('PHONE:', normalizedPhone);
+  console.log('ADMIN_PHONE:', adminPhone);
+  console.log('AGENT_PHONE:', agentPhone);
+  console.log('ROLE:', role);
 
-  return 'customer';
+  return role;
 };
 
 const mapUserProfileResponse = (
@@ -115,16 +127,12 @@ export const syncUserProfileResponse = async (
   const existingData = userSnapshot.exists
     ? userSnapshot.data() as Record<string, unknown>
     : {};
-  const resolvedRole: UserRole = userSnapshot.exists
-    ? normalizeRole(existingData.role)
-    : resolveSeededRole(authPhone);
+  const resolvedRole = resolveRoleFromPhone(authPhone);
   const name = getStringBodyValue(body, 'name', 120) ||
     (typeof existingData.name === 'string' ? existingData.name : '');
   const isActive = typeof existingData.isActive === 'boolean'
     ? existingData.isActive
     : true;
-
-  logResolvedRole(authPhone, resolvedRole);
 
   const baseProfile = {
     uid: requestUser.uid,
