@@ -77,10 +77,13 @@ Create `coffee-hub-web/.env.local` with the Firebase web config used by the clie
 - `VITE_APP_ID` or `VITE_FIREBASE_APP_ID`
 - `VITE_FIREBASE_VAPID_KEY`
 - `VITE_GOOGLE_MAP_KEY`
-- `VITE_ADMIN_EMAIL`
+- `VITE_ADMIN_PHONE`
+- `VITE_AGENT_PHONE` (optional, only for client-side display/lock state)
 
 Server-side Vercel/Firebase Admin variables:
 
+- `ADMIN_PHONE`
+- `AGENT_PHONE`
 - `FIREBASE_ADMIN_PROJECT_ID`
 - `FIREBASE_ADMIN_CLIENT_EMAIL`
 - `FIREBASE_ADMIN_PRIVATE_KEY`
