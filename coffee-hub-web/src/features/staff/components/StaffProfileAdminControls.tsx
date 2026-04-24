@@ -1,6 +1,6 @@
 import { Clock3 } from 'lucide-react';
 import { formatPhoneForDisplay } from '../../../../shared/phone';
-import { ADMIN_PHONE } from '../../app/lib/constants';
+import { ADMIN_PHONE, AGENT_PHONE } from '../../app/lib/constants';
 import type { AccessEntry, ShopTimingDraft } from '../../app/types';
 import { formatShopTimingRange, type ShopTiming } from '../../../../shared/shopTiming';
 
@@ -139,7 +139,12 @@ export const StaffProfileAdminControls = ({
             <p className="text-sm text-ink-muted">No signed-in users are available yet.</p>
           ) : (
             userRoleEntries.map(entry => {
-              const isLocked = Boolean(ADMIN_PHONE && entry.phone === ADMIN_PHONE);
+              const isLocked = Boolean(
+                (ADMIN_PHONE && entry.phone === ADMIN_PHONE) ||
+                (AGENT_PHONE && entry.phone === AGENT_PHONE),
+              );
+              const isConfiguredAdmin = Boolean(ADMIN_PHONE && entry.phone === ADMIN_PHONE);
+              const isConfiguredAgent = Boolean(AGENT_PHONE && entry.phone === AGENT_PHONE);
               const isUpdating = updatingUserRoleId === entry.id;
 
               return (
@@ -153,7 +158,11 @@ export const StaffProfileAdminControls = ({
                         {formatPhoneForDisplay(entry.phone)}
                       </p>
                       <p className="mt-1 text-[11px] uppercase tracking-[0.18em] text-ink-muted">
-                        {isLocked ? 'Main admin account' : 'Firestore user'}
+                        {isConfiguredAdmin
+                          ? 'Configured admin account'
+                          : isConfiguredAgent
+                            ? 'Configured agent account'
+                            : 'Firestore user'}
                       </p>
                     </div>
                     <span className="rounded-full border border-secondary/25 bg-secondary/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-secondary">

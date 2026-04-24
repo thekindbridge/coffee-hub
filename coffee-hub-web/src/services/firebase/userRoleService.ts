@@ -6,7 +6,6 @@ import {
   onSnapshot,
   query,
   serverTimestamp,
-  setDoc,
   updateDoc,
   where,
 } from 'firebase/firestore';
@@ -181,18 +180,6 @@ export const addAgentRoleEntry = async (phoneNumber: string) => {
 
   try {
     await updateUserRoleByPhone(normalizedPhone, 'agent');
-    await setDoc(
-      doc(db, 'agents', normalizedPhone),
-      {
-        accessOnly: true,
-        isActive: false,
-        phone: normalizedPhone,
-        role: 'agent',
-        status: 'OFFLINE',
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true },
-    );
   } catch (error) {
     throw toAppServiceError(error, 'Unable to add delivery agent role.', 'network');
   }
@@ -222,40 +209,6 @@ export const updateUserRoleEntry = async (
       role,
       updatedAt: serverTimestamp(),
     });
-
-    if (!normalizedPhone) {
-      return;
-    }
-
-    if (role === 'agent') {
-      await setDoc(
-        doc(db, 'agents', normalizedPhone),
-        {
-          accessOnly: false,
-          isActive: false,
-          phone: normalizedPhone,
-          role: 'agent',
-          status: 'OFFLINE',
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true },
-      );
-
-      return;
-    }
-
-    await setDoc(
-      doc(db, 'agents', normalizedPhone),
-      {
-        accessOnly: true,
-        isActive: false,
-        phone: normalizedPhone,
-        role,
-        status: 'OFFLINE',
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true },
-    );
   } catch (error) {
     throw toAppServiceError(error, 'Unable to update the user role.', 'network');
   }

@@ -41,18 +41,6 @@ export const useProfileData = ({
     role: currentUserRole,
   }), [currentUserId, currentUserName, currentUserPhone, currentUserRole]);
 
-  const resolveRole = (nextRole: CustomerProfile['role']) => {
-    if (nextRole === 'admin' || currentUserRole === 'admin') {
-      return 'admin';
-    }
-
-    if (nextRole === 'agent' || currentUserRole === 'agent') {
-      return 'agent';
-    }
-
-    return 'customer';
-  };
-
   useEffect(() => {
     if (!isAuthReady) {
       return;
@@ -82,7 +70,7 @@ export const useProfileData = ({
           uid: profile.uid || currentUserId,
           name: profile.name || currentUserName,
           phone: profile.phone || currentUserPhone,
-          role: resolveRole(profile.role),
+          role: profile.role,
         });
         setHasProfileSnapshot(true);
       },
@@ -137,7 +125,7 @@ export const useProfileData = ({
           uid: response.profile.uid || currentUserId,
           name: response.profile.name || currentUserName,
           phone: response.profile.phone || currentUserPhone,
-          role: resolveRole(response.profile.role),
+          role: response.profile.role,
         });
       } catch (error) {
         console.error('Failed to sync Firebase user profile', error);

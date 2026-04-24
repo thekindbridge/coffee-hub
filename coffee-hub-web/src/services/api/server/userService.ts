@@ -1,6 +1,7 @@
 import { FieldValue } from 'firebase-admin/firestore';
 import type { VercelRequest } from '@vercel/node';
 import { safeNormalizePhoneNumber } from '../../../../shared/phone.js';
+import { resolveRoleFromConfiguredPhones } from '../../../../shared/userRole.js';
 
 import { ApiError } from '../../../../api/_lib/errors.js';
 import {
@@ -19,16 +20,8 @@ const DEFAULT_NOTIFICATION_SETTINGS = {
   offers: false,
 };
 
-const normalize = (value: string) => value.replace(/\s+/g, '');
-
-const normalizePhoneForComparison = (value: string) =>
-  safeNormalizePhoneNumber(normalize(value)) || normalize(value).trim();
-
-const getConfiguredAdminPhone = () =>
-  normalizePhoneForComparison(process.env.VITE_ADMIN_PHONE || process.env.ADMIN_PHONE || '');
-
-const getConfiguredAgentPhone = () =>
-  normalizePhoneForComparison(process.env.VITE_AGENT_PHONE || process.env.AGENT_PHONE || '');
+const ADMIN_PHONE = process.env.VITE_ADMIN_PHONE || process.env.ADMIN_PHONE || '';
+const AGENT_PHONE = process.env.VITE_AGENT_PHONE || process.env.AGENT_PHONE || '';
 
 const getBody = (request: VercelRequest) => {
   if (!request.body || typeof request.body !== 'object') {
@@ -56,27 +49,18 @@ const normalizeRole = (value: unknown): UserRole => {
 };
 
 const resolveRoleFromPhone = (phone: string): UserRole => {
-  const normalizedPhone = normalizePhoneForComparison(phone);
-  const adminPhone = getConfiguredAdminPhone();
-  const agentPhone = getConfiguredAgentPhone();
-  const isAdmin = Boolean(normalizedPhone && adminPhone) && normalizedPhone === adminPhone;
-  const isAgent = Boolean(normalizedPhone && agentPhone) && normalizedPhone === agentPhone;
-  let role: UserRole;
+  return resolveRoleFromConfiguredPhones({
+    phone,
+    adminPhone: ADMIN_PHONE,
+    agentPhone: AGENT_PHONE,
+  });
+};
 
-  if (isAdmin) {
-    role = 'admin';
-  } else if (isAgent) {
-    role = 'agent';
-  } else {
-    role = 'customer';
-  }
-
-  console.log('PHONE:', normalizedPhone);
-  console.log('ADMIN_PHONE:', adminPhone);
-  console.log('AGENT_PHONE:', agentPhone);
-  console.log('ROLE:', role);
-
-  return role;
+const logResolvedRole = (phone: string, role: UserRole) => {
+  console.log('PHONE:', phone);
+  console.log('ENV ADMIN:', ADMIN_PHONE);
+  console.log('ENV AGENT:', AGENT_PHONE);
+  console.log('FINAL ROLE:', role);
 };
 
 const mapUserProfileResponse = (
@@ -133,6 +117,8 @@ export const syncUserProfileResponse = async (
   const isActive = typeof existingData.isActive === 'boolean'
     ? existingData.isActive
     : true;
+
+  logResolvedRole(authPhone, resolvedRole);
 
   const baseProfile = {
     uid: requestUser.uid,

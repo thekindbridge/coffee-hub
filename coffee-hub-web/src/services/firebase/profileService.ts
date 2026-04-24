@@ -101,7 +101,6 @@ export const saveUserProfile = async ({
       name: profileDraft.name.trim(),
       notificationSettings: profileDraft.notificationSettings,
       phone: normalizedPhone,
-      role: 'agent',
       status: agentStatus,
       updatedAt: serverTimestamp(),
       vehicle: profileDraft.vehicleType,

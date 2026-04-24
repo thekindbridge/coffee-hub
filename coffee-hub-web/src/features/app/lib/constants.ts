@@ -13,6 +13,7 @@ export const ORDER_STATUSES: Order['status'][] = [
 ];
 
 export const ADMIN_PHONE = safeNormalizePhoneNumber(import.meta.env.VITE_ADMIN_PHONE || '');
+export const AGENT_PHONE = safeNormalizePhoneNumber(import.meta.env.VITE_AGENT_PHONE || '');
 export const CURRENCY_SYMBOL = '\u20B9';
 export const STANDARD_DELIVERY_FEE = 50;
 export const AUTH_BACKGROUND_IMAGE =

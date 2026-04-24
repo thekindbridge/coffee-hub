@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { updateUserRoleEntry } from '../../../services/firebase/userRoleService';
 import type { AccessEntry } from '../types';
+import { ADMIN_PHONE, AGENT_PHONE } from '../lib/constants';
 
 type UseAccessManagerParams = {
   canManageRoles: boolean;
@@ -58,6 +59,16 @@ export const useAccessManager = ({
     }
 
     if (entry.role === role) {
+      return;
+    }
+
+    if (entry.phone === ADMIN_PHONE && role !== 'admin') {
+      setRoleChangeError('The configured admin phone is locked to the admin role.');
+      return;
+    }
+
+    if (entry.phone === AGENT_PHONE && role !== 'agent') {
+      setRoleChangeError('The configured agent phone is locked to the agent role.');
       return;
     }
 

@@ -19,13 +19,7 @@ let recaptchaVerifier: RecaptchaVerifier | null = null;
 let pendingConfirmationResult: ConfirmationResult | null = null;
 let pendingVerification: PendingPhoneVerification | null = null;
 
-const isPhoneAuthTestMode = () => {
-  const configuredValue = `${import.meta.env.VITE_FIREBASE_PHONE_TEST_MODE ?? 'true'}`
-    .trim()
-    .toLowerCase();
-
-  return configuredValue !== 'false';
-};
+const isPhoneAuthTestMode = () => import.meta.env.DEV;
 
 const getRecaptchaElement = (containerId: string) => {
   if (typeof document === 'undefined') {
