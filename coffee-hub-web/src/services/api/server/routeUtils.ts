@@ -51,6 +51,7 @@ export const toErrorResponse = (
     return jsonResponse(error.statusCode, { error: error.message });
   }
 
+  console.error('API ERROR:', error);
   console.error(logLabel, error);
   return jsonResponse(500, { error: fallbackMessage });
 };

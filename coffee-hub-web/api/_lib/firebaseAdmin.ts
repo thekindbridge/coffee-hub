@@ -38,6 +38,7 @@ const getRequiredEnv = (key: string, fallbacks: string[] = []) => {
     }
   }
 
+  console.error('API ERROR:', new Error(`Missing Firebase Admin environment variable: ${key}.`));
   throw new Error(`${key} is not configured.`);
 };
 

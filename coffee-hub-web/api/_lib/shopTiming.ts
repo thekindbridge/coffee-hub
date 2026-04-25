@@ -9,6 +9,11 @@ import {
 
 const SHOP_SETTINGS_COLLECTION = 'settings';
 const SHOP_SETTINGS_DOC_ID = 'shop';
+const DEFAULT_SHOP_TIMING: ShopTiming = {
+  openTime: '09:00',
+  closeTime: '22:00',
+  updatedAt: '',
+};
 
 const mapTimestampToIsoString = (value: unknown) => {
   if (
@@ -25,8 +30,8 @@ const mapTimestampToIsoString = (value: unknown) => {
 export const loadShopTiming = async (db: Firestore): Promise<ShopTiming> => {
   const snapshot = await db.collection(SHOP_SETTINGS_COLLECTION).doc(SHOP_SETTINGS_DOC_ID).get();
   if (!snapshot.exists) {
-    console.error('Shop timing document is missing at settings/shop.');
-    throw new Error('Shop timing document is missing.');
+    console.error('API ERROR:', new Error('Shop timing document is missing at settings/shop.'));
+    return DEFAULT_SHOP_TIMING;
   }
 
   const data = snapshot.data() as Record<string, unknown>;
@@ -37,11 +42,11 @@ export const loadShopTiming = async (db: Firestore): Promise<ShopTiming> => {
   });
 
   if (!shopTiming) {
-    console.error('Shop timing document is invalid.', {
+    console.error('API ERROR:', new Error('Shop timing document is invalid.'), {
       closeTime: data.closeTime,
       openTime: data.openTime,
     });
-    throw new Error('Shop timing document is invalid.');
+    return DEFAULT_SHOP_TIMING;
   }
 
   return shopTiming;
