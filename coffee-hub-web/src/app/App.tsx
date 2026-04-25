@@ -34,7 +34,7 @@ export default function App() {
 
   const offersState = useOffers({
     enabled: session.isAuthResolved,
-    includeInactive: session.isAdmin,
+    includeInactive: session.canAccessAdminPanel,
   });
 
   const orderOperations = useOrderOperations({
@@ -63,20 +63,18 @@ export default function App() {
   const profileManager = useProfileManager({
     currentUserId: session.currentUserId,
     currentUserPhone: session.currentUserPhone,
-    isAdmin: session.isAdmin,
+    isAdmin: session.canAccessAdminPanel,
     isDeliveryAgent: session.isDeliveryAgent,
     profileSaved: session.profileSaved,
     deliveryAgents: session.deliveryAgents,
   });
 
   const accessManager = useAccessManager({
-    canManageRoles: session.isAdmin,
-    currentUserPhone: session.normalizedCurrentPhone,
-    userRoleEntries: session.userRoleEntries,
+    canManageRoles: session.canManageRoles,
   });
 
   const shopTimingManager = useShopTimingManager({
-    isAdmin: session.isAdmin,
+    isAdmin: session.canAccessAdminPanel,
     isDrawerOpen: profileManager.isProfileOpen,
     shopTiming: session.shopTiming,
   });

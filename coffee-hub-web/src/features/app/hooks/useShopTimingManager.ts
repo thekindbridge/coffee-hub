@@ -68,7 +68,7 @@ export const useShopTimingManager = ({
 
   const handleSaveShopTiming = async () => {
     if (!isAdmin) {
-      setShopTimingError('Admin access is required to update shop timing.');
+      setShopTimingError('Owner or admin access is required to update shop timing.');
       return;
     }
 

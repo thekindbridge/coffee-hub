@@ -19,15 +19,18 @@ import type {
   AgentStatus,
   AgentVehicleType,
   CustomerProfile,
+  ManagedUserRole,
   ShopTimingDraft,
 } from '../app/types';
 import { type ShopTiming } from '../../../shared/shopTiming';
+import type { UserRole } from '../../../shared/userRole';
 
 type ProfileScreenProps = {
   isOpen: boolean;
-  isAdmin: boolean;
+  canAccessAdminPanel: boolean;
   isDeliveryAgent: boolean;
-  isMainAdmin: boolean;
+  isOwner: boolean;
+  role: UserRole;
   profileDraft: CustomerProfile;
   profileError: string;
   profileSyncError: string;
@@ -45,8 +48,9 @@ type ProfileScreenProps = {
   userRoleEntries: AccessEntry[];
   roleChangeError: string;
   roleChangeSuccess: string;
-  updatingUserRoleId: string;
-  updatingUserRoleValue: AccessEntry['role'] | '';
+  pendingRoleAction: 'assign' | 'remove' | '';
+  pendingRolePhone: string;
+  pendingRoleValue: ManagedUserRole | '';
   onClose: () => void;
   onLogout: () => void;
   onSave: () => void;
@@ -56,20 +60,23 @@ type ProfileScreenProps = {
   onProfileAddressExpandedChange: (isExpanded: boolean) => void;
   onShopTimingDraftChange: (draft: ShopTimingDraft) => void;
   onSaveShopTiming: () => void;
-  onChangeUserRole: (entry: AccessEntry, role: AccessEntry['role']) => void;
+  onAssignUserRole: (phone: string, role: ManagedUserRole) => void;
+  onRemoveUserRole: (entry: AccessEntry) => void;
 };
 
-const roleLabel = {
+const roleLabel: Record<UserRole, string> = {
+  owner: 'Owner',
   admin: 'Admin',
-  agent: 'Delivery Agent',
+  delivery_agent: 'Delivery Agent',
   customer: 'Customer',
 };
 
 export const ProfileScreen = ({
   isOpen,
-  isAdmin,
+  canAccessAdminPanel,
   isDeliveryAgent,
-  isMainAdmin,
+  isOwner,
+  role,
   profileDraft,
   profileError,
   profileSyncError,
@@ -87,8 +94,9 @@ export const ProfileScreen = ({
   userRoleEntries,
   roleChangeError,
   roleChangeSuccess,
-  updatingUserRoleId,
-  updatingUserRoleValue,
+  pendingRoleAction,
+  pendingRolePhone,
+  pendingRoleValue,
   onClose,
   onLogout,
   onSave,
@@ -98,9 +106,9 @@ export const ProfileScreen = ({
   onProfileAddressExpandedChange,
   onShopTimingDraftChange,
   onSaveShopTiming,
-  onChangeUserRole,
+  onAssignUserRole,
+  onRemoveUserRole,
 }: ProfileScreenProps) => {
-  const role = isAdmin ? 'admin' : isDeliveryAgent ? 'agent' : 'customer';
   const nameLabel = isDeliveryAgent ? 'Agent Name' : 'Name';
 
   return (
@@ -202,15 +210,15 @@ export const ProfileScreen = ({
                   </div>
                 </div>
 
-                {isAdmin && (
+                {canAccessAdminPanel && (
                   <div className="coffee-surface-soft rounded-[26px] p-4">
                     <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-ink-muted">
-                      Admin Settings
+                      {isOwner ? 'Owner Settings' : 'Admin Settings'}
                     </p>
                     <div className="mt-4 space-y-3">
                       <div className="flex items-center gap-2 rounded-[20px] border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-ink">
                         <ShieldCheck size={16} className="text-secondary" />
-                        Admin - Coffee Hub management
+                        {isOwner ? 'Owner' : 'Admin'} - Coffee Hub management
                       </div>
                       <div>
                         <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-muted">
@@ -283,7 +291,7 @@ export const ProfileScreen = ({
                   </div>
                 )}
 
-                {!isAdmin && !isDeliveryAgent && (
+                {!canAccessAdminPanel && !isDeliveryAgent && (
                   <div className="coffee-surface-soft rounded-[26px] p-4">
                     <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-ink-muted">
                       Orders and Addresses
@@ -355,8 +363,8 @@ export const ProfileScreen = ({
                 )}
 
                 <StaffProfileAdminControls
-                  isAdmin={isAdmin}
-                  isMainAdmin={isMainAdmin}
+                  canAccessAdminPanel={canAccessAdminPanel}
+                  isOwner={isOwner}
                   shopTiming={shopTiming}
                   shopTimingDraft={shopTimingDraft}
                   shopTimingError={shopTimingError}
@@ -365,11 +373,13 @@ export const ProfileScreen = ({
                   userRoleEntries={userRoleEntries}
                   roleChangeError={roleChangeError}
                   roleChangeSuccess={roleChangeSuccess}
-                  updatingUserRoleId={updatingUserRoleId}
-                  updatingUserRoleValue={updatingUserRoleValue}
+                  pendingRoleAction={pendingRoleAction}
+                  pendingRolePhone={pendingRolePhone}
+                  pendingRoleValue={pendingRoleValue}
                   onShopTimingDraftChange={onShopTimingDraftChange}
                   onSaveShopTiming={onSaveShopTiming}
-                  onChangeUserRole={onChangeUserRole}
+                  onAssignUserRole={onAssignUserRole}
+                  onRemoveUserRole={onRemoveUserRole}
                 />
 
                 <NotificationSettingsPanel

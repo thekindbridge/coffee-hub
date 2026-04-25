@@ -9,6 +9,7 @@ import { getMessaging } from 'firebase-admin/messaging';
 import type { VercelRequest } from '@vercel/node';
 import { safeNormalizePhoneNumber } from '../../shared/phone.js';
 import { ApiError } from './errors.js';
+import { hasAdminPanelAccess } from '../../src/services/api/server/roleService.js';
 
 type VerifiedRequestUser = {
   email?: string;
@@ -141,16 +142,6 @@ const toAuthApiError = (error: unknown) => {
   return null;
 };
 
-const getStoredRoleByUid = async (userId: string) => {
-  if (!userId) {
-    return '';
-  }
-
-  const snapshot = await getAdminDb().collection('users').doc(userId).get();
-  const role = snapshot.data()?.role;
-  return typeof role === 'string' ? role.trim().toLowerCase() : '';
-};
-
 const getDecodedTokenPhone = (decodedToken: DecodedIdToken) => safeNormalizePhoneNumber(
   decodedToken.phone_number ||
   (
@@ -160,14 +151,47 @@ const getDecodedTokenPhone = (decodedToken: DecodedIdToken) => safeNormalizePhon
   ),
 );
 
+const resolveRequestPhone = async (
+  decodedToken: DecodedIdToken,
+  uid: string,
+) => {
+  const decodedPhone = getDecodedTokenPhone(decodedToken);
+  if (decodedPhone) {
+    return decodedPhone;
+  }
+
+  try {
+    const userRecord = await getAdminAuthClient().getUser(uid);
+    return safeNormalizePhoneNumber(userRecord.phoneNumber || '');
+  } catch (error) {
+    console.error('Unable to resolve Firebase Auth phone number for request user', error);
+    return '';
+  }
+};
+
+const lookupUserPhoneByUid = async (userId: string) => {
+  if (!userId) {
+    return '';
+  }
+
+  const snapshot = await getAdminDb().collection('users').doc(userId).get();
+  const storedPhone = snapshot.data()?.phone;
+
+  return typeof storedPhone === 'string'
+    ? safeNormalizePhoneNumber(storedPhone)
+    : '';
+};
+
 export const hasAdminAccess = async ({
+  phone = '',
   uid = '',
 }: {
   email?: string;
   phone?: string;
   uid?: string;
 }) => {
-  return Boolean(uid && (await getStoredRoleByUid(uid)) === 'admin');
+  const resolvedPhone = safeNormalizePhoneNumber(phone) || await lookupUserPhoneByUid(uid);
+  return Boolean(resolvedPhone && await hasAdminPanelAccess(getAdminDb(), resolvedPhone));
 };
 
 export const verifyRequestUser = async (
@@ -190,7 +214,7 @@ export const verifyRequestUser = async (
 
     return {
       email: normalizeEmail(decodedToken.email || ''),
-      phone: getDecodedTokenPhone(decodedToken),
+      phone: await resolveRequestPhone(decodedToken, uid),
       sessionId: typeof decodedToken.sid === 'string' ? decodedToken.sid : null,
       tokenClaims: decodedToken,
       uid,
@@ -213,6 +237,7 @@ export const verifyRequestUser = async (
 export const verifyAdminRequest = async (request: VercelRequest) => {
   const decodedToken = await verifyRequestUser(request);
   const isAdmin = await hasAdminAccess({
+    phone: decodedToken.phone,
     uid: decodedToken.uid,
   });
 

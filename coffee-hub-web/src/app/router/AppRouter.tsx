@@ -21,7 +21,7 @@ const CustomerAppShell = lazyNamed(
 export const AppRouter = (props: AppRouterProps) => {
   let Shell = CustomerAppShell;
 
-  if (props.session.isAdmin) {
+  if (props.session.canAccessAdminPanel) {
     Shell = AdminAppShell;
   } else if (props.session.isDeliveryAgent) {
     Shell = AgentAppShell;

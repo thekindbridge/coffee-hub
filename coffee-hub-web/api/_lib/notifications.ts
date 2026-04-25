@@ -4,6 +4,10 @@ import { safeNormalizePhoneNumber } from '../../shared/phone.js';
 
 import { normalizeOrderStatusCode, type OrderStatusCode } from '../../shared/orderStatus.js';
 import { getAdminMessaging } from './firebaseAdmin.js';
+import {
+  getAdminPhones,
+  getUserRole,
+} from '../../src/services/api/server/roleService.js';
 
 export type NotificationPreferenceKey = 'orderUpdates' | 'offers';
 
@@ -102,6 +106,24 @@ const buildRecipientFromAgentSnapshot = (
     settings: normalizeNotificationSettings(data.notificationSettings),
     agentDocId: snapshot.id,
   };
+};
+
+const findUserSnapshotByPhone = async (
+  adminDb: Firestore,
+  phone: string,
+) => {
+  const normalizedPhone = safeNormalizePhoneNumber(phone);
+  if (!normalizedPhone) {
+    return null;
+  }
+
+  const snapshot = await adminDb
+    .collection('users')
+    .where('phone', '==', normalizedPhone)
+    .limit(1)
+    .get();
+
+  return snapshot.docs[0] || null;
 };
 
 const shouldDeliverToRecipient = (
@@ -206,14 +228,13 @@ export const syncNotificationRegistration = async (
   const existingSettings = normalizeNotificationSettings(
     userSnapshot.data()?.notificationSettings,
   );
+  const role = normalizedPhone
+    ? await getUserRole(adminDb, normalizedPhone)
+    : 'customer';
 
   const agentSnapshot = normalizedPhone
     ? await adminDb.collection('agents').doc(normalizedPhone).get()
     : null;
-  const existingRole = userSnapshot.data()?.role;
-  const role = existingRole === 'admin' || existingRole === 'agent' || existingRole === 'customer'
-    ? existingRole
-    : 'customer';
 
   if (normalizedToken) {
     const [duplicateUsers, duplicateAgents] = await Promise.all([
@@ -262,7 +283,7 @@ export const syncNotificationRegistration = async (
 
   await userRef.set(userUpdate, { merge: true });
 
-  if (role === 'agent' && normalizedPhone && tokenType === 'fcm') {
+  if (role === 'delivery_agent' && normalizedPhone && tokenType === 'fcm') {
     const existingAgentSettings = normalizeNotificationSettings(
       agentSnapshot?.data()?.notificationSettings,
     );
@@ -312,9 +333,13 @@ export const getAgentRecipient = async (
 export const getAdminRecipients = async (
   adminDb: Firestore,
 ): Promise<NotificationRecipient[]> => {
-  const snapshot = await adminDb.collection('users').where('role', '==', 'admin').get();
+  const adminPhones = await getAdminPhones(adminDb);
+  const snapshots = await Promise.all(
+    adminPhones.map(phone => findUserSnapshotByPhone(adminDb, phone)),
+  );
 
-  return snapshot.docs
+  return snapshots
+    .filter((snapshot): snapshot is QueryDocumentSnapshot => Boolean(snapshot))
     .map(buildRecipientFromUserSnapshot)
     .filter((recipient): recipient is NotificationRecipient => Boolean(recipient));
 };

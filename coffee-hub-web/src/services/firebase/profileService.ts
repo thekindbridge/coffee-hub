@@ -10,6 +10,10 @@ import type {
   NotificationSettings,
 } from '../../features/app/types';
 import {
+  canAccessAdminPanel,
+  isDeliveryAgentRole,
+} from '../../../shared/userRole';
+import {
   EMPTY_PROFILE,
   ensureProfileAddresses,
   formatPhoneWithPrefix,
@@ -69,18 +73,18 @@ export const saveUserProfile = async ({
       updatedAt: serverTimestamp(),
     };
 
-    if (profileDraft.role === 'admin') {
+    if (canAccessAdminPanel(profileDraft.role)) {
       userPayload.adminLocation = profileDraft.adminLocation.trim();
     }
 
-    if (profileDraft.role === 'agent') {
+    if (isDeliveryAgentRole(profileDraft.role)) {
       userPayload.status = profileDraft.status;
       userPayload.vehicleType = profileDraft.vehicleType;
     }
 
     await setDoc(doc(db, 'users', currentUserId), userPayload, { merge: true });
 
-    if (profileDraft.role !== 'agent' || !normalizedPhone) {
+    if (!isDeliveryAgentRole(profileDraft.role) || !normalizedPhone) {
       return;
     }
 
@@ -137,7 +141,7 @@ export const saveUserNotificationSettings = async ({
       { merge: true },
     );
 
-    if (profileDraft.role !== 'agent') {
+    if (!isDeliveryAgentRole(profileDraft.role)) {
       return;
     }
 

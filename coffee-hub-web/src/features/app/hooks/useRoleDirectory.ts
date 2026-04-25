@@ -1,68 +1,48 @@
-import { useEffect, useState } from 'react';
-import {
-  subscribeToAdminRoleEntries,
-  subscribeToAgentRoleEntries,
-  subscribeToUserRoleEntries,
-} from '../../../services/firebase/userRoleService';
+import { useEffect, useMemo, useState } from 'react';
+import { subscribeToRoleAssignments } from '../../../services/roleService';
 import type { AccessEntry } from '../types';
 
 export type RoleDirectoryData = {
   userRoleEntries: AccessEntry[];
   adminRoleEntries: AccessEntry[];
-  agentRoleEntries: AccessEntry[];
+  deliveryAgentRoleEntries: AccessEntry[];
 };
 
 /**
- * Loads role-management lists for the admin profile panel.
- * The current user's active role is read from users/{uid}.role in useProfileData.
+ * Loads live role assignments from user_roles/{phone} for the owner-only
+ * management panel. The active signed-in user's role is resolved separately
+ * through useUserRole.
  */
-export const useRoleDirectory = (isAdmin: boolean): RoleDirectoryData => {
+export const useRoleDirectory = (isOwner: boolean): RoleDirectoryData => {
   const [userRoleEntries, setUserRoleEntries] = useState<AccessEntry[]>([]);
-  const [adminRoleEntries, setAdminRoleEntries] = useState<AccessEntry[]>([]);
-  const [agentRoleEntries, setAgentRoleEntries] = useState<AccessEntry[]>([]);
 
   useEffect(() => {
-    if (!isAdmin) {
+    if (!isOwner) {
       setUserRoleEntries([]);
-      setAdminRoleEntries([]);
-      setAgentRoleEntries([]);
       return;
     }
 
-    const unsubscribeUsers = subscribeToUserRoleEntries(
+    return subscribeToRoleAssignments(
       setUserRoleEntries,
       error => {
-        console.error('Failed to load user role list', error);
+        console.error('Failed to load role assignments', error);
         setUserRoleEntries([]);
       },
     );
+  }, [isOwner]);
 
-    const unsubscribeAdmins = subscribeToAdminRoleEntries(
-      setAdminRoleEntries,
-      error => {
-        console.error('Failed to load admin role list', error);
-        setAdminRoleEntries([]);
-      },
-    );
-
-    const unsubscribeAgents = subscribeToAgentRoleEntries(
-      setAgentRoleEntries,
-      error => {
-        console.error('Failed to load delivery agent role list', error);
-        setAgentRoleEntries([]);
-      },
-    );
-
-    return () => {
-      unsubscribeUsers();
-      unsubscribeAdmins();
-      unsubscribeAgents();
-    };
-  }, [isAdmin]);
+  const adminRoleEntries = useMemo(
+    () => userRoleEntries.filter(entry => entry.role === 'admin'),
+    [userRoleEntries],
+  );
+  const deliveryAgentRoleEntries = useMemo(
+    () => userRoleEntries.filter(entry => entry.role === 'delivery_agent'),
+    [userRoleEntries],
+  );
 
   return {
     userRoleEntries,
     adminRoleEntries,
-    agentRoleEntries,
+    deliveryAgentRoleEntries,
   };
 };

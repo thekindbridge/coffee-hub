@@ -18,24 +18,6 @@ import { AuthShell } from '../../customer/components/AuthShell';
 import { SteamEffect } from '../../customer/components/SteamEffect';
 import { useAuth } from '../hooks/useAuth';
 
-const TEST_USERS = [
-  {
-    phone: '+917893504891',
-    role: 'Admin',
-    otpCode: '123456',
-  },
-  {
-    phone: '+918096633888',
-    role: 'Customer',
-    otpCode: '765432',
-  },
-  {
-    phone: '+919247774732',
-    role: 'Agent',
-    otpCode: '654321',
-  },
-];
-
 export const PhoneLoginScreen = () => {
   const {
     pendingPhoneNumber,
@@ -245,19 +227,6 @@ export const PhoneLoginScreen = () => {
                 : 'h-0 overflow-hidden'}
             >
               <div id={PHONE_AUTH_RECAPTCHA_CONTAINER_ID} />
-            </div>
-
-            <div className="rounded-[24px] border border-white/10 bg-white/5 px-4 py-3 text-left text-[11px] leading-5 text-[#f8e9d8]/82">
-              <p className="font-semibold uppercase tracking-[0.18em] text-[#fff8f1]">
-                Firebase Test Numbers
-              </p>
-              <div className="mt-2 space-y-1">
-                {TEST_USERS.map(testUser => (
-                  <p key={testUser.phone}>
-                    {testUser.role}: {formatPhoneForDisplay(testUser.phone)} / OTP {testUser.otpCode}
-                  </p>
-                ))}
-              </div>
             </div>
           </div>
 

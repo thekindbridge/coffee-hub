@@ -1,3 +1,5 @@
+import type { ManagedUserRole, UserRole } from '../../../shared/userRole';
+
 export type CustomerTab =
   | 'home'
   | 'menu'
@@ -32,8 +34,8 @@ export type CustomerProfile = {
   updatedAt?: string;
 };
 
-export type UserRole = 'customer' | 'admin' | 'agent';
-export type StaffRole = Extract<UserRole, 'admin' | 'agent'>;
+export type { ManagedUserRole, UserRole };
+export type StaffRole = Exclude<UserRole, 'customer'>;
 export type AgentVehicleType = '' | 'Bike' | 'Scooter' | 'Cycle';
 export type AgentStatus = 'Available' | 'Offline';
 

@@ -70,7 +70,7 @@ export const useProfileData = ({
           uid: profile.uid || currentUserId,
           name: profile.name || currentUserName,
           phone: profile.phone || currentUserPhone,
-          role: profile.role,
+          role: currentUserRole,
         });
         setHasProfileSnapshot(true);
       },
@@ -125,7 +125,7 @@ export const useProfileData = ({
           uid: response.profile.uid || currentUserId,
           name: response.profile.name || currentUserName,
           phone: response.profile.phone || currentUserPhone,
-          role: response.profile.role,
+          role: currentUserRole,
         });
       } catch (error) {
         console.error('Failed to sync Firebase user profile', error);

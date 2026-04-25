@@ -282,10 +282,11 @@ export const CustomerAppShell = ({
           {hasLoadedProfileDrawer && (
             <Suspense fallback={drawerLoader}>
               <ProfileScreen
-                isAdmin={session.isAdmin}
+                canAccessAdminPanel={session.canAccessAdminPanel}
                 isDeliveryAgent={session.isDeliveryAgent}
                 isOpen={profileManager.isProfileOpen}
-                isMainAdmin={session.isMainAdmin}
+                isOwner={session.isOwner}
+                role={session.role}
                 isProfileAddressExpanded={profileManager.isProfileAddressExpanded}
                 isProfileSavedToastVisible={profileManager.isProfileSavedToastVisible}
                 isProfileSaving={profileManager.isProfileSaving}
@@ -301,18 +302,28 @@ export const CustomerAppShell = ({
                 shopTimingDraft={shopTimingManager.shopTimingDraft}
                 shopTimingError={shopTimingManager.shopTimingError}
                 shopTimingSuccess={shopTimingManager.shopTimingSuccess}
-                updatingUserRoleId={accessManager.updatingUserRoleId}
-                updatingUserRoleValue={accessManager.updatingUserRoleValue}
+                pendingRoleAction={accessManager.pendingRoleAction}
+                pendingRolePhone={accessManager.pendingRolePhone}
+                pendingRoleValue={accessManager.pendingRoleValue}
                 userRoleEntries={session.userRoleEntries}
                 isShopTimingSaving={shopTimingManager.isShopTimingSaving}
-                onChangeUserRole={(entry, role) => {
+                onAssignUserRole={(phone, role) => {
                   if (accessManager.roleChangeError) {
                     accessManager.setRoleChangeError('');
                   }
                   if (accessManager.roleChangeSuccess) {
                     accessManager.setRoleChangeSuccess('');
                   }
-                  void accessManager.handleChangeUserRole(entry, role);
+                  void accessManager.handleAssignUserRole(phone, role);
+                }}
+                onRemoveUserRole={entry => {
+                  if (accessManager.roleChangeError) {
+                    accessManager.setRoleChangeError('');
+                  }
+                  if (accessManager.roleChangeSuccess) {
+                    accessManager.setRoleChangeSuccess('');
+                  }
+                  void accessManager.handleRemoveUserRole(entry);
                 }}
                 onClose={() => {
                   profileManager.setIsProfileOpen(false);

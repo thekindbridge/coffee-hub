@@ -1,27 +1,23 @@
 import { FieldValue } from 'firebase-admin/firestore';
 import type { VercelRequest } from '@vercel/node';
 import { safeNormalizePhoneNumber } from '../../../../shared/phone.js';
-import { resolveRoleFromConfiguredPhones } from '../../../../shared/userRole.js';
+import { normalizeUserRole, type UserRole } from '../../../../shared/userRole.js';
 
 import { ApiError } from '../../../../api/_lib/errors.js';
 import {
   getServerDb,
   requireUserRequest,
 } from './authService.js';
+import { getUserRole } from './roleService.js';
 import {
   jsonResponse,
   type ApiServiceResponse,
 } from './routeUtils.js';
 
-type UserRole = 'customer' | 'admin' | 'agent';
-
 const DEFAULT_NOTIFICATION_SETTINGS = {
   orderUpdates: true,
   offers: false,
 };
-
-const ADMIN_PHONE = process.env.VITE_ADMIN_PHONE || process.env.ADMIN_PHONE || '';
-const AGENT_PHONE = process.env.VITE_AGENT_PHONE || process.env.AGENT_PHONE || '';
 
 const getBody = (request: VercelRequest) => {
   if (!request.body || typeof request.body !== 'object') {
@@ -38,29 +34,6 @@ const getStringBodyValue = (
 ) => {
   const value = typeof body[key] === 'string' ? body[key].trim() : '';
   return value.slice(0, maxLength);
-};
-
-const normalizeRole = (value: unknown): UserRole => {
-  if (value === 'admin' || value === 'agent') {
-    return value;
-  }
-
-  return 'customer';
-};
-
-const resolveRoleFromPhone = (phone: string): UserRole => {
-  return resolveRoleFromConfiguredPhones({
-    phone,
-    adminPhone: ADMIN_PHONE,
-    agentPhone: AGENT_PHONE,
-  });
-};
-
-const logResolvedRole = (phone: string, role: UserRole) => {
-  console.log('PHONE:', phone);
-  console.log('ENV ADMIN:', ADMIN_PHONE);
-  console.log('ENV AGENT:', AGENT_PHONE);
-  console.log('FINAL ROLE:', role);
 };
 
 const mapUserProfileResponse = (
@@ -84,8 +57,8 @@ const mapUserProfileResponse = (
       data.notificationSettings && typeof data.notificationSettings === 'object'
         ? data.notificationSettings
         : DEFAULT_NOTIFICATION_SETTINGS,
-    phone: typeof data.phone === 'string' ? data.phone : '',
-    role: normalizeRole(data.role),
+    phone: typeof data.phone === 'string' ? safeNormalizePhoneNumber(data.phone) : '',
+    role: normalizeUserRole(data.role),
     status: typeof data.status === 'string' && data.status.toLowerCase() === 'offline'
       ? 'Offline'
       : 'Available',
@@ -111,14 +84,12 @@ export const syncUserProfileResponse = async (
   const existingData = userSnapshot.exists
     ? userSnapshot.data() as Record<string, unknown>
     : {};
-  const resolvedRole = resolveRoleFromPhone(authPhone);
+  const resolvedRole = await getUserRole(adminDb, authPhone);
   const name = getStringBodyValue(body, 'name', 120) ||
     (typeof existingData.name === 'string' ? existingData.name : '');
   const isActive = typeof existingData.isActive === 'boolean'
     ? existingData.isActive
     : true;
-
-  logResolvedRole(authPhone, resolvedRole);
 
   const baseProfile = {
     uid: requestUser.uid,

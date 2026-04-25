@@ -5,34 +5,31 @@ import { useMenuData } from './useMenuData';
 import { useOrdersData } from './useOrdersData';
 import { useProfileData } from './useProfileData';
 import { useShopTiming } from './useShopTiming';
-import { ADMIN_PHONE } from '../lib/constants';
+import { useUserRole } from './useUserRole';
 
 export const useRealtimeAppData = () => {
   const auth = useAuth();
+  const roleState = useUserRole(auth.currentUserPhone);
 
   const profiles = useProfileData({
     currentUserId: auth.currentUserId,
     currentUserName: auth.currentUserName,
     currentUserPhone: auth.currentUserPhone,
-    currentUserRole: auth.role,
+    currentUserRole: roleState.role,
     isAuthReady: auth.isAuthReady,
     isLoggedIn: auth.isLoggedIn,
   });
   const canReadProtectedData = auth.isAuthReady && profiles.isDataAccessReady && auth.isLoggedIn;
-
-  const isAdmin = profiles.profileSaved.role === 'admin';
-  const isDeliveryAgent = profiles.profileSaved.role === 'agent';
-  const isMainAdmin = isAdmin && (!ADMIN_PHONE || auth.normalizedCurrentPhone === ADMIN_PHONE);
-  const roleDirectory = useRoleDirectory(canReadProtectedData && isAdmin);
+  const roleDirectory = useRoleDirectory(canReadProtectedData && roleState.isOwner);
   const menu = useMenuData(auth.isAuthReady);
   const orders = useOrdersData(
-    canReadProtectedData && isAdmin,
+    canReadProtectedData && roleState.canAccessAdminPanel,
     canReadProtectedData ? auth.currentUserId : '',
   );
   const shopTiming = useShopTiming(auth.isAuthReady);
   const delivery = useDeliveryData(
-    canReadProtectedData && isAdmin,
-    canReadProtectedData && isDeliveryAgent,
+    canReadProtectedData && roleState.canAccessAdminPanel,
+    canReadProtectedData && roleState.isDeliveryAgent,
     canReadProtectedData ? auth.normalizedCurrentPhone : '',
   );
 
@@ -40,19 +37,22 @@ export const useRealtimeAppData = () => {
     // Auth
     isAuthResolved: auth.isAuthReady,
     isLoggedIn: auth.isLoggedIn,
-    isAuthReady: auth.isAuthReady && profiles.isProfileReady,
+    isAuthReady: auth.isAuthReady && roleState.isRoleReady && profiles.isProfileReady,
     isDataAccessReady: profiles.isDataAccessReady,
     currentUserId: auth.currentUserId,
     currentUserPhone: auth.currentUserPhone,
     normalizedCurrentPhone: auth.normalizedCurrentPhone,
 
     // Roles
-    isAdmin,
-    isDeliveryAgent,
-    isMainAdmin,
+    role: roleState.role,
+    isOwner: roleState.isOwner,
+    isAdmin: roleState.isAdmin,
+    isDeliveryAgent: roleState.isDeliveryAgent,
+    canAccessAdminPanel: roleState.canAccessAdminPanel,
+    canManageRoles: roleState.canManageRoles,
     userRoleEntries: roleDirectory.userRoleEntries,
     adminRoleEntries: roleDirectory.adminRoleEntries,
-    agentRoleEntries: roleDirectory.agentRoleEntries,
+    deliveryAgentRoleEntries: roleDirectory.deliveryAgentRoleEntries,
 
     // Menu
     menu: menu.menu,

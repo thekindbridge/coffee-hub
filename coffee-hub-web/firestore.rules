@@ -25,9 +25,27 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
-    function isAdmin() {
+    function isOwnerRole() {
       return isAuthenticated() &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'owner';
+    }
+
+    function isAssignedAdminRole() {
+      return isAuthenticated() &&
+        requestPhone() != '' &&
+        exists(/databases/$(database)/documents/user_roles/$(requestPhone())) &&
+        get(/databases/$(database)/documents/user_roles/$(requestPhone())).data.role == 'admin';
+    }
+
+    function isAdmin() {
+      return isOwnerRole() || isAssignedAdminRole();
+    }
+
+    function isDeliveryAgent() {
+      return isAuthenticated() &&
+        requestPhone() != '' &&
+        exists(/databases/$(database)/documents/user_roles/$(requestPhone())) &&
+        get(/databases/$(database)/documents/user_roles/$(requestPhone())).data.role in ['delivery_agent', 'agent'];
     }
 
     // Reusable field validators
@@ -670,7 +688,7 @@ service cloud.firestore {
     }
 
     function isValidUserRole(value) {
-      return value == null || value in ['customer', 'admin', 'agent'];
+      return value == null || value in ['customer', 'owner', 'admin', 'delivery_agent', 'agent'];
     }
 
     function isOptionalUserEmail(value) {
@@ -727,7 +745,7 @@ service cloud.firestore {
       return isValidUserRecord(request.resource.data) &&
         request.resource.data.uid == userId &&
         request.resource.data.phone == requestPhone() &&
-        request.resource.data.role == 'customer';
+        (request.resource.data.role == null || request.resource.data.role == 'customer');
     }
 
     function isValidOwnUserUpdate() {
@@ -798,6 +816,26 @@ service cloud.firestore {
         (request.resource.data.email == null || request.resource.data.email == agentId) &&
         (request.resource.data.role == null || request.resource.data.role == 'agent') &&
         request.resource.data.accessOnly != true;
+    }
+
+    function hasAllowedUserRoleKeys(data) {
+      return data.keys().hasOnly([
+        'role',
+        'createdAt',
+        'updatedAt'
+      ]);
+    }
+
+    function isValidManagedRole(value) {
+      return value in ['admin', 'delivery_agent', 'agent'];
+    }
+
+    function isValidUserRoleAssignment(data, phone) {
+      return hasAllowedUserRoleKeys(data) &&
+        isNonEmptyString(phone, 30) &&
+        isValidManagedRole(data.role) &&
+        isOptionalTimestamp(data.createdAt) &&
+        isOptionalTimestamp(data.updatedAt);
     }
 
     function hasAllowedDeliverySessionKeys(data) {
@@ -886,17 +924,26 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
+    match /user_roles/{phone} {
+      allow read: if isOwnerRole() || (isAuthenticated() && requestPhone() == phone);
+      allow create, update: if isOwnerRole() && isValidUserRoleAssignment(request.resource.data, phone);
+      allow delete: if isOwnerRole();
+    }
+
     // orders: customers create and read their own, admins can review and update status
     match /orders/{orderId} {
       allow read: if
         isAdmin() ||
-        isOwner(resource.data.userId);
+        isOwner(resource.data.userId) ||
+        isAssignedAgentForOrder(resource.data);
       allow create: if false;
-      allow update: if isAdmin() && isValidAdminOrderUpdate();
+      allow update: if
+        (isAdmin() && isValidAdminOrderUpdate()) ||
+        (isDeliveryAgent() && isValidAgentOrderUpdate());
       allow delete: if false;
     }
 
-    // users: owners can update their own profile fields, while admins manage roles centrally
+    // users: people manage their own profile fields, while role assignments live in user_roles
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
       allow create: if

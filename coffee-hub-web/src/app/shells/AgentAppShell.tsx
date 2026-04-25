@@ -35,9 +35,10 @@ export const AgentAppShell = ({
 
   const staffDrawerProps = {
     isOpen: profileManager.isProfileOpen,
-    isAdmin: session.isAdmin,
+    canAccessAdminPanel: session.canAccessAdminPanel,
     isDeliveryAgent: session.isDeliveryAgent,
-    isMainAdmin: session.isMainAdmin,
+    isOwner: session.isOwner,
+    role: session.role,
     profileDraft: profileManager.profileDraft,
     profileError: profileManager.profileError,
     profileSyncError: session.profileSyncError,
@@ -52,8 +53,9 @@ export const AgentAppShell = ({
     userRoleEntries: session.userRoleEntries,
     roleChangeError: accessManager.roleChangeError,
     roleChangeSuccess: accessManager.roleChangeSuccess,
-    updatingUserRoleId: accessManager.updatingUserRoleId,
-    updatingUserRoleValue: accessManager.updatingUserRoleValue,
+    pendingRoleAction: accessManager.pendingRoleAction,
+    pendingRolePhone: accessManager.pendingRolePhone,
+    pendingRoleValue: accessManager.pendingRoleValue,
     notificationPermissionState: pushNotifications.permissionState,
     isNotificationSyncing: pushNotifications.isSyncing,
     notificationSyncError: pushNotifications.syncError,
@@ -73,14 +75,23 @@ export const AgentAppShell = ({
     onProfileAddressExpandedChange: profileManager.setIsProfileAddressExpanded,
     onShopTimingDraftChange: shopTimingManager.handleShopTimingDraftChange,
     onSaveShopTiming: () => void shopTimingManager.handleSaveShopTiming(),
-    onChangeUserRole: (entry, role) => {
+    onAssignUserRole: (phone, role) => {
       if (accessManager.roleChangeError) {
         accessManager.setRoleChangeError('');
       }
       if (accessManager.roleChangeSuccess) {
         accessManager.setRoleChangeSuccess('');
       }
-      void accessManager.handleChangeUserRole(entry, role);
+      void accessManager.handleAssignUserRole(phone, role);
+    },
+    onRemoveUserRole: entry => {
+      if (accessManager.roleChangeError) {
+        accessManager.setRoleChangeError('');
+      }
+      if (accessManager.roleChangeSuccess) {
+        accessManager.setRoleChangeSuccess('');
+      }
+      void accessManager.handleRemoveUserRole(entry);
     },
   };
 

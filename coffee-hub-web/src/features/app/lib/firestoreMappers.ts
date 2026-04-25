@@ -25,6 +25,7 @@ import {
   normalizePhoneNumber,
   safeNormalizePhoneNumber,
 } from '../../../../shared/phone';
+import { normalizeUserRole } from '../../../../shared/userRole';
 
 const FALLBACK_TIMESTAMP_ISO = new Date(0).toISOString();
 
@@ -250,14 +251,6 @@ export const normalizeNotificationSettings = (
   };
 };
 
-export const normalizeUserRole = (value: unknown): UserRole => {
-  if (value === 'admin' || value === 'agent') {
-    return value;
-  }
-
-  return 'customer';
-};
-
 const normalizeProfileAgentStatus = (value: unknown): AgentStatus => {
   if (typeof value === 'string') {
     const normalized = value.toLowerCase();
@@ -297,7 +290,9 @@ export const mapProfileDocToProfile = (
 };
 
 const normalizeStaffRole = (value: unknown, fallback: StaffRole): StaffRole =>
-  value === 'admin' || value === 'agent' ? value : fallback;
+  value === 'owner' || value === 'admin' || value === 'delivery_agent' || value === 'agent'
+    ? normalizeUserRole(value) as StaffRole
+    : fallback;
 
 const normalizeVehicleType = (value: unknown): AgentVehicleType =>
   value === 'Bike' || value === 'Scooter' || value === 'Cycle' ? value : '';

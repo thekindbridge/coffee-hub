@@ -1,25 +1,27 @@
 import { useEffect, useState } from 'react';
-import { updateUserRoleEntry } from '../../../services/firebase/userRoleService';
-import type { AccessEntry } from '../types';
-import { ADMIN_PHONE, AGENT_PHONE } from '../lib/constants';
+import type { AccessEntry, ManagedUserRole } from '../types';
+import {
+  assignUserRole,
+  removeUserRole,
+} from '../../../services/roleService';
 
 type UseAccessManagerParams = {
   canManageRoles: boolean;
-  currentUserPhone: string;
-  userRoleEntries: AccessEntry[];
 };
 
 export type AccessManagerState = {
   roleChangeError: string;
   roleChangeSuccess: string;
-  updatingUserRoleId: string;
-  updatingUserRoleValue: AccessEntry['role'] | '';
+  pendingRoleAction: 'assign' | 'remove' | '';
+  pendingRolePhone: string;
+  pendingRoleValue: ManagedUserRole | '';
   setRoleChangeError: (error: string) => void;
   setRoleChangeSuccess: (message: string) => void;
-  handleChangeUserRole: (
-    entry: AccessEntry,
-    role: AccessEntry['role'],
+  handleAssignUserRole: (
+    phone: string,
+    role: ManagedUserRole,
   ) => Promise<void>;
+  handleRemoveUserRole: (entry: AccessEntry) => Promise<void>;
 };
 
 const getErrorMessage = (err: unknown, fallback: string) =>
@@ -27,13 +29,12 @@ const getErrorMessage = (err: unknown, fallback: string) =>
 
 export const useAccessManager = ({
   canManageRoles,
-  currentUserPhone,
-  userRoleEntries,
 }: UseAccessManagerParams): AccessManagerState => {
   const [roleChangeError, setRoleChangeError] = useState('');
   const [roleChangeSuccess, setRoleChangeSuccess] = useState('');
-  const [updatingUserRoleId, setUpdatingUserRoleId] = useState('');
-  const [updatingUserRoleValue, setUpdatingUserRoleValue] = useState<AccessEntry['role'] | ''>('');
+  const [pendingRoleAction, setPendingRoleAction] = useState<'assign' | 'remove' | ''>('');
+  const [pendingRolePhone, setPendingRolePhone] = useState('');
+  const [pendingRoleValue, setPendingRoleValue] = useState<ManagedUserRole | ''>('');
 
   useEffect(() => {
     if (!roleChangeSuccess) {
@@ -44,68 +45,73 @@ export const useAccessManager = ({
     return () => clearTimeout(timeoutId);
   }, [roleChangeSuccess]);
 
-  const handleChangeUserRole = async (
-    entry: AccessEntry,
-    role: AccessEntry['role'],
+  const handleAssignUserRole = async (
+    phone: string,
+    role: ManagedUserRole,
   ) => {
     if (!canManageRoles) {
-      setRoleChangeError('Only admins can update user roles.');
+      setRoleChangeError('Only the owner can manage user roles.');
       return;
     }
 
-    if (!entry.phone) {
-      setRoleChangeError('This user is missing a valid phone number.');
-      return;
-    }
-
-    if (entry.role === role) {
-      return;
-    }
-
-    if (entry.phone === ADMIN_PHONE && role !== 'admin') {
-      setRoleChangeError('The configured admin phone is locked to the admin role.');
-      return;
-    }
-
-    if (entry.phone === AGENT_PHONE && role !== 'agent') {
-      setRoleChangeError('The configured agent phone is locked to the agent role.');
-      return;
-    }
-
-    if (
-      entry.phone === currentUserPhone &&
-      entry.role === 'admin' &&
-      role !== 'admin' &&
-      userRoleEntries.filter(userEntry => userEntry.role === 'admin').length <= 1
-    ) {
-      setRoleChangeError('Keep at least one admin account active before demoting this user.');
-      return;
-    }
-
-    setUpdatingUserRoleId(entry.id);
-    setUpdatingUserRoleValue(role);
+    setPendingRoleAction('assign');
+    setPendingRolePhone(phone);
+    setPendingRoleValue(role);
     setRoleChangeError('');
     setRoleChangeSuccess('');
 
     try {
-      await updateUserRoleEntry(entry.id, entry.phone, role);
-      setRoleChangeSuccess('User role updated.');
+      await assignUserRole(phone, role);
+      setRoleChangeSuccess('Role assignment saved.');
     } catch (error) {
-      console.error('Failed to update user role', error);
-      setRoleChangeError(getErrorMessage(error, 'Unable to update the user role right now.'));
+      console.error('Failed to assign user role', error);
+      setRoleChangeError(getErrorMessage(error, 'Unable to save the role assignment right now.'));
     } finally {
-      setUpdatingUserRoleId('');
-      setUpdatingUserRoleValue('');
+      setPendingRoleAction('');
+      setPendingRolePhone('');
+      setPendingRoleValue('');
+    }
+  };
+
+  const handleRemoveUserRole = async (entry: AccessEntry) => {
+    if (!canManageRoles) {
+      setRoleChangeError('Only the owner can manage user roles.');
+      return;
+    }
+
+    if (!entry.phone) {
+      setRoleChangeError('This role assignment is missing a valid phone number.');
+      return;
+    }
+
+    setPendingRoleAction('remove');
+    setPendingRolePhone(entry.phone);
+    setPendingRoleValue('');
+    setRoleChangeError('');
+    setRoleChangeSuccess('');
+
+    try {
+      await removeUserRole(entry.phone);
+      setRoleChangeSuccess('Role assignment removed.');
+    } catch (error) {
+      console.error('Failed to remove user role', error);
+      setRoleChangeError(getErrorMessage(error, 'Unable to remove the role assignment right now.'));
+    } finally {
+      setPendingRoleAction('');
+      setPendingRolePhone('');
+      setPendingRoleValue('');
     }
   };
 
   return {
     roleChangeError,
     roleChangeSuccess,
-    updatingUserRoleId,
-    updatingUserRoleValue,
+    pendingRoleAction,
+    pendingRolePhone,
+    pendingRoleValue,
     setRoleChangeError,
     setRoleChangeSuccess,
-    handleChangeUserRole,
+    handleAssignUserRole,
+    handleRemoveUserRole,
   };
 };
