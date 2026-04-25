@@ -363,6 +363,7 @@ export const ProfileScreen = ({
                 )}
 
                 <StaffProfileAdminControls
+                  role={role}
                   canAccessAdminPanel={canAccessAdminPanel}
                   isOwner={isOwner}
                   shopTiming={shopTiming}

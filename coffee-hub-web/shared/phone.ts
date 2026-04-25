@@ -1,33 +1,34 @@
 const NON_DIGIT_PATTERN = /\D+/g;
 const INDIA_COUNTRY_CODE = '91';
+const LOCAL_PHONE_LENGTH = 10;
 
 const toDigits = (value: string) => value.replace(NON_DIGIT_PATTERN, '');
 
-export const normalizePhoneNumber = (value: string) => {
+export const normalizePhone = (value: string) => {
   const trimmedValue = value.trim();
   if (!trimmedValue) {
     return '';
   }
 
-  if (trimmedValue.startsWith('+')) {
-    const digits = toDigits(trimmedValue.slice(1));
-    if (digits.length < 10) {
-      throw new Error('Enter a valid mobile number.');
-    }
-
-    return `+${digits}`;
-  }
-
   const digits = toDigits(trimmedValue);
-  if (digits.length === 10) {
+
+  if (digits.length === LOCAL_PHONE_LENGTH) {
     return `+${INDIA_COUNTRY_CODE}${digits}`;
   }
 
-  if (digits.length === 12 && digits.startsWith(INDIA_COUNTRY_CODE)) {
+  if (digits.length === LOCAL_PHONE_LENGTH + 1 && digits.startsWith('0')) {
+    return `+${INDIA_COUNTRY_CODE}${digits.slice(1)}`;
+  }
+
+  if (digits.length === LOCAL_PHONE_LENGTH + INDIA_COUNTRY_CODE.length && digits.startsWith(INDIA_COUNTRY_CODE)) {
     return `+${digits}`;
   }
 
   throw new Error('Enter a valid mobile number.');
+};
+
+export const normalizePhoneNumber = (value: string) => {
+  return normalizePhone(value);
 };
 
 export const safeNormalizePhoneNumber = (value: string) => {

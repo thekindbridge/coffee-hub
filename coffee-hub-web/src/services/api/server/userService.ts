@@ -71,13 +71,16 @@ export const syncUserProfileResponse = async (
   request: VercelRequest,
 ): Promise<ApiServiceResponse> => {
   const requestUser = await requireUserRequest(request);
-  const authPhone = safeNormalizePhoneNumber(requestUser.phone || '');
+  const body = getBody(request);
+  const bodyPhone = safeNormalizePhoneNumber(
+    typeof body.phone === 'string' ? body.phone : '',
+  );
+  const authPhone = safeNormalizePhoneNumber(requestUser.phone || '') || bodyPhone;
 
   if (!authPhone) {
     throw new ApiError(400, 'A verified mobile number is required.');
   }
 
-  const body = getBody(request);
   const adminDb = getServerDb();
   const userRef = adminDb.collection('users').doc(requestUser.uid);
   const userSnapshot = await userRef.get();

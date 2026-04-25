@@ -77,5 +77,3 @@ export const auth = (() => {
   }
 })();
 export const db = getFirestore(app);
-
-console.log('Firestore client initialized');

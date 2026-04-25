@@ -21,6 +21,20 @@ service cloud.firestore {
           );
     }
 
+    function mainAdminPhone() {
+      return exists(/databases/$(database)/documents/settings/security)
+        && get(/databases/$(database)/documents/settings/security).data.mainAdminPhone is string
+        ? get(/databases/$(database)/documents/settings/security).data.mainAdminPhone
+        : '';
+    }
+
+    function isMainAdminPhoneRequest() {
+      return isAuthenticated() &&
+        requestPhone() != '' &&
+        mainAdminPhone() != '' &&
+        requestPhone() == mainAdminPhone();
+    }
+
     function isOwner(userId) {
       return isAuthenticated() && request.auth.uid == userId;
     }
@@ -925,9 +939,9 @@ service cloud.firestore {
     }
 
     match /user_roles/{phone} {
-      allow read: if isOwnerRole() || (isAuthenticated() && requestPhone() == phone);
-      allow create, update: if isOwnerRole() && isValidUserRoleAssignment(request.resource.data, phone);
-      allow delete: if isOwnerRole();
+      allow read: if isAuthenticated();
+      allow create, update: if isMainAdminPhoneRequest() && isValidUserRoleAssignment(request.resource.data, phone);
+      allow delete: if isMainAdminPhoneRequest();
     }
 
     // orders: customers create and read their own, admins can review and update status

@@ -108,6 +108,7 @@ const resolveAuthenticatedUser = (
           name:
             firebaseUser.displayName?.trim() ||
             buildDisplayName(authPhone),
+          phone: authPhone || safeNormalizePhoneNumber(firebaseUser.phoneNumber || ''),
         },
         idToken,
       );

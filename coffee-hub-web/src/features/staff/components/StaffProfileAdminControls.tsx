@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Clock3 } from 'lucide-react';
 import { formatPhoneForDisplay } from '../../../../shared/phone';
+import type { UserRole } from '../../../../shared/userRole';
 import type { AccessEntry, ManagedUserRole, ShopTimingDraft } from '../../app/types';
 import { formatShopTimingRange, type ShopTiming } from '../../../../shared/shopTiming';
 
 type StaffProfileAdminControlsProps = {
+  role: UserRole;
   canAccessAdminPanel: boolean;
   isOwner: boolean;
   shopTiming: ShopTiming;
@@ -30,6 +32,7 @@ const ROLE_LABEL: Record<ManagedUserRole, string> = {
 };
 
 export const StaffProfileAdminControls = ({
+  role,
   canAccessAdminPanel,
   isOwner,
   shopTiming,
@@ -61,6 +64,10 @@ export const StaffProfileAdminControls = ({
   }, [pendingRoleAction, roleChangeSuccess]);
 
   if (!canAccessAdminPanel) {
+    return null;
+  }
+
+  if (role !== 'owner') {
     return null;
   }
 

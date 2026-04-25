@@ -10,10 +10,6 @@ export const CUSTOMER_TABS = [
 
 export type CustomerTab = (typeof CUSTOMER_TABS)[number];
 
-export const ADMIN_SECTIONS = ['dashboard', 'products', 'orders', 'promos'] as const;
+export type AdminSection = 'dashboard' | 'products' | 'orders' | 'promos';
 
-export type AdminSection = (typeof ADMIN_SECTIONS)[number];
-
-export const AGENT_TABS = ['active', 'history'] as const;
-
-export type AgentTab = (typeof AGENT_TABS)[number];
+export type AgentTab = 'active' | 'history';

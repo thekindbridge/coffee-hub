@@ -3,6 +3,7 @@ import { postApi } from './apiClient';
 
 type SyncUserProfileBody = {
   name?: string;
+  phone?: string;
 };
 
 type SyncUserProfileResponse = {

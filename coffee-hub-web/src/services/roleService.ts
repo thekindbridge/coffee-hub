@@ -1,15 +1,14 @@
 import {
   collection,
-  deleteDoc,
   doc,
   getDoc,
   onSnapshot,
-  serverTimestamp,
-  setDoc,
 } from 'firebase/firestore';
 import type { AccessEntry } from '../features/app/types';
 import { toAppServiceError } from './platform/serviceError';
+import { postApi } from './api/apiClient';
 import { db } from './firebase';
+import { auth } from './firebase';
 import { normalizePhoneNumber, safeNormalizePhoneNumber } from '../../shared/phone';
 import {
   normalizeManagedUserRole,
@@ -19,7 +18,12 @@ import {
   USER_ROLES_COLLECTION,
 } from '../../shared/userRole';
 
-const MAIN_ADMIN_PHONE = safeNormalizePhoneNumber(import.meta.env.VITE_MAIN_ADMIN_PHONE || '');
+const MAIN_ADMIN_PHONE_ENV = import.meta.env.VITE_MAIN_ADMIN_PHONE || '';
+const MAIN_ADMIN_PHONE = safeNormalizePhoneNumber(MAIN_ADMIN_PHONE_ENV);
+
+if (MAIN_ADMIN_PHONE_ENV && !MAIN_ADMIN_PHONE) {
+  console.warn('MAIN_ADMIN_PHONE is configured but does not match expected +91XXXXXXXXXX format.');
+}
 
 const sortEntries = (entries: AccessEntry[]) =>
   entries.sort((leftEntry, rightEntry) => leftEntry.phone.localeCompare(rightEntry.phone));
@@ -42,28 +46,6 @@ const mapRoleEntry = (
   };
 };
 
-const createRoleDocumentPayload = async (
-  normalizedPhone: string,
-  role: ManagedUserRole,
-) => {
-  const roleRef = doc(db, USER_ROLES_COLLECTION, normalizedPhone);
-  const existingSnapshot = await getDoc(roleRef);
-
-  return {
-    roleRef,
-    payload: existingSnapshot.exists()
-      ? {
-          role,
-          updatedAt: serverTimestamp(),
-        }
-      : {
-          role,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        },
-  };
-};
-
 export const getMainAdminPhone = () => MAIN_ADMIN_PHONE;
 
 export const getUserRole = async (phone: string): Promise<UserRole> => {
@@ -83,8 +65,8 @@ export const getUserRole = async (phone: string): Promise<UserRole> => {
       mainAdminPhone: MAIN_ADMIN_PHONE,
       storedRole: snapshot.data()?.role,
     });
-  } catch (error) {
-    throw toAppServiceError(error, 'Unable to resolve the user role.', 'network');
+  } catch {
+    return 'customer';
   }
 };
 
@@ -155,8 +137,21 @@ export const assignUserRole = async (
   }
 
   try {
-    const { payload, roleRef } = await createRoleDocumentPayload(normalizedPhone, role);
-    await setDoc(roleRef, payload, { merge: true });
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      throw new Error('Please sign in to continue.');
+    }
+
+    const idToken = await currentUser.getIdToken(true);
+    await postApi<{ message: string }>(
+      '/api/admin/roles',
+      {
+        action: 'assign',
+        phone: normalizedPhone,
+        role,
+      },
+      idToken,
+    );
   } catch (error) {
     throw toAppServiceError(error, 'Unable to save the role assignment.', 'network');
   }
@@ -173,7 +168,20 @@ export const removeUserRole = async (phoneNumber: string) => {
   }
 
   try {
-    await deleteDoc(doc(db, USER_ROLES_COLLECTION, normalizedPhone));
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      throw new Error('Please sign in to continue.');
+    }
+
+    const idToken = await currentUser.getIdToken(true);
+    await postApi<{ message: string }>(
+      '/api/admin/roles',
+      {
+        action: 'remove',
+        phone: normalizedPhone,
+      },
+      idToken,
+    );
   } catch (error) {
     throw toAppServiceError(error, 'Unable to remove the role assignment.', 'network');
   }
