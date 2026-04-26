@@ -23,6 +23,7 @@ let cachedAdminApp: App | null = null;
 let cachedAdminDb: Firestore | null = null;
 let cachedAdminAuth: Auth | null = null;
 let cachedAdminMessaging: Messaging | null = null;
+let adminInitAttempted = false;
 
 const normalizeEmail = (value: string) => value.trim().toLowerCase();
 
@@ -38,8 +39,7 @@ const getRequiredEnv = (key: string, fallbacks: string[] = []) => {
     }
   }
 
-  console.error('API ERROR:', new Error(`Missing Firebase Admin environment variable: ${key}.`));
-  throw new Error(`${key} is not configured.`);
+  return '';
 };
 
 const normalizePrivateKey = (value: string) => {
@@ -58,30 +58,57 @@ const getAdminApp = () => {
     return cachedAdminApp;
   }
 
-  const existingApp = getApps()[0];
-  if (existingApp) {
-    cachedAdminApp = existingApp;
-    return cachedAdminApp;
+  if (adminInitAttempted) {
+    return null;
   }
 
-  cachedAdminApp = initializeApp({
-    credential: cert({
-      projectId: getRequiredEnv('FIREBASE_ADMIN_PROJECT_ID', [
-        process.env.FIREBASE_PROJECT_ID || '',
-        process.env.VITE_PROJECT_ID || '',
-        process.env.VITE_FIREBASE_PROJECT_ID || '',
-      ]),
-      clientEmail: getRequiredEnv('FIREBASE_ADMIN_CLIENT_EMAIL'),
-      privateKey: normalizePrivateKey(getRequiredEnv('FIREBASE_ADMIN_PRIVATE_KEY')),
-    }),
-  });
+  adminInitAttempted = true;
 
-  return cachedAdminApp;
+  try {
+    const existingApp = getApps()[0];
+    if (existingApp) {
+      cachedAdminApp = existingApp;
+      console.log('Firebase Admin initialized');
+      return cachedAdminApp;
+    }
+
+    const projectId = getRequiredEnv('FIREBASE_ADMIN_PROJECT_ID', [
+      process.env.FIREBASE_PROJECT_ID || '',
+      process.env.VITE_PROJECT_ID || '',
+      process.env.VITE_FIREBASE_PROJECT_ID || '',
+    ]);
+    const clientEmail = getRequiredEnv('FIREBASE_ADMIN_CLIENT_EMAIL');
+    const privateKey = normalizePrivateKey(getRequiredEnv('FIREBASE_ADMIN_PRIVATE_KEY'));
+
+    if (!projectId || !clientEmail || !privateKey) {
+      throw new Error('Missing Firebase Admin credentials in environment variables.');
+    }
+
+    cachedAdminApp = initializeApp({
+      credential: cert({
+        projectId,
+        clientEmail,
+        privateKey,
+      }),
+    });
+    console.log('Firebase Admin initialized');
+
+    return cachedAdminApp;
+  } catch (error) {
+    console.error('Firebase Admin init failed', error);
+    cachedAdminApp = null;
+    return null;
+  }
 };
 
 export const getAdminDb = () => {
   if (!cachedAdminDb) {
-    cachedAdminDb = getFirestore(getAdminApp());
+    const adminApp = getAdminApp();
+    if (!adminApp) {
+      return null;
+    }
+
+    cachedAdminDb = getFirestore(adminApp);
   }
 
   return cachedAdminDb;
@@ -89,7 +116,12 @@ export const getAdminDb = () => {
 
 export const getAdminAuthClient = () => {
   if (!cachedAdminAuth) {
-    cachedAdminAuth = getAdminAuth(getAdminApp());
+    const adminApp = getAdminApp();
+    if (!adminApp) {
+      return null;
+    }
+
+    cachedAdminAuth = getAdminAuth(adminApp);
   }
 
   return cachedAdminAuth;
@@ -97,11 +129,20 @@ export const getAdminAuthClient = () => {
 
 export const getAdminMessaging = () => {
   if (!cachedAdminMessaging) {
-    cachedAdminMessaging = getMessaging(getAdminApp());
+    const adminApp = getAdminApp();
+    if (!adminApp) {
+      return null;
+    }
+
+    cachedAdminMessaging = getMessaging(adminApp);
   }
 
   return cachedAdminMessaging;
 };
+
+export const isFirebaseAdminReady = () => Boolean(getAdminApp());
+
+export const db = getAdminDb;
 
 const getBearerToken = (request: VercelRequest) => {
   const authorizationHeader = Array.isArray(request.headers.authorization)
@@ -162,7 +203,12 @@ const resolveRequestPhone = async (
   }
 
   try {
-    const userRecord = await getAdminAuthClient().getUser(uid);
+    const adminAuthClient = getAdminAuthClient();
+    if (!adminAuthClient) {
+      return '';
+    }
+
+    const userRecord = await adminAuthClient.getUser(uid);
     return safeNormalizePhoneNumber(userRecord.phoneNumber || '');
   } catch (error) {
     console.error('Unable to resolve Firebase Auth phone number for request user', error);
@@ -175,7 +221,12 @@ const lookupUserPhoneByUid = async (userId: string) => {
     return '';
   }
 
-  const snapshot = await getAdminDb().collection('users').doc(userId).get();
+  const adminDb = getAdminDb();
+  if (!adminDb) {
+    return '';
+  }
+
+  const snapshot = await adminDb.collection('users').doc(userId).get();
   const storedPhone = snapshot.data()?.phone;
 
   return typeof storedPhone === 'string'
@@ -191,8 +242,13 @@ export const hasAdminAccess = async ({
   phone?: string;
   uid?: string;
 }) => {
+  const adminDb = getAdminDb();
+  if (!adminDb) {
+    return false;
+  }
+
   const resolvedPhone = safeNormalizePhoneNumber(phone) || await lookupUserPhoneByUid(uid);
-  return Boolean(resolvedPhone && await hasAdminPanelAccess(getAdminDb(), resolvedPhone));
+  return Boolean(resolvedPhone && await hasAdminPanelAccess(adminDb, resolvedPhone));
 };
 
 export const verifyRequestUser = async (
@@ -202,7 +258,12 @@ export const verifyRequestUser = async (
   const bearerToken = getBearerToken(request);
 
   try {
-    const decodedToken = await getAdminAuthClient().verifyIdToken(bearerToken, true);
+    const adminAuthClient = getAdminAuthClient();
+    if (!adminAuthClient) {
+      throw new ApiError(503, 'Firebase server authentication is temporarily unavailable.');
+    }
+
+    const decodedToken = await adminAuthClient.verifyIdToken(bearerToken, true);
     const uid = typeof decodedToken.uid === 'string' ? decodedToken.uid.trim() : '';
 
     if (!uid) {

@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 import { ApiError } from '../../../../api/_lib/errors.js';
+import { isFirebaseAdminReady } from '../../../../api/_lib/firebaseAdmin.js';
 
 export type ApiServiceResponse<TBody = unknown> = {
   body: TBody;
@@ -42,16 +43,41 @@ export const methodNotAllowedResponse = (allowedMethods: string[]) =>
     { Allow: allowedMethods.join(', ') },
   );
 
+export const firebaseUnavailableResponse = (message: string) =>
+  jsonResponse(200, {
+    fallback: true,
+    message,
+    success: false,
+  });
+
+export const isFirebaseUnavailable = () => !isFirebaseAdminReady();
+
+const isFirebaseInitError = (error: unknown) => {
+  const message = error instanceof Error ? error.message.toLowerCase() : '';
+
+  return Boolean(
+    message.includes('firebase') ||
+    message.includes('credential') ||
+    message.includes('firestore') ||
+    message.includes('cannot read properties of null'),
+  );
+};
+
 export const toErrorResponse = (
   error: unknown,
   logLabel: string,
   fallbackMessage: string,
 ) => {
+  if (isFirebaseUnavailable() || isFirebaseInitError(error)) {
+    console.warn('Firebase unavailable, returning fallback response');
+    return firebaseUnavailableResponse(fallbackMessage || 'Service temporarily unavailable.');
+  }
+
   if (error instanceof ApiError) {
     return jsonResponse(error.statusCode, { error: error.message });
   }
 
   console.error('API ERROR:', error);
   console.error(logLabel, error);
-  return jsonResponse(500, { error: fallbackMessage });
+  return jsonResponse(500, { error: fallbackMessage || 'Internal error' });
 };
