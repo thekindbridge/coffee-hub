@@ -1,3 +1,6 @@
+/// <reference types="@capacitor/local-notifications" />
+/// <reference types="@capacitor/push-notifications" />
+
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const DEFAULT_CAP_SERVER_URL = 'https://coffee-hub-inkollu.vercel.app/';
@@ -25,6 +28,9 @@ const config: CapacitorConfig = {
     ],
   },
   plugins: {
+    PushNotifications: {
+      presentationOptions: [],
+    },
     SplashScreen: {
       launchShowDuration: 2500,
       launchAutoHide: true,
