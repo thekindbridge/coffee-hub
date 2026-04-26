@@ -160,7 +160,7 @@ export const CartDrawer = ({
             </div>
           </div>
 
-          <div className="flex-grow space-y-5 overflow-y-auto px-5 pb-5 pt-4">
+          <div className="mobile-scroll flex-grow space-y-5 overflow-y-auto px-5 pb-5 pt-4">
             <div
               className={`rounded-[22px] border px-4 py-3 text-sm ${
                 isShopOpen
@@ -207,7 +207,14 @@ export const CartDrawer = ({
                     {cart.map(item => (
                       <div key={item.id} className="coffee-surface-soft flex gap-3 rounded-[24px] p-3">
                         <div className="h-[78px] w-[78px] flex-shrink-0 overflow-hidden rounded-[20px]">
-                          <img src={item.image_url} alt={item.name} className="h-full w-full object-cover" />
+                          <img
+                            src={item.image_url}
+                            alt={item.name}
+                            className="h-full w-full object-cover"
+                            loading="lazy"
+                            decoding="async"
+                            referrerPolicy="no-referrer"
+                          />
                         </div>
                         <div className="min-w-0 flex-grow">
                           <div className="flex items-start justify-between gap-3">

@@ -6,6 +6,8 @@ export const AboutPage = () => (
         src="https://images.unsplash.com/photo-1552611052-33e04de081de?auto=format&fit=crop&w=1200&q=80"
         alt="Kitchen"
         className="h-full w-full object-cover"
+        loading="lazy"
+        decoding="async"
         referrerPolicy="no-referrer"
       />
     </div>

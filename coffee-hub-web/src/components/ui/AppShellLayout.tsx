@@ -17,7 +17,7 @@ export const AppShellLayout = ({
 }: AppShellLayoutProps) => (
   <div className="app-shell">
     {header}
-    <main className="mx-auto max-w-screen-md">{children}</main>
+    <main className="mobile-scroll mx-auto max-w-screen-md">{children}</main>
     {footer}
     {overlays}
     {navigation}

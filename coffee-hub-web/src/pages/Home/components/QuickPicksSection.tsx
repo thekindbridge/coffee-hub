@@ -36,7 +36,7 @@ export const QuickPicksSection = memo(function QuickPicksSection({
       </button>
     </div>
 
-    <div className="-mx-4 mt-4 flex gap-3 overflow-x-auto px-4 pb-2 no-scrollbar sm:mx-0 sm:px-0">
+    <div className="mobile-scroll -mx-4 mt-4 flex gap-3 overflow-x-auto px-4 pb-2 no-scrollbar sm:mx-0 sm:px-0">
       {isMenuLoading
         ? [...Array(4)].map((_, index) => (
             <div key={index} className="min-w-[228px] max-w-[228px]">

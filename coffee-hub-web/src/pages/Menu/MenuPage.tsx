@@ -9,8 +9,10 @@ export const MenuPage = ({
   hasStatusBanner,
   isMenuLoading,
   isShopOpen,
+  menuError,
   onAddToCart,
   onCategoryChange,
+  onRetryMenu,
   onSearchChange,
   searchQuery,
   selectedCategory,
@@ -44,9 +46,11 @@ export const MenuPage = ({
       <MenuCatalog
         cartQuantityById={cartQuantityById}
         filteredMenu={filteredMenu}
+        menuError={menuError}
         isMenuLoading={isMenuLoading}
         isShopOpen={isShopOpen}
         onAddToCart={onAddToCart}
+        onRetryMenu={onRetryMenu}
         shopAvailabilityMessage={shopAvailabilityMessage}
       />
     </div>

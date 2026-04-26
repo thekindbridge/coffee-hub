@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { MenuItem } from '../../../types';
 import {
   createAdminMenuItem,
@@ -31,8 +31,10 @@ export const useAdminMenuManager = () => {
   const [menuForm, setMenuForm] = useState<AdminMenuFormState>(INITIAL_FORM_STATE);
   const [editingId, setEditingId] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [pendingMenuActionId, setPendingMenuActionId] = useState('');
   const [managerError, setManagerError] = useState('');
   const [isEditorOpen, setIsEditorOpen] = useState(false);
+  const isSavingRef = useRef(false);
 
   useEffect(() => {
     const unsubscribe = subscribeToAdminMenuItems(
@@ -40,9 +42,8 @@ export const useAdminMenuManager = () => {
         setMenuItems(nextMenuItems);
         setManagerError('');
       },
-      error => {
-        console.error('Failed to load menu items for admin manager', error);
-        setManagerError('Unable to load menu items right now.');
+      () => {
+        setManagerError('Something went wrong. Try again');
       },
     );
 
@@ -66,23 +67,23 @@ export const useAdminMenuManager = () => {
     );
   }, [menuForm]);
 
-  const resetForm = () => {
+  const resetForm = useCallback(() => {
     setMenuForm(INITIAL_FORM_STATE);
     setEditingId('');
-  };
+  }, []);
 
-  const openCreate = () => {
+  const openCreate = useCallback(() => {
     resetForm();
     setManagerError('');
     setIsEditorOpen(true);
-  };
+  }, [resetForm]);
 
-  const closeEditor = () => {
+  const closeEditor = useCallback(() => {
     setIsEditorOpen(false);
     resetForm();
-  };
+  }, [resetForm]);
 
-  const editMenuItem = (item: MenuItem) => {
+  const editMenuItem = useCallback((item: MenuItem) => {
     setEditingId(item.id);
     setMenuForm({
       name: item.name,
@@ -94,21 +95,26 @@ export const useAdminMenuManager = () => {
     });
     setManagerError('');
     setIsEditorOpen(true);
-  };
+  }, []);
 
-  const updateMenuForm = (updater: (current: AdminMenuFormState) => AdminMenuFormState) => {
+  const updateMenuForm = useCallback((updater: (current: AdminMenuFormState) => AdminMenuFormState) => {
     setMenuForm(current => updater(current));
     if (managerError) {
       setManagerError('');
     }
-  };
+  }, [managerError]);
 
   const saveMenuItem = async () => {
+    if (isSavingRef.current) {
+      return;
+    }
+
     if (!isFormValid) {
       setManagerError('Please complete all fields with valid values.');
       return;
     }
 
+    isSavingRef.current = true;
     setIsSaving(true);
     setManagerError('');
 
@@ -131,29 +137,41 @@ export const useAdminMenuManager = () => {
 
       closeEditor();
     } catch (error) {
-      console.error('Failed to save menu item', error);
-      setManagerError('Unable to save menu item right now.');
+      setManagerError(error instanceof Error ? error.message : 'Something went wrong. Try again');
     } finally {
+      isSavingRef.current = false;
       setIsSaving(false);
     }
   };
 
   const deleteMenuItem = async (menuItemId: string) => {
+    if (pendingMenuActionId) {
+      return;
+    }
+
+    setPendingMenuActionId(menuItemId);
     try {
       await deleteAdminMenuItem(menuItemId);
       closeEditor();
     } catch (error) {
-      console.error('Failed to delete menu item', error);
-      setManagerError('Unable to delete product right now.');
+      setManagerError(error instanceof Error ? error.message : 'Something went wrong. Try again');
+    } finally {
+      setPendingMenuActionId('');
     }
   };
 
   const toggleAvailability = async (menuItemId: string, isAvailable: boolean) => {
+    if (pendingMenuActionId) {
+      return;
+    }
+
+    setPendingMenuActionId(menuItemId);
     try {
       await setAdminMenuItemAvailability(menuItemId, !isAvailable);
     } catch (error) {
-      console.error('Failed to update menu item availability', error);
-      setManagerError('Unable to update item availability right now.');
+      setManagerError(error instanceof Error ? error.message : 'Something went wrong. Try again');
+    } finally {
+      setPendingMenuActionId('');
     }
   };
 
@@ -162,6 +180,7 @@ export const useAdminMenuManager = () => {
     menuForm,
     editingId,
     isSaving,
+    pendingMenuActionId,
     managerError,
     isEditorOpen,
     isFormValid,

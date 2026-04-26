@@ -12,6 +12,7 @@ import {
 export type OrdersData = {
   adminOrders: Order[];
   setAdminOrders: Dispatch<SetStateAction<Order[]>>;
+  isAdminOrdersLoading: boolean;
   newOrderDocIds: string[];
   setNewOrderDocIds: Dispatch<SetStateAction<string[]>>;
   userOrders: Order[];
@@ -29,6 +30,7 @@ export const useOrdersData = (
   currentUserId: string,
 ): OrdersData => {
   const [adminOrders, setAdminOrders] = useState<Order[]>([]);
+  const [isAdminOrdersLoading, setIsAdminOrdersLoading] = useState(false);
   const [newOrderDocIds, setNewOrderDocIds] = useState<string[]>([]);
   const [userOrders, setUserOrders] = useState<Order[]>([]);
   const [isUserOrdersLoading, setIsUserOrdersLoading] = useState(false);
@@ -40,11 +42,14 @@ export const useOrdersData = (
   useEffect(() => {
     if (!isAdmin) {
       setAdminOrders([]);
+      setIsAdminOrdersLoading(false);
       setNewOrderDocIds([]);
       previousAdminOrderCountRef.current = 0;
       hasInitializedAdminOrdersRef.current = false;
       return;
     }
+
+    setIsAdminOrdersLoading(true);
 
     // Pre-load audio alert for admins
     if (!orderAlertAudioRef.current) {
@@ -52,15 +57,14 @@ export const useOrdersData = (
     }
 
     if (notificationAdapter.getPermissionState() === 'default') {
-      void notificationAdapter.requestPermission().catch(error => {
-        console.error('Notification permission request failed', error);
-      });
+      void notificationAdapter.requestPermission().catch(() => undefined);
     }
 
     const highlightTimeoutIds: Array<ReturnType<typeof setTimeout>> = [];
     const unsubscribe = subscribeToAdminOrders(
       ({ addedOrderDocIds, orders, snapshotSize }) => {
         setAdminOrders(orders);
+        setIsAdminOrdersLoading(false);
 
         if (!hasInitializedAdminOrdersRef.current) {
           previousAdminOrderCountRef.current = snapshotSize;
@@ -78,9 +82,7 @@ export const useOrdersData = (
             highlightTimeoutIds.push(timeoutId);
 
             if (orderAlertAudioRef.current) {
-              void orderAlertAudioRef.current.play().catch(error => {
-                console.error('Unable to play order alert sound', error);
-              });
+              void orderAlertAudioRef.current.play().catch(() => undefined);
             }
 
             notificationAdapter.show({
@@ -93,8 +95,8 @@ export const useOrdersData = (
 
         previousAdminOrderCountRef.current = snapshotSize;
       },
-      error => {
-        console.error('Failed to subscribe to admin orders', error);
+      () => {
+        setIsAdminOrdersLoading(false);
       },
     );
 
@@ -103,6 +105,11 @@ export const useOrdersData = (
       highlightTimeoutIds.forEach(id => clearTimeout(id));
     };
   }, [isAdmin]);
+
+  useEffect(() => () => {
+    orderAlertAudioRef.current?.dispose?.();
+    orderAlertAudioRef.current = null;
+  }, []);
 
   // --- User orders subscription ---
   useEffect(() => {
@@ -120,8 +127,7 @@ export const useOrdersData = (
         setUserOrders(sortedOrders);
         setIsUserOrdersLoading(false);
       },
-      error => {
-        console.error('Failed to subscribe to user orders', error);
+      () => {
         setIsUserOrdersLoading(false);
       },
     );
@@ -130,6 +136,7 @@ export const useOrdersData = (
   return {
     adminOrders,
     setAdminOrders,
+    isAdminOrdersLoading,
     newOrderDocIds,
     setNewOrderDocIds,
     userOrders,

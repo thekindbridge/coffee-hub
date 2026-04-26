@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { MenuItem } from '../../../types';
 import { subscribeToAvailableMenuItems } from '../../../services/firebase/menuService';
 
 export type MenuData = {
   menu: MenuItem[];
+  menuError: string;
+  retryMenu: () => void;
   isMenuLoading: boolean;
 };
 
@@ -13,7 +15,13 @@ export type MenuData = {
  */
 export const useMenuData = (enabled: boolean): MenuData => {
   const [menu, setMenu] = useState<MenuItem[]>([]);
+  const [menuError, setMenuError] = useState('');
   const [isMenuLoading, setIsMenuLoading] = useState(true);
+  const [retryToken, setRetryToken] = useState(0);
+
+  const retryMenu = useCallback(() => {
+    setRetryToken(token => token + 1);
+  }, []);
 
   useEffect(() => {
     if (!enabled) {
@@ -23,18 +31,20 @@ export const useMenuData = (enabled: boolean): MenuData => {
     }
 
     setIsMenuLoading(true);
+    setMenuError('');
     const unsubscribe = subscribeToAvailableMenuItems(
       items => {
         setMenu(items);
+        setMenuError('');
         setIsMenuLoading(false);
       },
       error => {
-        console.error('Failed to subscribe to menu items', error);
+        setMenuError(error.message || 'Something went wrong. Try again');
         setIsMenuLoading(false);
       },
     );
     return unsubscribe;
-  }, [enabled]);
+  }, [enabled, retryToken]);
 
-  return { menu, isMenuLoading };
+  return { menu, menuError, retryMenu, isMenuLoading };
 };

@@ -39,6 +39,8 @@ export const HeroBanner = ({
           src="https://res.cloudinary.com/ddfhaqeme/image/upload/v1772699634/e0818545-8027-4b28-8a1f-d521f79fdb6a_plei96.jpg"
           alt="COFFEE-HUB hero"
           className="h-full w-full object-cover opacity-30"
+          decoding="async"
+          fetchPriority="high"
           referrerPolicy="no-referrer"
         />
         <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(12,9,8,0.18),rgba(12,9,8,0.92)_72%)]" />

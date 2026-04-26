@@ -13,6 +13,7 @@ type AdminSection = 'dashboard' | 'products' | 'orders' | 'promos';
 interface AdminDashboardProps {
   orders: Order[];
   offers: Offer[];
+  isOrdersLoading: boolean;
   isOffersLoading: boolean;
   offersError: string;
   newOrderDocIds: string[];
@@ -55,6 +56,7 @@ const renderCountCard = (title: string, count: number, Icon: typeof LayoutGrid) 
 export default function AdminDashboard({
   orders,
   offers,
+  isOrdersLoading,
   isOffersLoading,
   offersError,
   newOrderDocIds,
@@ -109,12 +111,16 @@ export default function AdminDashboard({
               <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-secondary">COFFEE-HUB admin</p>
               <h2 className="mt-1 text-[1.55rem] font-semibold text-accent">Operations overview</h2>
             </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {renderCountCard('Pending', orderCounts.waiting, ReceiptText)}
-              {renderCountCard('Preparing', orderCounts.preparing, Package2)}
-              {renderCountCard('Out for Delivery', orderCounts.outForDelivery, LayoutGrid)}
-              {renderCountCard('Rejected', orderCounts.rejected, ReceiptText)}
-            </div>
+            {isOrdersLoading ? (
+              <Loader label="Loading admin dashboard..." minHeightClassName="min-h-[220px]" />
+            ) : (
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {renderCountCard('Pending', orderCounts.waiting, ReceiptText)}
+                {renderCountCard('Preparing', orderCounts.preparing, Package2)}
+                {renderCountCard('Out for Delivery', orderCounts.outForDelivery, LayoutGrid)}
+                {renderCountCard('Rejected', orderCounts.rejected, ReceiptText)}
+              </div>
+            )}
             <div className="coffee-surface-soft rounded-[24px] p-4 text-sm text-ink-muted">
               <p className="font-semibold text-accent">{newOrderDocIds.length} new order alert{newOrderDocIds.length === 1 ? '' : 's'}</p>
               <p className="mt-2 leading-6">
@@ -132,13 +138,17 @@ export default function AdminDashboard({
 
         {activeSection === 'orders' && (
           <Suspense fallback={sectionFallback}>
-            <AdminOrders
-              orders={orders}
-              newOrderDocIds={newOrderDocIds}
-              deliveryAgents={deliveryAgents}
-              onAssignAgent={onAssignAgent}
-              onUpdateStatus={onUpdateStatus}
-            />
+            {isOrdersLoading ? (
+              <Loader label="Loading orders..." minHeightClassName="min-h-[320px]" />
+            ) : (
+              <AdminOrders
+                orders={orders}
+                newOrderDocIds={newOrderDocIds}
+                deliveryAgents={deliveryAgents}
+                onAssignAgent={onAssignAgent}
+                onUpdateStatus={onUpdateStatus}
+              />
+            )}
           </Suspense>
         )}
 

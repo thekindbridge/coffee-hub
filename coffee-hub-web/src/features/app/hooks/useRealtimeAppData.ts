@@ -56,6 +56,8 @@ export const useRealtimeAppData = () => {
 
     // Menu
     menu: menu.menu,
+    menuError: menu.menuError,
+    retryMenu: menu.retryMenu,
     isMenuLoading: menu.isMenuLoading,
 
     // Shop timing
@@ -65,6 +67,7 @@ export const useRealtimeAppData = () => {
     // Orders
     adminOrders: orders.adminOrders,
     setAdminOrders: orders.setAdminOrders,
+    isAdminOrdersLoading: orders.isAdminOrdersLoading,
     newOrderDocIds: orders.newOrderDocIds,
     setNewOrderDocIds: orders.setNewOrderDocIds,
     userOrders: orders.userOrders,

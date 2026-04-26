@@ -1,9 +1,8 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Poppins:wght@500;600;700;800&display=swap");
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Poppins", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-display: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 
   --color-background: #0f0b09;
   --color-primary: #6f4e37;
@@ -23,10 +22,21 @@
 
   * {
     -webkit-tap-highlight-color: transparent;
+    min-width: 0;
+  }
+
+  html {
+    background: #120d0b;
+    overscroll-behavior-y: none;
+    text-size-adjust: 100%;
+    -webkit-text-size-adjust: 100%;
   }
 
   body {
     @apply min-h-screen bg-background font-sans text-ink antialiased;
+    overflow-x: hidden;
+    overscroll-behavior-y: none;
+    touch-action: manipulation;
     background-image:
       radial-gradient(circle at top, rgba(255, 179, 71, 0.12), transparent 24%),
       radial-gradient(circle at bottom right, rgba(111, 78, 55, 0.24), transparent 30%),
@@ -48,11 +58,17 @@
   select {
     font: inherit;
   }
+
+  img {
+    content-visibility: auto;
+  }
 }
 
 @layer components {
   .app-shell {
     @apply min-h-screen text-ink selection:bg-highlight/35 selection:text-[#2f1e12];
+    min-height: 100dvh;
+    overflow-x: hidden;
     background-image:
       radial-gradient(circle at top left, rgba(255, 179, 71, 0.08), transparent 22%),
       radial-gradient(circle at bottom right, rgba(111, 78, 55, 0.24), transparent 32%),
@@ -79,6 +95,7 @@
     @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl px-4 text-[13px] font-semibold tracking-[0.02em] text-[#fff9f4] transition-all duration-200 active:scale-[0.98];
     background: linear-gradient(135deg, #8b6145 0%, #6f4e37 45%, #3e2723 100%);
     box-shadow: 0 14px 30px rgba(62, 39, 35, 0.35);
+    will-change: transform;
   }
 
   .coffee-btn-primary:hover {
@@ -87,16 +104,19 @@
 
   .coffee-btn-secondary {
     @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 text-[13px] font-semibold text-ink-muted transition-all duration-200 hover:bg-white/8 active:scale-[0.98];
+    will-change: transform;
   }
 
   .coffee-btn-accent {
     @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl px-4 text-[13px] font-semibold text-[#322117] transition-all duration-200 active:scale-[0.98];
     background: linear-gradient(135deg, #ffd29d 0%, #ffb347 100%);
     box-shadow: 0 14px 26px rgba(255, 179, 71, 0.18);
+    will-change: transform;
   }
 
   .coffee-icon-btn {
     @apply inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-ink-muted transition-all duration-200 hover:bg-white/8 hover:text-ink active:scale-[0.96];
+    will-change: transform;
   }
 
   .coffee-input {
@@ -294,7 +314,32 @@
   display: none;
 }
 
-.no-scrollbar {
+  .no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
+}
+
+.mobile-scroll {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+@media (hover: none) {
+  .coffee-btn-primary:hover,
+  .coffee-btn-secondary:hover,
+  .coffee-icon-btn:hover {
+    box-shadow: none;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
 }

@@ -124,6 +124,7 @@ export const usePaymentFlow = ({
   const [draftOrderId, setDraftOrderId] = useState('');
   const [currentTime, setCurrentTime] = useState(() => Date.now());
   const hasCheckoutAddressSelectionRef = useRef(false);
+  const isPlacingOrderRef = useRef(false);
 
   // Derived address options from saved profile
   const savedAddressOptions = useMemo<SavedAddressOption[]>(
@@ -247,7 +248,6 @@ export const usePaymentFlow = ({
           error,
           'Unable to capture your location right now.',
         );
-      console.error('Failed to capture customer location', error);
       setCustomerLocationError(message);
       setCanOpenLocationSettings(isPermissionError);
       return null;
@@ -329,7 +329,6 @@ export const usePaymentFlow = ({
           setCouponError('Coupon was removed because it is no longer valid.');
         }
       } catch (error) {
-        console.error('Failed to validate coupon before checkout', error);
         setCouponError('Unable to validate your coupon right now.');
         setCheckoutError('Unable to validate your coupon right now.');
         return null;
@@ -359,6 +358,11 @@ export const usePaymentFlow = ({
   };
 
   const placeCodOrder = async (draft: CheckoutOrderDraft) => {
+    if (isPlacingOrderRef.current) {
+      return;
+    }
+
+    isPlacingOrderRef.current = true;
     setIsPlacingOrder(true);
     setCheckoutError('');
     try {
@@ -375,15 +379,19 @@ export const usePaymentFlow = ({
 
       resetAfterSuccess(orderResponse.order);
     } catch (error) {
-      console.error('Failed to place COD order', error);
       const typedError = error as Error;
-      setCheckoutError(typedError.message || 'Unable to place your order right now. Please try again.');
+      setCheckoutError(typedError.message || 'Something went wrong. Try again');
     } finally {
+      isPlacingOrderRef.current = false;
       setIsPlacingOrder(false);
     }
   };
 
   const handlePlaceOrder = async () => {
+    if (isPlacingOrderRef.current) {
+      return;
+    }
+
     if (!isShopOpenNow) {
       setCheckoutError(buildCheckoutClosedMessage(shopTiming.openTime));
       return;
@@ -394,11 +402,10 @@ export const usePaymentFlow = ({
       if (!preparedOrder) return;
       await placeCodOrder(preparedOrder.order);
     } catch (error) {
-      console.error('Failed to prepare checkout draft', error);
       setCheckoutError(
         getAppServiceErrorMessage(
           error,
-          'Unable to prepare your order right now. Please try again.',
+          'Something went wrong. Try again',
         ),
       );
     }

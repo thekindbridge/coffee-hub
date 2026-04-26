@@ -9,7 +9,9 @@ type MenuCatalogProps = {
   filteredMenu: MenuItem[];
   isMenuLoading: boolean;
   isShopOpen: boolean;
+  menuError: string;
   onAddToCart: (item: MenuItem, delta: number) => void;
+  onRetryMenu: () => void;
   shopAvailabilityMessage: string;
 };
 
@@ -18,9 +20,24 @@ export const MenuCatalog = memo(function MenuCatalog({
   filteredMenu,
   isMenuLoading,
   isShopOpen,
+  menuError,
   onAddToCart,
+  onRetryMenu,
   shopAvailabilityMessage,
 }: MenuCatalogProps) {
+  if (!isMenuLoading && menuError) {
+    return (
+      <div className="coffee-surface-soft mt-6 rounded-[26px] px-5 py-10 text-center">
+        <Search size={42} className="mx-auto text-rose-300/70" />
+        <p className="mt-4 text-sm font-semibold text-accent">Something went wrong. Try again</p>
+        <p className="mt-2 text-xs leading-5 text-ink-muted">{menuError}</p>
+        <button type="button" onClick={onRetryMenu} className="coffee-btn-primary mt-5">
+          Retry
+        </button>
+      </div>
+    );
+  }
+
   return (
   <>
     <div className="mt-5 grid grid-cols-1 gap-4 pb-28 sm:grid-cols-2 sm:pb-32 lg:grid-cols-3">
@@ -41,7 +58,7 @@ export const MenuCatalog = memo(function MenuCatalog({
     {!isMenuLoading && filteredMenu.length === 0 && (
       <div className="coffee-surface-soft mt-6 rounded-[26px] px-5 py-10 text-center">
         <Search size={42} className="mx-auto text-ink-muted/40" />
-        <p className="mt-4 text-sm font-semibold text-accent">No items match your search</p>
+        <p className="mt-4 text-sm font-semibold text-accent">Nothing here yet ☕</p>
         <p className="mt-2 text-xs leading-5 text-ink-muted">Try a different keyword or switch the category chip above.</p>
       </div>
     )}

@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { memo, useCallback } from 'react';
 import { motion } from 'motion/react';
 import { Coffee, Flame, Leaf, Minus, Plus, Star } from 'lucide-react';
 import { CURRENCY_SYMBOL } from '../../app/lib/constants';
@@ -31,6 +31,14 @@ export const MenuItemCard = memo(function MenuItemCard({
   shopAvailabilityMessage,
   onAdd,
 }: MenuItemCardProps) {
+  const handleAddOne = useCallback(() => {
+    onAdd(item, 1);
+  }, [item, onAdd]);
+
+  const handleRemoveOne = useCallback(() => {
+    onAdd(item, -1);
+  }, [item, onAdd]);
+
   return (
   <motion.article
     layout
@@ -47,6 +55,8 @@ export const MenuItemCard = memo(function MenuItemCard({
         className={`h-full w-full object-cover transition-transform duration-500 ${
           isShopOpen ? 'group-hover:scale-105' : 'scale-[1.02] blur-[1.5px] brightness-[0.55]'
         }`}
+        loading="lazy"
+        decoding="async"
         referrerPolicy="no-referrer"
       />
       <div className="absolute inset-0 bg-gradient-to-t from-[#0d0907]/92 via-[#0d0907]/10 to-transparent" />
@@ -94,14 +104,14 @@ export const MenuItemCard = memo(function MenuItemCard({
           <div className="min-w-[124px] text-right">
             <div className="flex items-center justify-end gap-2 rounded-full border border-white/10 bg-[#120d0b]/92 p-1.5 shadow-[0_14px_30px_rgba(0,0,0,0.22)]">
               <button
-                onClick={() => onAdd(item, -1)}
+                onClick={handleRemoveOne}
                 className="coffee-icon-btn h-9 w-9 rounded-full border-none bg-white/6"
               >
                 <Minus size={16} />
               </button>
               <span className="min-w-5 text-center text-sm font-semibold text-accent">{cartQuantity}</span>
               <button
-                onClick={() => onAdd(item, 1)}
+                onClick={handleAddOne}
                 disabled={!isShopOpen}
                 className="coffee-icon-btn h-9 w-9 rounded-full border-none bg-primary text-white hover:text-white disabled:cursor-not-allowed disabled:bg-white/8 disabled:text-white/45"
               >
@@ -117,7 +127,7 @@ export const MenuItemCard = memo(function MenuItemCard({
         ) : (
           <div className="min-w-[124px] text-right">
             <button
-              onClick={() => onAdd(item, 1)}
+              onClick={handleAddOne}
               disabled={!isShopOpen}
               className="coffee-btn-primary min-w-[108px] px-3.5 disabled:cursor-not-allowed disabled:opacity-55"
             >

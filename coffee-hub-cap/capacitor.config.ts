@@ -13,6 +13,12 @@ const config: CapacitorConfig = {
   appName: 'Coffee Hub',
   webDir: 'dist',
   backgroundColor: '#120c09',
+  android: {
+    allowMixedContent: false,
+    backgroundColor: '#120c09',
+    captureInput: true,
+    webContentsDebuggingEnabled: false,
+  },
   // The Android shell normally loads the deployed web app. Override
   // CAP_SERVER_URL for emulator/device debugging against a local server.
   server: {
@@ -32,10 +38,15 @@ const config: CapacitorConfig = {
     PushNotifications: {
       presentationOptions: [],
     },
+    LocalNotifications: {
+      smallIcon: 'ic_launcher',
+      iconColor: '#c08a5d',
+      sound: 'customer.mp3',
+    },
     SplashScreen: {
-      launchShowDuration: 2500,
+      launchShowDuration: 1800,
       launchAutoHide: true,
-      launchFadeOutDuration: 250,
+      launchFadeOutDuration: 180,
       backgroundColor: '#120c09',
       androidScaleType: 'CENTER_CROP',
       showSpinner: false,

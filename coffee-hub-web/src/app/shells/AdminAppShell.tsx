@@ -187,6 +187,7 @@ export const AdminAppShell = ({
       <Suspense fallback={<Loader label="Loading admin dashboard..." minHeightClassName="min-h-[420px]" />}>
         <AdminDashboardPage
           deliveryAgents={session.deliveryAgents}
+          isOrdersLoading={session.isAdminOrdersLoading}
           isOffersLoading={offersState.isLoading}
           newOrderDocIds={session.newOrderDocIds}
           offers={offersState.offers}

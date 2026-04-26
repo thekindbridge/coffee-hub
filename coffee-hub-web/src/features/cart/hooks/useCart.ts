@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import type { CartItem, MenuItem, Offer } from '../../../types';
 import { calculateDiscount } from '../../../utils/calculateDiscount';
@@ -48,6 +48,7 @@ export const useCart = ({ findActiveOfferByCode }: UseCartParams): CartState => 
   const [couponSuccess, setCouponSuccess] = useState('');
   const [isApplyingCoupon, setIsApplyingCoupon] = useState(false);
   const [isCouponAppliedPulseVisible, setIsCouponAppliedPulseVisible] = useState(false);
+  const isApplyingCouponRef = useRef(false);
 
   const hasCartItems = cart.length > 0;
   const { cartCount, cartTotal } = useMemo(() => (
@@ -115,8 +116,8 @@ export const useCart = ({ findActiveOfferByCode }: UseCartParams): CartState => 
           );
         }
       })
-      .catch(error => {
-        console.error('Failed to validate coupon', error);
+      .catch(() => {
+        setCouponError('Something went wrong. Try again');
       });
   }, [appliedCouponCode, cartTotal, findActiveOfferByCode]);
 
@@ -158,6 +159,10 @@ export const useCart = ({ findActiveOfferByCode }: UseCartParams): CartState => 
   }, []);
 
   const handleApplyCoupon = useCallback(async () => {
+    if (isApplyingCouponRef.current) {
+      return;
+    }
+
     const normalizedCode = couponInput.trim().toUpperCase();
     if (!normalizedCode) {
       setCouponError('Enter a coupon code.');
@@ -165,6 +170,7 @@ export const useCart = ({ findActiveOfferByCode }: UseCartParams): CartState => 
       return;
     }
 
+    isApplyingCouponRef.current = true;
     setIsApplyingCoupon(true);
     setCouponError('');
     setCouponSuccess('');
@@ -199,9 +205,9 @@ export const useCart = ({ findActiveOfferByCode }: UseCartParams): CartState => 
       setCouponSuccess(`Coupon ${matchingOffer.couponCode} applied.`);
       setIsCouponAppliedPulseVisible(true);
     } catch (error) {
-      console.error('Failed to apply coupon', error);
-      setCouponError('Unable to apply coupon right now.');
+      setCouponError(error instanceof Error ? error.message : 'Something went wrong. Try again');
     } finally {
+      isApplyingCouponRef.current = false;
       setIsApplyingCoupon(false);
     }
   }, [cartTotal, couponInput, findActiveOfferByCode]);

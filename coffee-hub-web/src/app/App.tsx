@@ -2,6 +2,7 @@ import { Suspense, useEffect, useState } from 'react';
 import type { Order } from '../types';
 import { useOffers } from '../features/offers/hooks/useOffers';
 import { useRealtimeAppData } from '../features/app/hooks/useRealtimeAppData';
+import { useNetworkStatus } from '../features/app/hooks/useNetworkStatus';
 import { useOrderOperations } from '../features/orders/hooks/useOrderOperations';
 import { useProfileManager } from '../features/app/hooks/useProfileManager';
 import { useAccessManager } from '../features/app/hooks/useAccessManager';
@@ -9,6 +10,7 @@ import { usePushNotifications } from '../features/app/hooks/usePushNotifications
 import { useShopTimingManager } from '../features/app/hooks/useShopTimingManager';
 import { useInstallPrompt } from '../features/customer/hooks/useInstallPrompt';
 import { Loader } from '../components/ui/Loader';
+import { NetworkStatusBanner } from '../components/common/NetworkStatusBanner';
 import { lazyNamed } from '../utils/lazyNamed';
 import { AppRouter } from './router/AppRouter';
 import { storageAdapter } from '../services/platform/storageAdapter';
@@ -28,6 +30,7 @@ export default function App() {
   const session = useRealtimeAppData();
   const [orderStatus, setOrderStatus] = useState<Order | null>(null);
   const installPrompt = useInstallPrompt();
+  const networkStatus = useNetworkStatus();
 
   const pushNotifications = usePushNotifications({
     isAuthReady: session.isAuthReady,
@@ -124,17 +127,20 @@ export default function App() {
   }
 
   return (
-    <AppRouter
-      accessManager={accessManager}
-      installPrompt={installPrompt}
-      offersState={offersState}
-      orderOperations={orderOperations}
-      orderStatus={orderStatus}
-      profileManager={profileManager}
-      pushNotifications={pushNotifications}
-      session={session}
-      setOrderStatus={setOrderStatus}
-      shopTimingManager={shopTimingManager}
-    />
+    <>
+      <NetworkStatusBanner isOffline={networkStatus.isOffline} />
+      <AppRouter
+        accessManager={accessManager}
+        installPrompt={installPrompt}
+        offersState={offersState}
+        orderOperations={orderOperations}
+        orderStatus={orderStatus}
+        profileManager={profileManager}
+        pushNotifications={pushNotifications}
+        session={session}
+        setOrderStatus={setOrderStatus}
+        shopTimingManager={shopTimingManager}
+      />
+    </>
   );
 }

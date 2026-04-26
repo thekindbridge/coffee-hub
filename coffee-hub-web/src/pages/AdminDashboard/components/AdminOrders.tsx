@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useMemo, useState } from 'react';
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import {
   getOrderStatusCustomerCopy,
   normalizeOrderStatusCode,
@@ -81,6 +81,7 @@ export default function AdminOrders({
   const [rejectError, setRejectError] = useState('');
   const [selectedAgentByOrderDocId, setSelectedAgentByOrderDocId] = useState<Record<string, string>>({});
   const [toastMessage, setToastMessage] = useState('');
+  const pendingOrderActionRef = useRef('');
 
   const availableAgents = useMemo(
     () => deliveryAgents.filter(agent => getAgentStatus(agent) === 'available'),
@@ -117,7 +118,12 @@ export default function AdminOrders({
     status: OrderStatusCode,
     rejectionReason?: string,
   ) => {
+    if (pendingOrderActionRef.current === order.doc_id) {
+      return;
+    }
+
     setActionError('');
+    pendingOrderActionRef.current = order.doc_id;
     setSubmittingOrderDocId(order.doc_id);
 
     try {
@@ -139,6 +145,7 @@ export default function AdminOrders({
       setActionError(message);
       throw error;
     } finally {
+      pendingOrderActionRef.current = '';
       setSubmittingOrderDocId('');
     }
   };
@@ -163,6 +170,10 @@ export default function AdminOrders({
   };
 
   const assignAgentToOrder = async (order: Order, agentId: string) => {
+    if (assigningOrderDocId === order.doc_id) {
+      return;
+    }
+
     if (!agentId) {
       setActionError('Select a delivery agent before dispatching the order.');
       return;
@@ -200,7 +211,7 @@ export default function AdminOrders({
   if (sortedOrders.length === 0) {
     return (
       <div className="coffee-surface-soft rounded-[24px] p-6 text-center text-sm text-ink-muted">
-        No orders yet.
+        Nothing here yet ☕
       </div>
     );
   }

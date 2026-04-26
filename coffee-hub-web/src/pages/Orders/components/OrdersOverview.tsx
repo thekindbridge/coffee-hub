@@ -232,7 +232,7 @@ export const OrdersOverview = memo(function OrdersOverview({
       <div className="px-4 pb-28 pt-24 sm:px-6">
         <div className="coffee-surface-soft mx-auto max-w-screen-md rounded-[24px] p-8 text-center">
           <PackageSearch className="mx-auto mb-4 text-ink-muted opacity-80" size={36} />
-          <h2 className="mb-2 text-[1.55rem] font-semibold text-accent">No orders yet</h2>
+          <h2 className="mb-2 text-[1.55rem] font-semibold text-accent">Nothing here yet ☕</h2>
           <p className="mb-6 text-sm text-ink-muted">Place your first order and track it live here.</p>
           <button onClick={onBrowseMenu} className="coffee-btn-primary">
             Browse menu

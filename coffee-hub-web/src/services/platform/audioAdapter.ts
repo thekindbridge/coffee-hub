@@ -1,6 +1,7 @@
 import { createBrowserAudio } from '../browser/audioService';
 
 export interface AudioHandle {
+  dispose?(): void;
   play(): Promise<void>;
   reset(): void;
 }

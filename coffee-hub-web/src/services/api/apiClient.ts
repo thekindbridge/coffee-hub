@@ -1,4 +1,8 @@
 import { toAppServiceError } from '../platform/serviceError';
+import {
+  getNetworkErrorMessage,
+  isNetworkUnavailable,
+} from '../platform/networkStatusService';
 
 const readJson = async (response: Response) => response.json().catch(() => ({}));
 
@@ -27,6 +31,14 @@ const requestApi = async <TResponse>({
   method: 'GET' | 'POST' | 'PUT';
   path: string;
 }) => {
+  if (isNetworkUnavailable()) {
+    throw toAppServiceError(
+      getNetworkErrorMessage(),
+      getNetworkErrorMessage(),
+      'network',
+    );
+  }
+
   try {
     const response = await fetch(path, {
       method,

@@ -11,6 +11,10 @@ import {
 import type { MenuItem } from '../../types';
 import { mapMenuDocToMenuItem } from '../../features/app/lib/firestoreMappers';
 import { toAppServiceError } from '../platform/serviceError';
+import {
+  getNetworkErrorMessage,
+  isNetworkUnavailable,
+} from '../platform/networkStatusService';
 import { db } from './index';
 
 const MENU_COLLECTION = 'menu_items';
@@ -38,6 +42,10 @@ export const subscribeToAdminMenuItems = (
 );
 
 export const createAdminMenuItem = async (input: AdminMenuItemInput) => {
+  if (isNetworkUnavailable()) {
+    throw toAppServiceError(getNetworkErrorMessage(), getNetworkErrorMessage(), 'network');
+  }
+
   try {
     await addDoc(collection(db, MENU_COLLECTION), {
       name: input.name.trim(),
@@ -58,6 +66,10 @@ export const updateAdminMenuItem = async (
   input: AdminMenuItemInput,
   isAvailable: boolean,
 ) => {
+  if (isNetworkUnavailable()) {
+    throw toAppServiceError(getNetworkErrorMessage(), getNetworkErrorMessage(), 'network');
+  }
+
   try {
     await updateDoc(doc(db, MENU_COLLECTION, menuItemId), {
       name: input.name.trim(),
@@ -74,6 +86,10 @@ export const updateAdminMenuItem = async (
 };
 
 export const deleteAdminMenuItem = async (menuItemId: string) => {
+  if (isNetworkUnavailable()) {
+    throw toAppServiceError(getNetworkErrorMessage(), getNetworkErrorMessage(), 'network');
+  }
+
   try {
     await deleteDoc(doc(db, MENU_COLLECTION, menuItemId));
   } catch (error) {
@@ -85,6 +101,10 @@ export const setAdminMenuItemAvailability = async (
   menuItemId: string,
   isAvailable: boolean,
 ) => {
+  if (isNetworkUnavailable()) {
+    throw toAppServiceError(getNetworkErrorMessage(), getNetworkErrorMessage(), 'network');
+  }
+
   try {
     await updateDoc(doc(db, MENU_COLLECTION, menuItemId), { isAvailable });
   } catch (error) {

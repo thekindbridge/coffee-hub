@@ -6,7 +6,21 @@ import { defineConfig } from 'vite';
 export default defineConfig(() => {
   return {
     plugins: [react(), tailwindcss()],
+    esbuild: {
+      drop: ['console', 'debugger'],
+      legalComments: 'none',
+    },
     build: {
+      assetsInlineLimit: 2048,
+      cssCodeSplit: true,
+      cssMinify: true,
+      minify: 'esbuild',
+      modulePreload: {
+        polyfill: false,
+      },
+      reportCompressedSize: false,
+      sourcemap: false,
+      target: 'es2020',
       rollupOptions: {
         output: {
           manualChunks: id => {

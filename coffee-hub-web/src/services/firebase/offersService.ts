@@ -16,6 +16,10 @@ import {
 import type { DocumentData, QueryDocumentSnapshot, Timestamp } from 'firebase/firestore';
 import type { Offer, OfferInput } from '../../types';
 import { toAppServiceError } from '../platform/serviceError';
+import {
+  getNetworkErrorMessage,
+  isNetworkUnavailable,
+} from '../platform/networkStatusService';
 import { db } from './index';
 
 const OFFERS_COLLECTION = 'offers';
@@ -70,6 +74,10 @@ export const assertCouponCodeUnique = async (
   couponCode: string,
   offerIdToIgnore = '',
 ) => {
+  if (isNetworkUnavailable()) {
+    throw toAppServiceError(getNetworkErrorMessage(), getNetworkErrorMessage(), 'network');
+  }
+
   try {
     const normalizedCouponCode = normalizeCouponCode(couponCode);
     const duplicateSnapshot = await getDocs(
@@ -85,6 +93,10 @@ export const assertCouponCodeUnique = async (
 };
 
 export const createOfferRecord = async (offerInput: OfferInput) => {
+  if (isNetworkUnavailable()) {
+    throw toAppServiceError(getNetworkErrorMessage(), getNetworkErrorMessage(), 'network');
+  }
+
   try {
     const normalizedCouponCode = normalizeCouponCode(offerInput.couponCode);
     await assertCouponCodeUnique(normalizedCouponCode);
@@ -111,6 +123,10 @@ export const createOfferRecord = async (offerInput: OfferInput) => {
 };
 
 export const updateOfferRecord = async (offerId: string, offerInput: OfferInput) => {
+  if (isNetworkUnavailable()) {
+    throw toAppServiceError(getNetworkErrorMessage(), getNetworkErrorMessage(), 'network');
+  }
+
   try {
     const normalizedCouponCode = normalizeCouponCode(offerInput.couponCode);
     await assertCouponCodeUnique(normalizedCouponCode, offerId);
@@ -133,6 +149,10 @@ export const updateOfferRecord = async (offerId: string, offerInput: OfferInput)
 };
 
 export const deleteOfferRecord = async (offerId: string) => {
+  if (isNetworkUnavailable()) {
+    throw toAppServiceError(getNetworkErrorMessage(), getNetworkErrorMessage(), 'network');
+  }
+
   try {
     await deleteDoc(doc(db, OFFERS_COLLECTION, offerId));
   } catch (error) {
@@ -141,6 +161,10 @@ export const deleteOfferRecord = async (offerId: string) => {
 };
 
 export const toggleOfferRecordStatus = async (offerId: string, isActive: boolean) => {
+  if (isNetworkUnavailable()) {
+    throw toAppServiceError(getNetworkErrorMessage(), getNetworkErrorMessage(), 'network');
+  }
+
   try {
     await updateDoc(doc(db, OFFERS_COLLECTION, offerId), { isActive });
   } catch (error) {
@@ -149,6 +173,10 @@ export const toggleOfferRecordStatus = async (offerId: string, isActive: boolean
 };
 
 export const findActiveOfferRecordByCode = async (couponCode: string) => {
+  if (isNetworkUnavailable()) {
+    throw toAppServiceError(getNetworkErrorMessage(), getNetworkErrorMessage(), 'network');
+  }
+
   const normalizedCouponCode = normalizeCouponCode(couponCode);
   if (!normalizedCouponCode) {
     return null;

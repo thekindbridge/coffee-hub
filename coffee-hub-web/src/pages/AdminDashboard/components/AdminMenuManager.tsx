@@ -10,6 +10,7 @@ export default function AdminMenuManager() {
     menuForm,
     editingId,
     isSaving,
+    pendingMenuActionId,
     managerError,
     isEditorOpen,
     openCreate,
@@ -92,7 +93,7 @@ export default function AdminMenuManager() {
             <button onClick={() => void saveMenuItem()} disabled={isSaving} className="coffee-btn-primary disabled:opacity-60">
               {isSaving ? 'Saving...' : editingId ? 'Update' : 'Create'}
             </button>
-            <button onClick={closeEditor} className="coffee-btn-secondary">
+            <button onClick={closeEditor} disabled={isSaving} className="coffee-btn-secondary disabled:opacity-60">
               Cancel
             </button>
             {editingId && (
@@ -104,10 +105,11 @@ export default function AdminMenuManager() {
 
                   void deleteMenuItem(editingId);
                 }}
-                className="coffee-btn-secondary border-red-400/20 bg-red-500/10 text-red-300"
+                disabled={isSaving || pendingMenuActionId === editingId}
+                className="coffee-btn-secondary border-red-400/20 bg-red-500/10 text-red-300 disabled:opacity-60"
               >
                 <Trash2 size={15} />
-                Delete
+                {pendingMenuActionId === editingId ? 'Deleting...' : 'Delete'}
               </button>
             )}
           </div>
@@ -140,13 +142,14 @@ export default function AdminMenuManager() {
               </button>
               <button
                 onClick={() => void toggleAvailability(item.id, item.is_available)}
+                disabled={pendingMenuActionId === item.id}
                 className={`rounded-full px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] ${
                   item.is_available
                     ? 'border border-emerald-300/20 bg-emerald-500/10 text-emerald-300'
                     : 'border border-white/10 bg-white/6 text-ink-muted'
-                }`}
+                } disabled:cursor-not-allowed disabled:opacity-60`}
               >
-                {item.is_available ? 'Live' : 'Off'}
+                {pendingMenuActionId === item.id ? 'Saving' : item.is_available ? 'Live' : 'Off'}
               </button>
             </div>
           </article>
@@ -154,7 +157,7 @@ export default function AdminMenuManager() {
 
         {menuItems.length === 0 && (
           <div className="coffee-surface-soft rounded-[24px] p-5 text-sm text-ink-muted">
-            No products found.
+            Nothing here yet ☕
           </div>
         )}
       </div>

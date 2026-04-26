@@ -7,8 +7,10 @@ export type MenuPageProps = {
   hasStatusBanner: boolean;
   isMenuLoading: boolean;
   isShopOpen: boolean;
+  menuError: string;
   onAddToCart: (item: MenuItem, delta: number) => void;
   onCategoryChange: (category: string) => void;
+  onRetryMenu: () => void;
   onSearchChange: (value: string) => void;
   searchQuery: string;
   selectedCategory: string;

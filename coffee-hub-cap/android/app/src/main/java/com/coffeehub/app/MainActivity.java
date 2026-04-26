@@ -2,6 +2,7 @@ package com.coffeehub.app;
 
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
+import android.os.Build;
 import android.os.Bundle;
 import android.util.TypedValue;
 import android.view.Gravity;
@@ -50,11 +51,26 @@ public class MainActivity extends BridgeActivity {
         settings.setDomStorageEnabled(true);
         settings.setGeolocationEnabled(true);
         settings.setJavaScriptCanOpenWindowsAutomatically(true);
-        settings.setMixedContentMode(WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);
+        settings.setCacheMode(WebSettings.LOAD_DEFAULT);
+        settings.setDatabaseEnabled(true);
+        settings.setLoadWithOverviewMode(true);
+        settings.setLoadsImagesAutomatically(true);
+        settings.setMediaPlaybackRequiresUserGesture(true);
+        settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
+        settings.setSaveFormData(false);
         settings.setSupportMultipleWindows(false);
+        settings.setTextZoom(100);
+        settings.setUseWideViewPort(true);
 
         webView.setBackgroundColor(COFFEE_BACKGROUND);
+        webView.setLayerType(View.LAYER_TYPE_HARDWARE, null);
         webView.setOverScrollMode(WebView.OVER_SCROLL_NEVER);
+        webView.setScrollBarStyle(View.SCROLLBARS_INSIDE_OVERLAY);
+        webView.setScrollbarFadingEnabled(true);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            webView.setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_BOUND, true);
+        }
 
         cookieManager.setAcceptCookie(true);
         cookieManager.setAcceptThirdPartyCookies(webView, true);

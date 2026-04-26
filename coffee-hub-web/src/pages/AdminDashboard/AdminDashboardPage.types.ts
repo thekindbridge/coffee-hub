@@ -2,6 +2,7 @@ import type { DeliveryAgent, Offer, OfferInput, Order, OrderStatusCode } from '.
 
 export type AdminDashboardPageProps = {
   deliveryAgents: DeliveryAgent[];
+  isOrdersLoading: boolean;
   isOffersLoading: boolean;
   newOrderDocIds: string[];
   offers: Offer[];
