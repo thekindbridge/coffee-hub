@@ -1,0 +1,6 @@
+▲ [WARNING] Cannot find base config file "expo/tsconfig.base" [tsconfig.json]
+
+    ../tsconfig.json:3:13:
+      3 │   "extends": "expo/tsconfig.base",
+        ╵              ~~~~~~~~~~~~~~~~~~~~
+

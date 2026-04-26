@@ -1,11 +1,7 @@
 import type {
-  GetShopTimingResponse,
   UpdateShopTimingResponse,
 } from '../../types';
-import { getApi, putApi } from './apiClient';
-
-export const getShopTimingRequest = () =>
-  getApi<GetShopTimingResponse>('/api/shop/timing');
+import { putApi } from './apiClient';
 
 export const updateShopTimingRequest = (
   params: {

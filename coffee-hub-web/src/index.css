@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --font-display: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-sans: var(--app-font-sans);
+  --font-display: var(--app-font-display);
 
   --color-background: #0f0b09;
   --color-primary: #6f4e37;
@@ -18,6 +18,8 @@
 @layer base {
   :root {
     color-scheme: dark;
+    --app-font-sans: "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+    --app-font-display: "Segoe UI Variable Display", "Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
   }
 
   * {
@@ -30,6 +32,7 @@
     overscroll-behavior-y: none;
     text-size-adjust: 100%;
     -webkit-text-size-adjust: 100%;
+    font-family: var(--app-font-sans);
   }
 
   body {
@@ -41,6 +44,8 @@
       radial-gradient(circle at top, rgba(255, 179, 71, 0.12), transparent 24%),
       radial-gradient(circle at bottom right, rgba(111, 78, 55, 0.24), transparent 30%),
       linear-gradient(180deg, #120d0b 0%, #0f0b09 100%);
+    text-rendering: optimizeLegibility;
+    font-synthesis-weight: none;
   }
 
   h1,

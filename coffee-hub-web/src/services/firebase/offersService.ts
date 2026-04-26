@@ -1,4 +1,3 @@
-import { FirebaseError } from 'firebase/app';
 import {
   addDoc,
   collection,
@@ -182,35 +181,22 @@ export const findActiveOfferRecordByCode = async (couponCode: string) => {
     return null;
   }
 
-  let matchingOfferSnapshot;
   try {
-    matchingOfferSnapshot = await getDocs(
+    const matchingOfferSnapshot = await getDocs(
       query(
         collection(db, OFFERS_COLLECTION),
         where('couponCode', '==', normalizedCouponCode),
-        where('isActive', '==', true),
         limit(1),
       ),
     );
-  } catch (error) {
-    const shouldFallback = error instanceof FirebaseError && error.code === 'failed-precondition';
-    if (!shouldFallback) {
-      throw toAppServiceError(error, 'Unable to load the offer.', 'network');
+
+    if (matchingOfferSnapshot.empty) {
+      return null;
     }
 
-    matchingOfferSnapshot = await getDocs(
-      query(
-        collection(db, OFFERS_COLLECTION),
-        where('couponCode', '==', normalizedCouponCode),
-        limit(1),
-      ),
-    );
+    const matchingOffer = mapOfferDoc(matchingOfferSnapshot.docs[0]);
+    return matchingOffer.isActive ? matchingOffer : null;
+  } catch (error) {
+    throw toAppServiceError(error, 'Unable to load the offer.', 'network');
   }
-
-  if (matchingOfferSnapshot.empty) {
-    return null;
-  }
-
-  const matchingOffer = mapOfferDoc(matchingOfferSnapshot.docs[0]);
-  return matchingOffer.isActive ? matchingOffer : null;
 };
