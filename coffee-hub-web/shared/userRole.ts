@@ -1,4 +1,4 @@
-import { safeNormalizePhoneNumber } from './phone';
+import { safeNormalizePhoneNumber } from './phone.js';
 
 export const USER_ROLES_COLLECTION = 'user_roles';
 
