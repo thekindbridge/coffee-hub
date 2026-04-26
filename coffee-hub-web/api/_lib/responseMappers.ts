@@ -34,7 +34,9 @@ export interface StoredOrderRecord {
   paymentStatus?: string;
   status?: string;
   orderStatus?: string;
+  rejectReason?: string;
   rejectionReason?: string;
+  cancelledBy?: string;
   cancellationReason?: string;
   agentId?: string;
   agentName?: string;
@@ -235,7 +237,7 @@ export const mapOrderRecordToResponse = (
     final_total: totalAmount,
     status: getOrderStatusLabel(statusCode),
     status_code: statusCode,
-    rejection_reason: (record.rejectionReason || '').trim(),
+    rejection_reason: (record.rejectionReason || record.rejectReason || '').trim(),
     cancellation_reason: (record.cancellationReason || '').trim(),
     payment_method: normalizePaymentMethod(record.paymentMode),
     payment_status: normalizePaymentStatus(record.paymentStatus),

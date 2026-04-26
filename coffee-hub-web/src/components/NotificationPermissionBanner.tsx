@@ -22,10 +22,10 @@ export const NotificationPermissionBanner = ({
             Stay Updated
           </p>
           <p className="mt-1 text-sm font-semibold text-white">
-            Turn on push notifications for live order updates.
+            Enable notifications for order updates 🚀
           </p>
           <p className="mt-1 text-xs leading-5 text-[#ead8cc]">
-            We only send important order progress and the offers you opt into.
+            Get real-time updates without opening the app every time.
           </p>
         </div>
       </div>

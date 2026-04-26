@@ -70,7 +70,6 @@ export const useCustomerExperience = ({
       const mergedItems =
         syncedOrder.items && syncedOrder.items.length > 0 ? syncedOrder.items : previousOrder.items;
       const isSameOrder =
-        previousOrder.status === syncedOrder.status &&
         previousOrder.status_code === syncedOrder.status_code &&
         previousOrder.total_amount === syncedOrder.total_amount &&
         previousOrder.address === syncedOrder.address &&

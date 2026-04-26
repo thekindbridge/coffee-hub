@@ -1,14 +1,12 @@
 import { memo, useMemo, useState } from 'react';
 import { ChevronDown, ChevronUp, MapPin, PackageSearch } from 'lucide-react';
+import { OrderStatusTimeline } from '../../../components/orders/OrderStatusTimeline';
 
 import type { Order } from '../../../types';
 import { CancelOrderModal } from './CancelOrderModal';
 import { OrdersPageSkeleton } from './OrdersPageSkeleton';
 import {
-  getOrderStatusCustomerCopy,
   isCustomerCancellableOrderStatus,
-  ORDER_STATUS_DISPLAY,
-  ORDER_STATUS_PROGRESS_FLOW,
 } from '../../../../shared/orderStatus';
 
 export type OrdersOverviewProps = {
@@ -19,14 +17,10 @@ export type OrdersOverviewProps = {
   onTrackOrder: (order: Order) => void;
 };
 
-const ORDER_FLOW: Order['status'][] = ORDER_STATUS_PROGRESS_FLOW.map(
-  statusCode => ORDER_STATUS_DISPLAY[statusCode],
-);
 const CURRENCY_SYMBOL = '\u20B9';
 
 const STATUS_BADGE_CLASS: Record<Order['status'], string> = {
   Pending: 'border border-white/12 bg-white/6 text-ink-muted',
-  Accepted: 'border border-emerald-400/30 bg-emerald-400/14 text-emerald-300',
   Preparing: 'border border-amber-400/30 bg-amber-400/14 text-amber-300',
   'Out for Delivery': 'border border-sky-400/30 bg-sky-400/14 text-sky-300',
   Delivered: 'border border-emerald-400/30 bg-emerald-400/14 text-emerald-300',
@@ -107,50 +101,6 @@ export const OrdersOverview = memo(function OrdersOverview({
     }
   };
 
-  const renderProgressTracker = (status: Order['status']) => {
-    const currentStatusIndex = ORDER_FLOW.indexOf(status);
-    const progressPercent = currentStatusIndex <= 0
-      ? 0
-      : (currentStatusIndex / (ORDER_FLOW.length - 1)) * 100;
-
-    return (
-      <div className="mt-4 rounded-[30px] border border-white/10 bg-white/5 px-4 py-4">
-        <div className="relative">
-          <div className="absolute left-0 right-0 top-3 h-1.5 rounded-full bg-white/10" />
-          <div
-            className="absolute left-0 top-3 h-1.5 rounded-full bg-secondary"
-            style={{ width: `${progressPercent}%` }}
-          />
-          <div className="grid grid-cols-4 gap-2">
-            {ORDER_FLOW.map((step, index) => {
-              const isReached = index <= currentStatusIndex;
-              const isCurrent = index === currentStatusIndex;
-
-              return (
-                <div key={step} className="flex min-w-0 flex-col items-center gap-2 text-center">
-                  <div
-                    className={`h-2.5 w-2.5 rounded-full border ${
-                      isReached
-                        ? 'border-secondary bg-secondary'
-                        : 'border-white/15 bg-[#1a1310]'
-                    } ${isCurrent ? 'shadow-[0_0_0_4px_rgba(192,138,93,0.15)]' : ''}`}
-                  />
-                  <span
-                    className={`text-[9px] font-semibold uppercase tracking-[0.12em] leading-4 sm:text-[10px] ${
-                      isCurrent ? 'text-accent' : isReached ? 'text-[#f5ede3]' : 'text-ink-muted'
-                    }`}
-                  >
-                    {step}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-    );
-  };
-
   const renderOrderCard = (order: Order, showTracker: boolean) => {
     const isExpanded = expandedOrderDocId === order.doc_id;
     const hasItems = Boolean(order.items && order.items.length > 0);
@@ -186,7 +136,9 @@ export const OrdersOverview = memo(function OrdersOverview({
           </div>
         </div>
 
-        <p className="mt-4 text-sm text-ink-muted">{getOrderStatusCustomerCopy(order.status_code)}</p>
+        <div className="mt-4">
+          <OrderStatusTimeline compact statusCode={order.status_code} />
+        </div>
 
         <div className="mt-4 space-y-1 text-sm text-ink-muted">
           {hasItems ? (
@@ -221,8 +173,6 @@ export const OrdersOverview = memo(function OrdersOverview({
             {cancellingOrderDocId === order.doc_id ? 'Cancelling...' : 'Cancel Order'}
           </button>
         )}
-
-        {canTrackOrder && renderProgressTracker(order.status)}
 
         {order.status_code === 'REJECTED' && order.rejection_reason && (
           <div className="mt-4 rounded-[20px] border border-rose-400/20 bg-rose-500/10 px-4 py-4 text-sm text-rose-100">

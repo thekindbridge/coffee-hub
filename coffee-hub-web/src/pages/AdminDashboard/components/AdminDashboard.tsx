@@ -1,5 +1,6 @@
 import { Suspense, lazy, useMemo, useState } from 'react';
 import { LayoutGrid, Package2, ReceiptText, TicketPercent } from 'lucide-react';
+import { normalizeStatus } from '../../../../shared/orderStatus';
 import { Loader } from '../../../components/ui/Loader';
 import type { DeliveryAgent, Offer, OfferInput, Order, OrderStatusCode } from '../../../types';
 
@@ -69,28 +70,24 @@ export default function AdminDashboard({
 
   const orderCounts = useMemo(() => {
     const counts = {
-      accepted: 0,
       outForDelivery: 0,
-      pending: 0,
+      waiting: 0,
       preparing: 0,
       rejected: 0,
     };
 
     orders.forEach(order => {
-      switch (order.status) {
-        case 'Pending':
-          counts.pending += 1;
+      switch (normalizeStatus(order.status_code)) {
+        case 'WAITING':
+          counts.waiting += 1;
           break;
-        case 'Accepted':
-          counts.accepted += 1;
-          break;
-        case 'Preparing':
+        case 'PREPARING':
           counts.preparing += 1;
           break;
-        case 'Out for Delivery':
+        case 'OUT_FOR_DELIVERY':
           counts.outForDelivery += 1;
           break;
-        case 'Rejected':
+        case 'REJECTED':
           counts.rejected += 1;
           break;
         default:
@@ -113,8 +110,7 @@ export default function AdminDashboard({
               <h2 className="mt-1 text-[1.55rem] font-semibold text-accent">Operations overview</h2>
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {renderCountCard('Pending', orderCounts.pending, ReceiptText)}
-              {renderCountCard('Accepted', orderCounts.accepted, LayoutGrid)}
+              {renderCountCard('Pending', orderCounts.waiting, ReceiptText)}
               {renderCountCard('Preparing', orderCounts.preparing, Package2)}
               {renderCountCard('Out for Delivery', orderCounts.outForDelivery, LayoutGrid)}
               {renderCountCard('Rejected', orderCounts.rejected, ReceiptText)}

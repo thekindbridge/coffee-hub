@@ -1,5 +1,6 @@
 import { Suspense, useEffect, useState } from 'react';
 import {
+  Bell,
   ChevronRight,
   Clock,
   Coffee,
@@ -19,6 +20,7 @@ import { Loader } from '../../components/ui/Loader';
 import { BrewingOverlay } from '../../features/customer/components/BrewingOverlay';
 import { InstallAppBanner } from '../../features/customer/components/InstallAppBanner';
 import { ShopStatusBanner } from '../../features/customer/components/ShopStatusBanner';
+import { useNotificationHistory } from '../../features/app/hooks/useNotificationHistory';
 import { useCustomerExperience } from '../../features/customer/hooks/useCustomerExperience';
 import { MenuPageSkeleton } from '../../pages/Menu/components/MenuPageSkeleton';
 import { OrdersPageSkeleton } from '../../pages/Orders/components/OrdersPageSkeleton';
@@ -62,6 +64,10 @@ const ProfileScreen = lazyNamed(
   () => import('../../features/profile/ProfileScreen'),
   'ProfileScreen',
 );
+const NotificationHistoryPage = lazyNamed(
+  () => import('../../pages/Notifications/NotificationHistoryPage'),
+  'NotificationHistoryPage',
+);
 
 export const CustomerAppShell = ({
   accessManager,
@@ -77,6 +83,7 @@ export const CustomerAppShell = ({
 }: CustomerShellProps) => {
   const [hasLoadedCartDrawer, setHasLoadedCartDrawer] = useState(false);
   const [hasLoadedProfileDrawer, setHasLoadedProfileDrawer] = useState(false);
+  const [isNotificationHistoryOpen, setIsNotificationHistoryOpen] = useState(false);
 
   const customerExperience = useCustomerExperience({
     currentUserId: session.currentUserId,
@@ -89,6 +96,12 @@ export const CustomerAppShell = ({
     setOrderStatus,
     shopTiming: session.shopTiming,
     userOrders: session.userOrders,
+  });
+  const notificationHistory = useNotificationHistory({
+    currentUserId: session.currentUserId,
+    isAuthReady: session.isAuthReady,
+    isLoggedIn: session.isLoggedIn,
+    role: session.role,
   });
 
   useEffect(() => {
@@ -229,6 +242,19 @@ export const CustomerAppShell = ({
           onProfileClick={profileManager.handleOpenProfile}
           rightSlot={(
             <>
+              <button
+                type="button"
+                onClick={() => setIsNotificationHistoryOpen(true)}
+                className="coffee-icon-btn relative"
+                aria-label="Open notifications"
+              >
+                <Bell size={18} />
+                {notificationHistory.unreadCount > 0 && (
+                  <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-white">
+                    {notificationHistory.unreadCount > 9 ? '9+' : notificationHistory.unreadCount}
+                  </span>
+                )}
+              </button>
               <div className="hidden rounded-full border border-white/10 bg-white/5 px-3 py-2 text-[11px] font-medium text-ink-muted sm:block">
                 {formatPhoneForDisplay(session.currentUserPhone)}
               </div>
@@ -410,6 +436,19 @@ export const CustomerAppShell = ({
             notification={pushNotifications.foregroundNotification}
             onDismiss={pushNotifications.dismissForegroundNotification}
           />
+          <Suspense fallback={drawerLoader}>
+            <NotificationHistoryPage
+              error={notificationHistory.error}
+              isLoading={notificationHistory.isLoading}
+              isMarkingId={notificationHistory.isMarkingId}
+              isOpen={isNotificationHistoryOpen}
+              notifications={notificationHistory.notifications}
+              onClose={() => setIsNotificationHistoryOpen(false)}
+              onMarkAsRead={notificationId => {
+                void notificationHistory.markAsRead(notificationId);
+              }}
+            />
+          </Suspense>
         </>
       )}
     >

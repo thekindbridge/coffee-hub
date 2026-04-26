@@ -41,7 +41,7 @@ export const subscribeToAgentOrdersByStatus = (
   query(
     collection(db, 'orders'),
     where('assignedAgentId', '==', agentId),
-    where('status', '==', status),
+    where('status_code', '==', status),
   ),
   snapshot => {
     const mappedOrders = snapshot.docs

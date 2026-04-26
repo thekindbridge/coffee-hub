@@ -20,6 +20,8 @@
     "@capacitor/app": "^8.1.0",
     "@capacitor/browser": "^8.0.3",
     "@capacitor/core": "^8.3.1",
+    "@capacitor/local-notifications": "^8.0.2",
+    "@capacitor/push-notifications": "^8.0.3",
     "@react-google-maps/api": "^2.20.8",
     "@react-native-async-storage/async-storage": "^2.2.0",
     "@tailwindcss/vite": "^4.1.14",

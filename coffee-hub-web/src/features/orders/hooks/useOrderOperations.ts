@@ -17,7 +17,6 @@ import {
   type AgentTrackerStatus,
 } from '../../../agent/agentTracker';
 import {
-  getOrderStatusLabel,
   isCustomerCancellableOrderStatus,
   normalizeOrderStatusCode,
 } from '../../../../shared/orderStatus';
@@ -233,10 +232,10 @@ export const useOrderOperations = ({
       throw new Error('Unable to find the order for this update.');
     }
 
-    const nextStatusLabel = getOrderStatusLabel(status);
+    const normalizedNextStatus = normalizeOrderStatusCode(status);
     const requiresAgent =
-      nextStatusLabel === 'Out for Delivery' ||
-      nextStatusLabel === 'Delivered';
+      normalizedNextStatus === 'OUT_FOR_DELIVERY' ||
+      normalizedNextStatus === 'DELIVERED';
 
     if (requiresAgent && !existingOrder.delivery_agent_id) {
       throw new Error('Assign an agent before updating this status.');
@@ -250,7 +249,7 @@ export const useOrderOperations = ({
     const response = await updateOrderStatusRequest(
       {
         orderId,
-        status: normalizeOrderStatusCode(status),
+        status: normalizedNextStatus,
         rejectionReason,
       },
       idToken,

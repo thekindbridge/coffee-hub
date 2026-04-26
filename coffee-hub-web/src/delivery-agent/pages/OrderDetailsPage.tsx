@@ -18,6 +18,7 @@ import type {
   DeliverySession,
   Order,
 } from '../../types';
+import { OrderStatusTimeline } from '../../components/orders/OrderStatusTimeline';
 import { TRACKER_TONE_CLASS_BY_LIFECYCLE } from '../constants/deliveryStatus';
 import { formatDateTime } from '../utils/formatTime';
 import {
@@ -86,9 +87,11 @@ export const OrderDetailsPage = ({
               </div>
             </div>
 
-            <p className="text-sm leading-6 text-[#cdbbaa]">
-              Keep GPS running while you ride. COFFEE-HUB will update the customer map, ETA, and route in real time.
-            </p>
+            <OrderStatusTimeline
+              className="border-white/8 bg-white/4"
+              statusCode={order.status_code}
+              subtext="Keep GPS running while you ride. COFFEE-HUB will update the customer map, ETA, and route in real time."
+            />
 
             <div className="grid gap-3 sm:grid-cols-4">
               <div className="rounded-[24px] border border-white/10 bg-white/5 p-4">
@@ -218,7 +221,7 @@ export const OrderDetailsPage = ({
               type="button"
             >
               <CheckCircle2 size={16} />
-              End Delivery
+              Mark Delivered
             </button>
           </div>
 

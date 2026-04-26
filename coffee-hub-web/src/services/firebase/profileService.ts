@@ -167,3 +167,122 @@ export const saveUserNotificationSettings = async ({
     );
   }
 };
+
+export const saveUserFcmToken = async ({
+  currentUserId,
+  currentUserPhone,
+  isDeliveryAgent,
+  token,
+}: {
+  currentUserId: string;
+  currentUserPhone: string;
+  isDeliveryAgent: boolean;
+  token: string;
+}) => {
+  try {
+    const normalizedToken = token.trim();
+    if (!currentUserId || !normalizedToken) {
+      return;
+    }
+
+    await setDoc(
+      doc(db, 'users', currentUserId),
+      {
+        fcmToken: normalizedToken,
+        fcmTokenUpdatedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    );
+
+    if (!isDeliveryAgent) {
+      return;
+    }
+
+    const normalizedPhone = formatPhoneWithPrefix(currentUserPhone);
+    if (!normalizedPhone) {
+      return;
+    }
+
+    await setDoc(
+      doc(db, 'agents', normalizedPhone),
+      {
+        fcmToken: normalizedToken,
+        fcmTokenUpdatedAt: serverTimestamp(),
+        phone: normalizedPhone,
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    );
+  } catch (error) {
+    throw toAppServiceError(
+      error,
+      'Unable to save this device for notifications right now.',
+      'network',
+    );
+  }
+};
+
+export const saveDeliveryAgentAvailability = async ({
+  currentUserId,
+  currentUserPhone,
+  deliveryAgents,
+  nextStatus,
+  profileDraft,
+}: {
+  currentUserId: string;
+  currentUserPhone: string;
+  deliveryAgents: DeliveryAgent[];
+  nextStatus: 'Available' | 'Offline';
+  profileDraft: CustomerProfile;
+}) => {
+  try {
+    const normalizedPhone = formatPhoneWithPrefix(currentUserPhone);
+    const existingAgent = deliveryAgents.find(
+      agent => agent.id === normalizedPhone || agent.phone === normalizedPhone,
+    );
+    const shouldMarkOffline = nextStatus === 'Offline';
+    const shouldPreserveBusyAssignment =
+      existingAgent?.status === 'busy' && Boolean(existingAgent.current_order_id);
+    const agentStatus = shouldMarkOffline
+      ? 'OFFLINE'
+      : shouldPreserveBusyAssignment
+        ? 'BUSY'
+        : 'AVAILABLE';
+
+    await setDoc(
+      doc(db, 'users', currentUserId),
+      {
+        status: nextStatus,
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    );
+
+    if (!normalizedPhone) {
+      return;
+    }
+
+    const agentPayload: Record<string, unknown> = {
+      accessOnly: false,
+      isActive: !shouldMarkOffline,
+      name: profileDraft.name.trim(),
+      phone: normalizedPhone,
+      status: agentStatus,
+      updatedAt: serverTimestamp(),
+      vehicle: profileDraft.vehicleType,
+    };
+
+    if (!existingAgent) {
+      agentPayload.createdAt = serverTimestamp();
+    }
+
+    await setDoc(doc(db, 'agents', normalizedPhone), agentPayload, { merge: true });
+  } catch (error) {
+    throw toAppServiceError(
+      error,
+      'Unable to update delivery availability right now.',
+      'network',
+    );
+  }
+}

@@ -1,8 +1,10 @@
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react';
 import {
   getOrderStatusCustomerCopy,
+  normalizeOrderStatusCode,
   type OrderStatusCode,
 } from '../../../../shared/orderStatus';
+import { OrderStatusTimeline } from '../../../components/orders/OrderStatusTimeline';
 import type { DeliveryAgent, Order } from '../../../types';
 import { calculateDistanceMeters } from '../../../agent/agentTracker';
 import { Loader } from '../../../components/ui/Loader';
@@ -25,7 +27,6 @@ interface AdminOrdersProps {
 
 const STATUS_BADGE_CLASS: Record<Order['status'], string> = {
   Pending: 'border border-amber-300/30 bg-amber-400/18 text-amber-300',
-  Accepted: 'border border-emerald-300/30 bg-emerald-400/18 text-emerald-300',
   Preparing: 'border border-sky-300/30 bg-sky-400/18 text-sky-300',
   'Out for Delivery': 'border border-orange-300/30 bg-orange-400/18 text-orange-300',
   Delivered: 'border border-emerald-300/30 bg-emerald-500/18 text-emerald-200',
@@ -78,6 +79,7 @@ export default function AdminOrders({
   const [rejectionReasonDraft, setRejectionReasonDraft] = useState('');
   const [actionError, setActionError] = useState('');
   const [rejectError, setRejectError] = useState('');
+  const [selectedAgentByOrderDocId, setSelectedAgentByOrderDocId] = useState<Record<string, string>>({});
   const [toastMessage, setToastMessage] = useState('');
 
   const availableAgents = useMemo(
@@ -128,7 +130,7 @@ export default function AdminOrders({
       if (status === 'REJECTED') {
         setToastMessage('Order rejected successfully');
       } else {
-        setToastMessage(`Order moved to ${getOrderStatusCustomerCopy(status)}`);
+        setToastMessage(`Order moved to ${normalizeOrderStatusCode(status)}`);
       }
     } catch (error) {
       const message = error instanceof Error
@@ -262,6 +264,9 @@ export default function AdminOrders({
               </div>
 
               <p className="mt-3 text-sm text-ink-muted">{getOrderStatusCustomerCopy(order.status_code)}</p>
+              <div className="mt-4">
+                <OrderStatusTimeline compact statusCode={order.status_code} />
+              </div>
 
               <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
                 <div>
@@ -352,70 +357,57 @@ export default function AdminOrders({
 
               {canManageAgentAssignment && (
                 <div className="mt-4 space-y-3">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-muted">
-                      Assign Agent
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => setExpandedOrderId(prev => (prev === order.doc_id ? '' : order.doc_id))}
-                      className="rounded-full bg-primary px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-white transition hover:opacity-90"
-                    >
-                      {isExpanded ? 'Hide Agents' : hasAssignedAgent ? 'Change Agent' : 'Assign Agent'}
-                    </button>
-                  </div>
-
-                  {!hasAssignedAgent && (
-                    <p className="text-xs text-ink-muted">
-                      Choosing an available agent dispatches this order immediately.
-                    </p>
-                  )}
-
-                  {isExpanded && (
-                    <div className="space-y-2">
-                      {availableAgents.length === 0 ? (
-                        <div className="rounded-[18px] border border-white/8 bg-white/5 px-4 py-3 text-sm text-ink-muted">
-                          No available delivery agents.
-                        </div>
-                      ) : (
-                        availableAgents.map(agent => {
-                          const statusValue = getAgentStatus(agent);
-                          const statusLabel = formatAgentStatusLabel(statusValue);
-                          const isAgentUnavailable = statusValue === 'offline' || statusValue === 'busy';
-
-                          return (
-                            <div
-                              key={agent.id}
-                              className="grid gap-3 rounded-[18px] border border-white/8 bg-white/5 p-4 sm:grid-cols-[1.3fr,0.7fr,auto] sm:items-center"
-                            >
-                              <div className="space-y-1">
-                                <p className="text-sm font-semibold text-accent">{agent.name}</p>
-                                <p className="text-sm text-ink-muted">{agent.vehicle_type || 'Vehicle not added'}</p>
-                                <p className="text-sm text-ink-muted">{agent.phone || 'Phone not added'}</p>
-                                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-secondary">
-                                  {statusLabel}
-                                </p>
-                              </div>
-                              <div>
-                                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-muted">
-                                  Distance
-                                </p>
-                                <p className="mt-1 text-sm font-semibold text-ink">{resolveAgentDistance(agent, order)}</p>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  void assignAgentToOrder(order, agent.id);
-                                }}
-                                disabled={isAgentUnavailable || assigningOrderDocId === order.doc_id}
-                                className="inline-flex min-h-10 items-center justify-center rounded-full bg-primary px-4 text-xs font-semibold uppercase tracking-[0.18em] text-white disabled:cursor-not-allowed disabled:opacity-60"
-                              >
-                                {assigningOrderDocId === order.doc_id ? 'Assigning...' : 'Assign'}
-                              </button>
-                            </div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-muted">
+                    Assign Agent
+                  </p>
+                  {availableAgents.length === 0 ? (
+                    <div className="rounded-[18px] border border-white/8 bg-white/5 px-4 py-3 text-sm text-ink-muted">
+                      No active delivery agents available.
+                    </div>
+                  ) : (
+                    <div className="grid gap-3 rounded-[18px] border border-white/8 bg-white/5 p-4 sm:grid-cols-[1.4fr,0.8fr,auto] sm:items-end">
+                      <label className="space-y-2">
+                        <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-ink-muted">
+                          Active agents
+                        </span>
+                        <select
+                          value={selectedAgentByOrderDocId[order.doc_id] || order.delivery_agent_id || ''}
+                          onChange={event => {
+                            const nextAgentId = event.target.value;
+                            setSelectedAgentByOrderDocId(prev => ({
+                              ...prev,
+                              [order.doc_id]: nextAgentId,
+                            }));
+                          }}
+                          className="coffee-input min-h-11"
+                        >
+                          <option value="">Select agent</option>
+                          {availableAgents.map(agent => (
+                            <option key={agent.id} value={agent.id}>
+                              {agent.name} · {formatAgentStatusLabel(getAgentStatus(agent))} · {resolveAgentDistance(agent, order)}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <div className="rounded-[16px] border border-white/8 bg-[#17110d] px-4 py-3 text-sm text-ink-muted">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-ink-muted">
+                          Assigned
+                        </p>
+                        <p className="mt-1 font-semibold text-accent">{assignedAgentName}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void assignAgentToOrder(
+                            order,
+                            selectedAgentByOrderDocId[order.doc_id] || order.delivery_agent_id || '',
                           );
-                        })
-                      )}
+                        }}
+                        disabled={assigningOrderDocId === order.doc_id}
+                        className="inline-flex min-h-11 items-center justify-center rounded-full bg-primary px-4 text-xs font-semibold uppercase tracking-[0.18em] text-white disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {assigningOrderDocId === order.doc_id ? 'Saving...' : hasAssignedAgent ? 'Update Agent' : 'Assign Agent'}
+                      </button>
                     </div>
                   )}
                 </div>
@@ -424,12 +416,12 @@ export default function AdminOrders({
               <div className="mt-4 rounded-[20px] border border-white/8 bg-white/5 px-4 py-4">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-muted">Actions</p>
 
-                {order.status_code === 'PENDING' && (
+                {order.status_code === 'WAITING' && (
                   <div className="mt-3 flex flex-wrap gap-3">
                     <button
                       type="button"
                       onClick={() => {
-                        void runStatusAction(order, 'ACCEPTED');
+                        void runStatusAction(order, 'PREPARING');
                       }}
                       disabled={submittingOrderDocId === order.doc_id}
                       className="coffee-btn-primary min-h-10 px-4"
@@ -452,26 +444,23 @@ export default function AdminOrders({
                   </div>
                 )}
 
-                {order.status_code === 'ACCEPTED' && (
-                  <div className="mt-3">
+                {order.status_code === 'PREPARING' && (
+                  <div className="mt-3 flex flex-wrap gap-3">
                     <button
                       type="button"
                       onClick={() => {
-                        void runStatusAction(order, 'PREPARING');
+                        void runStatusAction(order, 'OUT_FOR_DELIVERY');
                       }}
-                      disabled={submittingOrderDocId === order.doc_id}
-                      className="coffee-btn-primary min-h-10 px-4"
+                      disabled={submittingOrderDocId === order.doc_id || !order.delivery_agent_id}
+                      className="coffee-btn-primary min-h-10 px-4 disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      {submittingOrderDocId === order.doc_id ? 'Updating...' : 'Start Preparing'}
+                      {submittingOrderDocId === order.doc_id ? 'Dispatching...' : 'Dispatch'}
                     </button>
-                  </div>
-                )}
-
-                {order.status_code === 'PREPARING' && (
-                  <div className="mt-3">
-                    <p className="text-sm text-ink-muted">
-                      Assign an available delivery agent to move this order to out-for-delivery.
-                    </p>
+                    {!order.delivery_agent_id && (
+                      <p className="self-center text-sm text-ink-muted">
+                        Assign an active agent before dispatch.
+                      </p>
+                    )}
                   </div>
                 )}
 

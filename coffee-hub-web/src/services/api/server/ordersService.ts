@@ -45,6 +45,7 @@ import {
   requireUserRequest,
   userHasAdminAccess,
 } from './authService.js';
+import { getUserRole } from './roleService.js';
 import {
   getQueryValue,
   jsonResponse,
@@ -139,10 +140,12 @@ const buildStoredOrderRecord = (
   finalAmount: pricing.finalTotal,
   paymentMode: 'COD',
   paymentStatus: 'PENDING',
-  status: getOrderStatusFirestoreValue('PENDING'),
-  orderStatus: 'PENDING',
-  status_code: 'PENDING',
+  status: getOrderStatusFirestoreValue('WAITING'),
+  orderStatus: 'WAITING',
+  status_code: 'WAITING',
+  rejectReason: '',
   rejectionReason: '',
+  cancelledBy: '',
   assignedAgentEmail: '',
   assignedAgentId: '',
   assignedAgentName: '',
@@ -235,7 +238,7 @@ const parseOrderStatusUpdateBody = (body: unknown) => {
 
   const payload = body as Record<string, unknown>;
   const rawOrderId = payload.orderId;
-  const rawStatus = payload.status;
+  const rawStatus = payload.status_code ?? payload.status;
   const rejectionReason = typeof payload.rejectionReason === 'string'
     ? payload.rejectionReason.trim()
     : '';
@@ -245,7 +248,7 @@ const parseOrderStatusUpdateBody = (body: unknown) => {
   }
 
   if (typeof rawStatus !== 'string' || !rawStatus.trim()) {
-    throw new ApiError(400, 'status is required.');
+    throw new ApiError(400, 'status or status_code is required.');
   }
 
   const orderId = rawOrderId.trim();
@@ -262,6 +265,94 @@ const parseOrderStatusUpdateBody = (body: unknown) => {
   };
 };
 
+const resolveCurrentOrderStatus = (order: StoredOrderRecord) =>
+  normalizeOrderStatusCode(order.status_code ?? order.status ?? order.orderStatus);
+
+const logStatusTransition = ({
+  from,
+  to,
+  userRole,
+}: {
+  from: OrderStatusCode;
+  to: OrderStatusCode;
+  userRole: string;
+}) => {
+  console.log('STATUS TRANSITION:', {
+    from,
+    to,
+    userRole,
+  });
+};
+
+const sendLifecycleNotificationsForStatusTransition = async ({
+  adminDb,
+  assignedAgentId,
+  fromStatus,
+  orderId,
+  rejectionReason = '',
+  toStatus,
+  userId,
+}: {
+  adminDb: Firestore;
+  assignedAgentId?: string;
+  fromStatus: OrderStatusCode;
+  orderId: string;
+  rejectionReason?: string;
+  toStatus: OrderStatusCode;
+  userId?: string;
+}) => {
+  if (fromStatus === toStatus) {
+    return;
+  }
+
+  const normalizedAgentId = (assignedAgentId || '').trim().toLowerCase();
+  const notificationTasks: Promise<unknown>[] = [];
+
+  if (
+    userId &&
+    (
+      (fromStatus === 'WAITING' && toStatus === 'PREPARING') ||
+      (fromStatus === 'WAITING' && toStatus === 'REJECTED') ||
+      (fromStatus === 'PREPARING' && toStatus === 'OUT_FOR_DELIVERY') ||
+      (fromStatus === 'OUT_FOR_DELIVERY' && toStatus === 'DELIVERED')
+    )
+  ) {
+    notificationTasks.push((async () => {
+      const customerRecipient = await getCustomerRecipient(adminDb, userId);
+      if (!customerRecipient) {
+        return;
+      }
+
+      await sendPushNotification(
+        adminDb,
+        [customerRecipient],
+        buildCustomerOrderNotification({
+          orderId,
+          rejectionReason,
+          status: toStatus,
+        }),
+      );
+    })());
+  }
+
+  if (fromStatus === 'PREPARING' && toStatus === 'OUT_FOR_DELIVERY' && normalizedAgentId) {
+    notificationTasks.push((async () => {
+      const agentRecipient = await getAgentRecipient(adminDb, normalizedAgentId);
+      if (!agentRecipient) {
+        return;
+      }
+
+      await sendPushNotification(
+        adminDb,
+        [agentRecipient],
+        buildAgentAssignmentNotification(orderId),
+      );
+    })());
+  }
+
+  await Promise.all(notificationTasks);
+};
+
 const buildOrderStatusUpdate = (
   currentOrder: StoredOrderRecord,
   nextStatus: OrderStatusCode,
@@ -272,13 +363,15 @@ const buildOrderStatusUpdate = (
     status_code: nextStatus,
     status: getOrderStatusFirestoreValue(nextStatus),
     orderStatus: nextStatus,
+    rejectReason: nextStatus === 'REJECTED' ? rejectionReason : '',
     rejectionReason: nextStatus === 'REJECTED' ? rejectionReason : '',
     rejection_reason: nextStatus === 'REJECTED' ? rejectionReason : '',
+    cancelledBy: '',
     updatedAt: timestampValue,
     updated_at: timestampValue,
   };
 
-  if (nextStatus === 'ACCEPTED' && !currentOrder.acceptedAt) {
+  if (nextStatus === 'PREPARING' && !currentOrder.acceptedAt) {
     update.acceptedAt = timestampValue;
     update.accepted_at = timestampValue;
     update['timestamps.acceptedAt'] = timestampValue;
@@ -319,6 +412,13 @@ const buildOrderStatusUpdate = (
     update.rejectedAt = timestampValue;
     update.rejected_at = timestampValue;
     update['timestamps.rejectedAt'] = timestampValue;
+  }
+
+  if (nextStatus === 'CANCELLED' && !currentOrder.cancelledAt) {
+    update.cancelledAt = timestampValue;
+    update.cancelled_at = timestampValue;
+    update.cancelledBy = 'customer';
+    update['timestamps.cancelledAt'] = timestampValue;
   }
 
   return update;
@@ -540,10 +640,14 @@ const resolveLegacyPostAction = (request: VercelRequest): OrderMutationAction | 
 const updateOrderStatusResponse = async (
   request: VercelRequest,
 ): Promise<ApiServiceResponse> => {
-  await requireAdminRequest(request);
+  const verifiedRequest = await requireAdminRequest(request);
   const { orderId, rejectionReason, status } = parseOrderStatusUpdateBody(request.body);
   const adminDb = getServerDb();
+  const requestRole = await getUserRole(adminDb, verifiedRequest.phone || '');
   const orderRef = await resolveOrderReferenceByIdentifier(adminDb, orderId);
+  let previousStatus: OrderStatusCode | null = null;
+  let assignedAgentId = '';
+  let orderUserId = '';
 
   await adminDb.runTransaction(async transaction => {
     const orderSnapshot = await transaction.get(orderRef);
@@ -552,7 +656,9 @@ const updateOrderStatusResponse = async (
     }
 
     const currentOrder = orderSnapshot.data() as StoredOrderRecord;
-    const currentStatus = normalizeOrderStatusCode(currentOrder.status ?? currentOrder.orderStatus);
+    const currentStatus = resolveCurrentOrderStatus(currentOrder);
+    previousStatus = currentStatus;
+    orderUserId = `${currentOrder.userId || ''}`.trim();
 
     if (currentStatus === status) {
       throw new ApiError(409, 'Order is already in that status.');
@@ -566,7 +672,13 @@ const updateOrderStatusResponse = async (
       throw new ApiError(409, `Invalid transition from ${currentStatus} to ${status}.`);
     }
 
-    const assignedAgentId = (
+    logStatusTransition({
+      from: currentStatus,
+      to: status,
+      userRole: requestRole,
+    });
+
+    assignedAgentId = (
       currentOrder.assignedAgentId ||
       currentOrder.deliveryAgentId ||
       currentOrder.agentId ||
@@ -669,26 +781,15 @@ const updateOrderStatusResponse = async (
   const updatedOrder = mapOrderSnapshotToResponse(updatedOrderSnapshot as QueryDocumentSnapshot);
 
   try {
-    if (updatedOrder.user_id) {
-      const customerRecipient = await getCustomerRecipient(adminDb, updatedOrder.user_id);
-
-      if (customerRecipient && (
-        status === 'ACCEPTED' ||
-        status === 'REJECTED' ||
-        status === 'OUT_FOR_DELIVERY' ||
-        status === 'DELIVERED'
-      )) {
-        await sendPushNotification(
-          adminDb,
-          [customerRecipient],
-          buildCustomerOrderNotification({
-            orderId: updatedOrder.id,
-            rejectionReason,
-            status,
-          }),
-        );
-      }
-    }
+    await sendLifecycleNotificationsForStatusTransition({
+      adminDb,
+      assignedAgentId,
+      fromStatus: previousStatus || status,
+      orderId: updatedOrder.id,
+      rejectionReason,
+      toStatus: status,
+      userId: updatedOrder.user_id || orderUserId,
+    });
   } catch (notificationError) {
     console.error('Order status updated but notification dispatch failed', notificationError);
   }
@@ -719,9 +820,7 @@ const assignAgentResponse = async (
     }
 
     const orderData = orderSnapshot.data() as StoredOrderRecord;
-    const currentStatus = `${orderData.status || orderData.orderStatus || ''}`
-      .trim()
-      .toUpperCase();
+    const currentStatus = resolveCurrentOrderStatus(orderData);
 
     if (currentStatus !== 'PREPARING') {
       throw new ApiError(409, 'Only preparing orders can be assigned to a delivery agent.');
@@ -770,29 +869,16 @@ const assignAgentResponse = async (
       agentName,
       agentPhone,
       agentVehicle,
-      orderStatus: 'OUT_FOR_DELIVERY',
+      orderStatus: 'PREPARING',
+      rejectReason: '',
       rejectionReason: '',
       rejection_reason: '',
-      status: getOrderStatusFirestoreValue('OUT_FOR_DELIVERY'),
-      status_code: 'OUT_FOR_DELIVERY',
+      cancelledBy: '',
+      status: getOrderStatusFirestoreValue('PREPARING'),
+      status_code: 'PREPARING',
       updatedAt: FieldValue.serverTimestamp(),
       updated_at: FieldValue.serverTimestamp(),
     };
-
-    if (!orderData.assignedAt && !orderData.deliveryAssignedAt) {
-      orderUpdate.assignedAt = FieldValue.serverTimestamp();
-      orderUpdate.assigned_at = FieldValue.serverTimestamp();
-      orderUpdate.deliveryAssignedAt = FieldValue.serverTimestamp();
-      orderUpdate.delivery_assigned_at = FieldValue.serverTimestamp();
-    }
-
-    if (!orderData.outForDeliveryAt && !orderData.deliveryOutForDeliveryAt) {
-      orderUpdate.outForDeliveryAt = FieldValue.serverTimestamp();
-      orderUpdate.out_for_delivery_at = FieldValue.serverTimestamp();
-      orderUpdate.deliveryOutForDeliveryAt = FieldValue.serverTimestamp();
-      orderUpdate.delivery_out_for_delivery_at = FieldValue.serverTimestamp();
-      orderUpdate['timestamps.outForDeliveryAt'] = FieldValue.serverTimestamp();
-    }
 
     transaction.update(orderRef, orderUpdate);
 
@@ -853,36 +939,6 @@ const assignAgentResponse = async (
 
   const updatedOrder = mapOrderSnapshotToResponse(updatedOrderSnapshot as QueryDocumentSnapshot);
 
-  try {
-    const [customerRecipient, agentRecipient] = await Promise.all([
-      updatedOrder.user_id
-        ? getCustomerRecipient(adminDb, updatedOrder.user_id)
-        : Promise.resolve(null),
-      getAgentRecipient(adminDb, agentId),
-    ]);
-
-    if (customerRecipient) {
-      await sendPushNotification(
-        adminDb,
-        [customerRecipient],
-        buildCustomerOrderNotification({
-          orderId: updatedOrder.id,
-          status: 'OUT_FOR_DELIVERY',
-        }),
-      );
-    }
-
-    if (agentRecipient) {
-      await sendPushNotification(
-        adminDb,
-        [agentRecipient],
-        buildAgentAssignmentNotification(updatedOrder.id),
-      );
-    }
-  } catch (notificationError) {
-    console.error('Agent assigned but notification dispatch failed', notificationError);
-  }
-
   return jsonResponse(200, { order: updatedOrder });
 };
 
@@ -905,9 +961,7 @@ const cancelOrderResponse = async (
       throw new ApiError(403, 'Order access is limited to the order owner.');
     }
 
-    const currentStatus = normalizeOrderStatusCode(
-      currentOrder.status ?? currentOrder.orderStatus,
-    );
+    const currentStatus = resolveCurrentOrderStatus(currentOrder);
 
     if (currentStatus === 'CANCELLED') {
       throw new ApiError(409, 'Order has already been cancelled.');
@@ -917,12 +971,20 @@ const cancelOrderResponse = async (
       throw new ApiError(409, 'Order cannot be cancelled at this stage.');
     }
 
+    logStatusTransition({
+      from: currentStatus,
+      to: 'CANCELLED',
+      userRole: 'customer',
+    });
+
     transaction.update(orderRef, {
       cancellationReason,
       cancellation_reason: cancellationReason,
       cancelledAt: FieldValue.serverTimestamp(),
       cancelled_at: FieldValue.serverTimestamp(),
+      cancelledBy: 'customer',
       orderStatus: 'CANCELLED',
+      rejectReason: '',
       rejectionReason: '',
       rejection_reason: '',
       status: getOrderStatusFirestoreValue('CANCELLED'),
@@ -999,6 +1061,16 @@ const completeDeliveryResponse = async (
   const { finalLocation, orderId } = parseCompleteDeliveryBody(request.body);
   const adminDb = getServerDb();
   const orderRef = await resolveOrderReferenceByIdentifier(adminDb, orderId);
+  const requesterPhone = (decodedToken.phone || '').trim();
+  const isAdmin = await userHasAdminAccess({
+    email: decodedToken.email,
+    phone: requesterPhone,
+    uid: decodedToken.uid,
+  });
+  const requestRole = isAdmin
+    ? await getUserRole(adminDb, requesterPhone)
+    : 'delivery_agent';
+  let orderUserId = '';
 
   await adminDb.runTransaction(async transaction => {
     const orderSnapshot = await transaction.get(orderRef);
@@ -1007,23 +1079,22 @@ const completeDeliveryResponse = async (
     }
 
     const currentOrder = orderSnapshot.data() as StoredOrderRecord;
-    const requesterPhone = (decodedToken.phone || '').trim();
-    const isAdmin = await userHasAdminAccess({
-      email: decodedToken.email,
-      phone: requesterPhone,
-      uid: decodedToken.uid,
-    });
+    orderUserId = `${currentOrder.userId || ''}`.trim();
 
     if (!isAdmin && !isAssignedAgentPhone(currentOrder, requesterPhone)) {
       throw new ApiError(403, 'Only the assigned agent or an admin can complete this delivery.');
     }
 
-    const currentStatus = `${currentOrder.status || currentOrder.orderStatus || ''}`
-      .trim()
-      .toUpperCase();
+    const currentStatus = resolveCurrentOrderStatus(currentOrder);
     if (currentStatus !== 'OUT_FOR_DELIVERY') {
       throw new ApiError(409, 'Only out-for-delivery orders can be completed.');
     }
+
+    logStatusTransition({
+      from: currentStatus,
+      to: 'DELIVERED',
+      userRole: requestRole,
+    });
 
     const orderNumber = `${currentOrder.orderId || orderRef.id}`.trim().toUpperCase();
 
@@ -1031,6 +1102,10 @@ const completeDeliveryResponse = async (
       deliveryDeliveredAt: FieldValue.serverTimestamp(),
       delivery_delivered_at: FieldValue.serverTimestamp(),
       deliveredAt: FieldValue.serverTimestamp(),
+      cancelledBy: '',
+      rejectReason: '',
+      rejectionReason: '',
+      rejection_reason: '',
       ...(finalLocation
         ? {
             deliveryLocation: {
@@ -1122,19 +1197,13 @@ const completeDeliveryResponse = async (
   const updatedOrder = mapOrderSnapshotToResponse(updatedOrderSnapshot as QueryDocumentSnapshot);
 
   try {
-    if (updatedOrder.user_id) {
-      const customerRecipient = await getCustomerRecipient(adminDb, updatedOrder.user_id);
-      if (customerRecipient) {
-        await sendPushNotification(
-          adminDb,
-          [customerRecipient],
-          buildCustomerOrderNotification({
-            orderId: updatedOrder.id,
-            status: 'DELIVERED',
-          }),
-        );
-      }
-    }
+    await sendLifecycleNotificationsForStatusTransition({
+      adminDb,
+      fromStatus: 'OUT_FOR_DELIVERY',
+      orderId: updatedOrder.id,
+      toStatus: 'DELIVERED',
+      userId: updatedOrder.user_id || orderUserId,
+    });
   } catch (notificationError) {
     console.error('Delivery completed but notification dispatch failed', notificationError);
   }

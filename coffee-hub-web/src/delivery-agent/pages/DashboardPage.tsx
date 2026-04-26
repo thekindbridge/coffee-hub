@@ -10,6 +10,7 @@ import type {
   AgentTrackerPermissionState,
   AgentTrackerStatus,
 } from '../../agent/agentTracker';
+import type { AgentStatus } from '../../features/app/types';
 import type {
   DeliveryAgent,
   DeliveryLocation,
@@ -33,8 +34,10 @@ export type DashboardPageProps = {
   deliveryAgent: DeliveryAgent | null;
   deliverySession: DeliverySession | null;
   isAuthorized: boolean;
+  isAvailabilitySaving?: boolean;
   isTracking: boolean;
   lastTrackedLocation: DeliveryLocation | null;
+  onAvailabilityChange?: (status: AgentStatus) => void | Promise<void>;
   onEndDelivery: (orderDocId: string) => void | Promise<void>;
   onStartDelivery: () => void | Promise<void>;
   orders: Order[];
@@ -54,8 +57,10 @@ export const DashboardPage = ({
   deliveryAgent,
   deliverySession,
   isAuthorized,
+  isAvailabilitySaving = false,
   isTracking,
   lastTrackedLocation,
+  onAvailabilityChange,
   onEndDelivery,
   onStartDelivery,
   orders,
@@ -108,6 +113,8 @@ export const DashboardPage = ({
       <ProfilePage
         deliveryAgent={deliveryAgent}
         deliverySession={deliverySession}
+        isAvailabilitySaving={isAvailabilitySaving}
+        onAvailabilityChange={onAvailabilityChange}
         permissionState={permissionState}
         trackerStatus={trackerStatus}
       />

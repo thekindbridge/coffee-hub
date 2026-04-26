@@ -6,11 +6,10 @@ import {
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { DeliveryTrackingMapSkeleton } from '../../../components/DeliveryTrackingMapSkeleton';
+import { OrderStatusTimeline } from '../../../components/orders/OrderStatusTimeline';
 import { useOrderTracking } from '../../../features/orders/hooks/useOrderTracking';
 import {
   getOrderStatusCustomerCopy,
-  ORDER_STATUS_DISPLAY,
-  ORDER_STATUS_PROGRESS_FLOW,
 } from '../../../../shared/orderStatus';
 import type {
   DeliveryLocation,
@@ -19,10 +18,6 @@ import type {
 } from '../../../types';
 
 const DeliveryTrackingMap = lazy(() => import('../../../components/DeliveryTrackingMap'));
-
-const ORDER_FLOW: Order['status'][] = ORDER_STATUS_PROGRESS_FLOW.map(
-  statusCode => ORDER_STATUS_DISPLAY[statusCode],
-);
 
 export interface OrderTrackingDetailsProps {
   order: Order;
@@ -38,7 +33,6 @@ const joinClassNames = (...classNames: Array<string | undefined>) =>
 
 const statusToneClass: Record<Order['status'], string> = {
   Pending: 'border-amber-300/25 bg-amber-300/10 text-amber-100',
-  Accepted: 'border-emerald-300/25 bg-emerald-300/10 text-emerald-100',
   Preparing: 'border-sky-300/25 bg-sky-300/10 text-sky-100',
   'Out for Delivery': 'border-orange-300/25 bg-orange-300/10 text-orange-100',
   Delivered: 'border-emerald-300/25 bg-emerald-300/10 text-emerald-100',
@@ -55,8 +49,6 @@ export const OrderTrackingDetails = ({
   const { agentId, deliveryAgent, deliverySession, liveOrder } = useOrderTracking(order);
   const [routeMetrics, setRouteMetrics] = useState<DeliveryRouteMetrics | null>(null);
 
-  const currentStepIndex = ORDER_FLOW.indexOf(liveOrder.status);
-  const activeStepIndex = currentStepIndex >= 0 ? currentStepIndex : 0;
   const agentPhone = deliveryAgent?.phone || liveOrder.delivery_agent_phone || '';
   const agentVehicle = deliveryAgent?.vehicle_type || liveOrder.delivery_agent_vehicle || '';
   const agentName =
@@ -66,8 +58,6 @@ export const OrderTrackingDetails = ({
     'Agent details pending';
   const displayAgentPhone = agentPhone || '';
   const phoneHref = displayAgentPhone ? `tel:${normalizePhoneForTel(displayAgentPhone)}` : undefined;
-  const stepProgress = ORDER_FLOW.length > 1 ? activeStepIndex / (ORDER_FLOW.length - 1) : 0;
-  const stepProgressPercent = Math.max(0, Math.min(1, stepProgress)) * 100;
   const backButton = onBackToOrders ? (
     <button
       type="button"
@@ -103,10 +93,6 @@ export const OrderTrackingDetails = ({
 
     if (liveOrder.status_code === 'PREPARING') {
       return 'Preparing your order';
-    }
-
-    if (liveOrder.status_code === 'ACCEPTED') {
-      return 'Order accepted';
     }
 
     return 'Order received';
@@ -179,21 +165,20 @@ export const OrderTrackingDetails = ({
           transition={{ duration: 0.35, delay: 0.05, ease: 'easeOut' }}
         >
           <div className="rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,#17110d,#0f0a08)] p-5 text-[#fff8f2] shadow-[0_18px_50px_rgba(9,6,5,0.22)]">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.32em] text-[#f1b375]">
-                  Order Status
-                </p>
-                <h2 className="mt-1 text-lg font-semibold text-[#fff8f2]">{liveOrder.status}</h2>
-              </div>
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.32em] text-[#f1b375]">
+                Order Status
+              </p>
               <div className="text-sm font-semibold text-[#d8c7ba]">
                 {etaLabel}
               </div>
             </div>
 
-            <p className="mt-4 text-sm text-[#d8c7ba]">
-              {getOrderStatusCustomerCopy(liveOrder.status_code)}
-            </p>
+            <OrderStatusTimeline
+              className="border-white/8 bg-white/4"
+              statusCode={liveOrder.status_code}
+              subtext={etaLabel || getOrderStatusCustomerCopy(liveOrder.status_code)}
+            />
 
             {liveOrder.status_code === 'REJECTED' && liveOrder.rejection_reason && (
               <div className="mt-4 rounded-[24px] border border-rose-300/20 bg-rose-500/10 px-4 py-4 text-sm text-rose-100">
@@ -210,47 +195,6 @@ export const OrderTrackingDetails = ({
                   Cancellation reason
                 </p>
                 <p className="mt-2 leading-6">{liveOrder.cancellation_reason}</p>
-              </div>
-            )}
-
-            {liveOrder.status_code !== 'REJECTED' && liveOrder.status_code !== 'CANCELLED' && (
-              <div className="mt-5 rounded-[30px] border border-white/10 bg-white/5 px-4 py-5">
-              <div className="relative">
-                <div className="absolute left-0 right-0 top-3 h-1.5 rounded-full bg-white/10" />
-                <div
-                  className="absolute left-0 top-3 h-1.5 rounded-full bg-[#f1b375] transition-[width] duration-300"
-                  style={{ width: `${stepProgressPercent}%` }}
-                />
-                <div className="grid grid-cols-4 gap-2">
-                  {ORDER_FLOW.map((step, index) => {
-                    const isReached = index <= activeStepIndex;
-                    const isCurrent = index === activeStepIndex;
-
-                    return (
-                      <div key={step} className="min-w-0 text-center">
-                        <div className="flex flex-col items-center gap-2">
-                          <div
-                            aria-current={isCurrent ? 'step' : undefined}
-                            className={joinClassNames(
-                              'h-2.5 w-2.5 rounded-full border transition-colors',
-                              isReached ? 'border-[#f1b375] bg-[#f1b375]' : 'border-white/20 bg-[#0f0a08]',
-                              isCurrent ? 'shadow-[0_0_0_4px_rgba(241,179,117,0.15)]' : undefined,
-                            )}
-                          />
-                          <span
-                            className={joinClassNames(
-                              'text-[9px] font-semibold uppercase tracking-[0.12em] leading-4 break-words sm:text-[10px]',
-                              isCurrent ? 'text-[#fff8f2]' : isReached ? 'text-[#f5ede3]' : 'text-[#8b7565]',
-                            )}
-                          >
-                            {step}
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
               </div>
             )}
           </div>
@@ -307,7 +251,7 @@ export const OrderTrackingDetails = ({
                   Live Map
                 </div>
                 <div className="text-xs font-semibold text-[#d8c7ba]">
-                  {liveOrder.status === 'Out for Delivery' ? 'Agent on the way' : liveOrder.status}
+                  {liveOrder.status_code === 'OUT_FOR_DELIVERY' ? 'Agent on the way' : liveOrder.status}
                 </div>
               </div>
               <Suspense

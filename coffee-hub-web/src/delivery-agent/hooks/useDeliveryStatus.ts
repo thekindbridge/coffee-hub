@@ -11,6 +11,7 @@ import {
   type AgentTrackerPermissionState,
   type AgentTrackerStatus,
 } from '../../agent/agentTracker';
+import { normalizeStatus } from '../../../shared/orderStatus';
 import { DEFAULT_TRACKER_STATUS } from '../../features/app/lib/constants';
 import type { DeliveryLocation, Order } from '../../types';
 
@@ -71,7 +72,11 @@ export const useDeliveryStatus = (
       return;
     }
 
-    if (currentDeliveryOrder?.status === 'Delivered' && agentTrackerRef.current) {
+    if (
+      currentDeliveryOrder &&
+      normalizeStatus(currentDeliveryOrder.status_code) === 'DELIVERED' &&
+      agentTrackerRef.current
+    ) {
       agentTrackerRef.current.stop();
       agentTrackerRef.current = null;
       trackedOrderIdRef.current = '';
@@ -81,7 +86,7 @@ export const useDeliveryStatus = (
         message: 'Delivery completed and GPS tracking stopped.',
       });
     }
-  }, [currentDeliveryOrder?.doc_id, currentDeliveryOrder?.id, currentDeliveryOrder?.status]);
+  }, [currentDeliveryOrder?.doc_id, currentDeliveryOrder?.id, currentDeliveryOrder?.status_code]);
 
   return {
     agentLastTrackedLocation,

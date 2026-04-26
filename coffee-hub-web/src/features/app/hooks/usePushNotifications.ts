@@ -1,123 +1,266 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { getCurrentUserIdToken } from '../../../services/auth/authService';
+import type { UserRole } from '../types';
 import {
-  pushNotificationsPlatformService,
-  type ForegroundNotification,
-  type PushPermissionState,
-} from '../../../services/platform/pushNotificationsService';
+  detectFirebaseMessagingSupport,
+  getDeviceToken,
+  requestNotificationPermission,
+  subscribeToMessagingForeground,
+  type FirebaseForegroundNotification,
+  type FirebaseMessagingPermissionState,
+} from '../../../services/firebase/firebaseMessaging';
+import { saveUserFcmToken } from '../../../services/firebase/profileService';
+import {
+  getNativeNotificationPermissionState,
+  isNativeAndroidNotificationRuntime,
+  playRoleNotificationEffect,
+  requestNativeNotificationPermission,
+  resolveNotificationRole,
+  subscribeToNativePushNotifications,
+} from '../../../services/platform/notificationService';
+import { storageAdapter } from '../../../services/platform/storageAdapter';
 
 type UsePushNotificationsParams = {
   isAuthReady: boolean;
   isLoggedIn: boolean;
   currentUserId: string;
+  currentUserPhone: string;
+  isDeliveryAgent: boolean;
+  role: UserRole;
 };
 
 type PushNotificationsState = {
-  permissionState: PushPermissionState;
+  permissionState: FirebaseMessagingPermissionState;
   isSupported: boolean;
   isSyncing: boolean;
   syncError: string;
   isPermissionBannerVisible: boolean;
-  foregroundNotification: ForegroundNotification | null;
+  foregroundNotification: FirebaseForegroundNotification | null;
   requestPermission: () => Promise<void>;
   dismissPermissionBanner: () => void;
   dismissForegroundNotification: () => void;
 };
 
+const PUSH_PROMPT_DISMISS_KEY = 'coffee_hub_push_prompt_dismissed';
+const getPromptDismissKey = (currentUserId: string) =>
+  currentUserId
+    ? `${PUSH_PROMPT_DISMISS_KEY}:${currentUserId}`
+    : PUSH_PROMPT_DISMISS_KEY;
+
 export const usePushNotifications = ({
   isAuthReady,
   isLoggedIn,
   currentUserId,
+  currentUserPhone,
+  isDeliveryAgent,
+  role,
 }: UsePushNotificationsParams): PushNotificationsState => {
-  const [permissionState, setPermissionState] = useState<PushPermissionState>(
-    pushNotificationsPlatformService.getPermissionState(),
+  const [permissionState, setPermissionState] = useState<FirebaseMessagingPermissionState>(
+    typeof Notification === 'undefined' ? 'unsupported' : Notification.permission,
   );
-  const [isMessagingSupported, setIsMessagingSupported] = useState(false);
+  const [isSupported, setIsSupported] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncError, setSyncError] = useState('');
   const [foregroundNotification, setForegroundNotification] =
-    useState<ForegroundNotification | null>(null);
+    useState<FirebaseForegroundNotification | null>(null);
   const [isPermissionBannerDismissed, setIsPermissionBannerDismissed] =
-    useState(pushNotificationsPlatformService.isPushPermissionBannerDismissed);
-  const lastSyncedKeyRef = useRef('');
+    useState(false);
+  const lastSyncedTokenRef = useRef('');
+  const resolvedNotificationRole = resolveNotificationRole(role);
+  const isNativeAndroid = isNativeAndroidNotificationRuntime();
 
   useEffect(() => {
     let isMounted = true;
 
-    void pushNotificationsPlatformService.detectMessagingSupport().then(supported => {
-      if (!isMounted) {
-        return;
-      }
+    const detectSupport = async () => {
+      try {
+        if (isNativeAndroid) {
+          const nativePermission = await getNativeNotificationPermissionState();
+          if (!isMounted) {
+            return;
+          }
 
-      setIsMessagingSupported(supported);
-      setPermissionState(supported ? pushNotificationsPlatformService.getPermissionState() : 'unsupported');
-    }).catch(error => {
-      console.error('Failed to detect Firebase Messaging support', error);
-      if (!isMounted) {
-        return;
-      }
+          setIsSupported(true);
+          setPermissionState(nativePermission);
+          return;
+        }
 
-      setIsMessagingSupported(false);
-      setPermissionState('unsupported');
-    });
+        const browserSupported = await detectFirebaseMessagingSupport();
+        if (!isMounted) {
+          return;
+        }
+
+        setIsSupported(browserSupported);
+        setPermissionState(
+          browserSupported && typeof Notification !== 'undefined'
+            ? Notification.permission
+            : 'unsupported',
+        );
+      } catch (error) {
+        console.error('Failed to detect notification support', error);
+        if (!isMounted) {
+          return;
+        }
+
+        setIsSupported(false);
+        setPermissionState('unsupported');
+      }
+    };
+
+    void detectSupport();
 
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [isNativeAndroid]);
 
   useEffect(() => {
-    if (!isMessagingSupported || !isLoggedIn) {
+    if (!isAuthReady || !isLoggedIn || !currentUserId || !isSupported) {
+      lastSyncedTokenRef.current = '';
+      return;
+    }
+
+    setIsPermissionBannerDismissed(
+      storageAdapter.read(getPromptDismissKey(currentUserId)) === 'true',
+    );
+  }, [currentUserId, isAuthReady, isLoggedIn, isSupported]);
+
+  useEffect(() => {
+    if (!isSupported || !isLoggedIn) {
       setForegroundNotification(null);
       return undefined;
     }
 
-    return pushNotificationsPlatformService.subscribeToForegroundMessages(nextNotification => {
-      if (nextNotification) {
-        setForegroundNotification(nextNotification);
+    if (isNativeAndroid) {
+      let cleanup: (() => Promise<void>) | undefined;
+      let isDisposed = false;
+
+      void subscribeToNativePushNotifications({
+        onToken: async token => {
+          if (!token.trim()) {
+            return;
+          }
+
+          setIsSyncing(true);
+          setSyncError('');
+          try {
+            await saveUserFcmToken({
+              currentUserId,
+              currentUserPhone,
+              isDeliveryAgent,
+              token,
+            });
+            lastSyncedTokenRef.current = token;
+          } catch (error) {
+            console.error('Failed to save native push token', error);
+            setSyncError(
+              error instanceof Error
+                ? error.message
+                : 'Unable to enable notifications right now.',
+            );
+          } finally {
+            setIsSyncing(false);
+          }
+        },
+        onRegistrationError: error => {
+          console.error('Native push registration failed', error);
+          setSyncError(error.message);
+        },
+        onNotificationReceived: notification => {
+          const title = `${notification.title || 'COFFEE-HUB'}`.trim();
+          const body = `${notification.body || ''}`.trim();
+          const url = `${notification.data?.url || notification.data?.link || '/'}`.trim() || '/';
+          const tag = `${notification.tag || notification.data?.tag || ''}`.trim();
+
+          setForegroundNotification({
+            id: `${Date.now()}`,
+            title,
+            body,
+            url,
+          });
+
+          void playRoleNotificationEffect({
+            body,
+            role: resolvedNotificationRole,
+            tag,
+            title,
+            url,
+          });
+        },
+        onNotificationAction: notification => {
+          const targetUrl = `${notification.data?.url || notification.link || '/'}`.trim() || '/';
+          if (typeof window !== 'undefined') {
+            window.location.assign(targetUrl);
+          }
+        },
+      }).then(nextCleanup => {
+        if (isDisposed) {
+          void nextCleanup();
+          return;
+        }
+
+        cleanup = nextCleanup;
+      }).catch(error => {
+        console.error('Failed to subscribe to native push notifications', error);
+      });
+
+      return () => {
+        isDisposed = true;
+        if (cleanup) {
+          void cleanup();
+        }
+      };
+    }
+
+    return subscribeToMessagingForeground(nextNotification => {
+      if (!nextNotification) {
+        return;
       }
+
+      setForegroundNotification(nextNotification);
     });
-  }, [isMessagingSupported, isLoggedIn]);
+  }, [
+    currentUserId,
+    currentUserPhone,
+    isDeliveryAgent,
+    isLoggedIn,
+    isNativeAndroid,
+    isSupported,
+    resolvedNotificationRole,
+  ]);
 
   useEffect(() => {
-    if (!isAuthReady || !isLoggedIn || !currentUserId || !isMessagingSupported) {
-      lastSyncedKeyRef.current = '';
+    if (!isAuthReady || !isLoggedIn || !currentUserId || !isSupported) {
       return;
     }
 
-    if (permissionState === 'default' || permissionState === 'unsupported') {
-      return;
-    }
-
-    const syncKey = `${currentUserId}:${permissionState}`;
-    if (lastSyncedKeyRef.current === syncKey) {
+    if (permissionState !== 'granted' || isNativeAndroid) {
       return;
     }
 
     let isCancelled = false;
 
-    const syncRegistration = async () => {
-      const idToken = await getCurrentUserIdToken();
-      if (!idToken || isCancelled) {
-        return;
-      }
-
+    const syncBrowserRegistration = async () => {
       setIsSyncing(true);
       setSyncError('');
 
       try {
-        await pushNotificationsPlatformService.syncRegistration({
-          idToken,
-          permissionState,
-        });
-
-        if (isCancelled) {
+        const token = await getDeviceToken();
+        if (!token || isCancelled || lastSyncedTokenRef.current === token) {
           return;
         }
 
-        lastSyncedKeyRef.current = syncKey;
+        await saveUserFcmToken({
+          currentUserId,
+          currentUserPhone,
+          isDeliveryAgent,
+          token,
+        });
+
+        if (!isCancelled) {
+          lastSyncedTokenRef.current = token;
+        }
       } catch (error) {
-        console.error('Failed to sync push token', error);
+        console.error('Failed to sync browser push token', error);
         if (!isCancelled) {
           setSyncError(
             error instanceof Error
@@ -132,54 +275,62 @@ export const usePushNotifications = ({
       }
     };
 
-    void syncRegistration();
+    void syncBrowserRegistration();
 
     return () => {
       isCancelled = true;
     };
   }, [
     currentUserId,
+    currentUserPhone,
     isAuthReady,
+    isDeliveryAgent,
     isLoggedIn,
-    isMessagingSupported,
+    isNativeAndroid,
+    isSupported,
     permissionState,
   ]);
 
   const requestPermission = async () => {
-    if (!isMessagingSupported) {
+    if (!isSupported) {
       setPermissionState('unsupported');
       return;
     }
 
     try {
       setSyncError('');
-      const nextPermission = await pushNotificationsPlatformService.requestPermission();
+      const nextPermission = isNativeAndroid
+        ? await requestNativeNotificationPermission()
+        : await requestNotificationPermission();
       setPermissionState(nextPermission);
-      setIsPermissionBannerDismissed(false);
-      pushNotificationsPlatformService.clearPushPermissionBannerDismissal();
+
+      if (nextPermission === 'granted') {
+        storageAdapter.remove(getPromptDismissKey(currentUserId));
+        setIsPermissionBannerDismissed(false);
+      }
     } catch (error) {
       console.error('Notification permission request failed', error);
-      setSyncError('Unable to request browser notification permission.');
+      setSyncError('Unable to request notification permission right now.');
     }
   };
 
   const dismissPermissionBanner = () => {
     setIsPermissionBannerDismissed(true);
-    pushNotificationsPlatformService.dismissPushPermissionBanner();
+    storageAdapter.write(getPromptDismissKey(currentUserId), 'true');
   };
 
   const isPermissionBannerVisible = useMemo(
     () =>
       isLoggedIn &&
-      isMessagingSupported &&
+      isSupported &&
       permissionState === 'default' &&
       !isPermissionBannerDismissed,
-    [isLoggedIn, isMessagingSupported, permissionState, isPermissionBannerDismissed],
+    [isLoggedIn, isPermissionBannerDismissed, isSupported, permissionState],
   );
 
   return {
     permissionState,
-    isSupported: isMessagingSupported,
+    isSupported,
     isSyncing,
     syncError,
     isPermissionBannerVisible,

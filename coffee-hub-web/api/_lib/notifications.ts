@@ -10,6 +10,7 @@ import {
 } from '../../src/services/api/server/roleService.js';
 
 export type NotificationPreferenceKey = 'orderUpdates' | 'offers';
+export type NotificationRecipientRole = 'admin' | 'customer' | 'delivery_agent';
 
 export type StoredNotificationSettings = {
   orderUpdates: boolean;
@@ -21,6 +22,7 @@ type NotificationTokenType = 'expo' | 'fcm';
 type NotificationRecipient = {
   fcmToken?: string;
   pushToken?: string;
+  role: NotificationRecipientRole;
   settings: StoredNotificationSettings;
   userDocId?: string;
   agentDocId?: string;
@@ -58,6 +60,30 @@ const COLLAPSE_DELAY_MS = 20000;
 const EXPO_PUSH_API_URL = 'https://exp.host/--/api/v2/push/send';
 const EXPO_PUSH_CHUNK_SIZE = 100;
 const buildOrderTrackingUrl = (orderId: string) => `/?tab=tracking&orderId=${encodeURIComponent(orderId)}`;
+const NOTIFICATIONS_COLLECTION = 'notifications';
+
+const normalizeRecipientRole = (value: unknown): NotificationRecipientRole => {
+  if (value === 'owner' || value === 'admin') {
+    return 'admin';
+  }
+
+  if (value === 'delivery_agent' || value === 'agent') {
+    return 'delivery_agent';
+  }
+
+  return 'customer';
+};
+
+const getRoleChannelId = (role: NotificationRecipientRole) => {
+  switch (role) {
+    case 'admin':
+      return 'admin_channel';
+    case 'delivery_agent':
+      return 'agent_channel';
+    default:
+      return 'customer_channel';
+  }
+};
 
 const normalizeNotificationSettings = (value: unknown): StoredNotificationSettings => {
   if (!value || typeof value !== 'object') {
@@ -87,6 +113,7 @@ const buildRecipientFromUserSnapshot = (
   return {
     ...(fcmToken ? { fcmToken } : {}),
     ...(pushToken ? { pushToken } : {}),
+    role: normalizeRecipientRole(data.role),
     settings: normalizeNotificationSettings(data.notificationSettings),
     userDocId: snapshot.id,
   };
@@ -94,6 +121,7 @@ const buildRecipientFromUserSnapshot = (
 
 const buildRecipientFromAgentSnapshot = (
   snapshot: QueryDocumentSnapshot,
+  userDocId = '',
 ): NotificationRecipient | null => {
   const data = snapshot.data() as Record<string, unknown>;
   const fcmToken = typeof data.fcmToken === 'string' ? data.fcmToken.trim() : '';
@@ -103,8 +131,10 @@ const buildRecipientFromAgentSnapshot = (
 
   return {
     fcmToken,
+    role: 'delivery_agent',
     settings: normalizeNotificationSettings(data.notificationSettings),
     agentDocId: snapshot.id,
+    ...(userDocId ? { userDocId } : {}),
   };
 };
 
@@ -131,10 +161,15 @@ const shouldDeliverToRecipient = (
   preferenceKey: NotificationPreferenceKey,
 ) => recipient.settings[preferenceKey] !== false;
 
-const buildPushDataPayload = (content: PushMessageContent) => ({
+const buildPushDataPayload = (
+  content: PushMessageContent,
+  role: NotificationRecipientRole,
+) => ({
   body: content.body,
+  channelId: getRoleChannelId(role),
   ...(content.orderId ? { orderId: content.orderId } : {}),
   preferenceKey: content.preferenceKey,
+  recipientRole: role,
   ...(content.status ? { status: content.status } : {}),
   tag: content.tag || 'coffee-hub',
   title: content.title,
@@ -327,7 +362,18 @@ export const getAgentRecipient = async (
     return null;
   }
 
-  return buildRecipientFromAgentSnapshot(snapshot as QueryDocumentSnapshot);
+  const agentData = snapshot.data() as Record<string, unknown>;
+  const agentPhone = safeNormalizePhoneNumber(
+    `${agentData.phone || snapshot.id}`.trim(),
+  );
+  const userSnapshot = agentPhone
+    ? await findUserSnapshotByPhone(adminDb, agentPhone)
+    : null;
+
+  return buildRecipientFromAgentSnapshot(
+    snapshot as QueryDocumentSnapshot,
+    userSnapshot?.id || '',
+  );
 };
 
 export const getAdminRecipients = async (
@@ -372,6 +418,29 @@ const buildNotificationTargets = (recipient: NotificationRecipient): Notificatio
   return targets;
 };
 
+const writeNotificationHistoryEntry = async (
+  adminDb: Firestore,
+  recipient: NotificationRecipient,
+  content: PushMessageContent,
+) => {
+  if (!recipient.userDocId) {
+    return;
+  }
+
+  await adminDb.collection(NOTIFICATIONS_COLLECTION).add({
+    body: content.body,
+    createdAt: FieldValue.serverTimestamp(),
+    orderId: content.orderId || '',
+    read: false,
+    role: recipient.role,
+    status: content.status || '',
+    tag: content.tag || '',
+    title: content.title,
+    url: normalizeUrl(content.url || '/'),
+    userId: recipient.userDocId,
+  });
+};
+
 const sendExpoPushNotifications = async (
   adminDb: Firestore,
   targets: NotificationTarget[],
@@ -393,8 +462,8 @@ const sendExpoPushNotifications = async (
         body: JSON.stringify(
           targetChunk.map(target => ({
             body: content.body,
-            channelId: 'order-updates',
-            data: buildPushDataPayload(content),
+            channelId: getRoleChannelId(target.recipient.role),
+            data: buildPushDataPayload(content, target.recipient.role),
             sound: 'default',
             title: content.title,
             to: target.token,
@@ -449,11 +518,21 @@ export const sendPushNotification = async (
   recipients: NotificationRecipient[],
   content: PushMessageContent,
 ) => {
-  const eligibleTargets = recipients
-    .filter(recipient =>
-      shouldDeliverToRecipient(recipient, content.preferenceKey),
-    )
-    .flatMap(buildNotificationTargets);
+  const uniqueRecipients = Array.from(
+    recipients
+      .filter(recipient =>
+        shouldDeliverToRecipient(recipient, content.preferenceKey),
+      )
+      .reduce((accumulator, recipient) => {
+        const key = recipient.userDocId || recipient.agentDocId || recipient.fcmToken || recipient.pushToken || `${recipient.role}-${accumulator.size}`;
+        if (!accumulator.has(key)) {
+          accumulator.set(key, recipient);
+        }
+        return accumulator;
+      }, new Map<string, NotificationRecipient>())
+      .values(),
+  );
+  const eligibleTargets = uniqueRecipients.flatMap(buildNotificationTargets);
 
   if (eligibleTargets.length === 0) {
     return { attempted: 0, delivered: 0 };
@@ -464,10 +543,16 @@ export const sendPushNotification = async (
 
   let delivered = 0;
 
+  await Promise.all(
+    uniqueRecipients.map(recipient =>
+      writeNotificationHistoryEntry(adminDb, recipient, content),
+    ),
+  );
+
   if (fcmTargets.length > 0) {
     const response = await getAdminMessaging().sendEach(
       fcmTargets.map(target => ({
-        data: buildPushDataPayload(content),
+        data: buildPushDataPayload(content, target.recipient.role),
         token: target.token,
         webpush: {
           headers: {
@@ -522,20 +607,10 @@ export const buildCustomerOrderNotification = ({
   const orderNumber = formatCustomerOrderNumber(orderId);
 
   switch (normalizedStatus) {
-    case 'PENDING':
+    case 'WAITING':
       return {
         title: 'Coffee Hub \u2615',
-        body: `Order ${orderNumber} placed successfully \u2615`,
-        orderId,
-        preferenceKey: 'orderUpdates',
-        status: normalizedStatus,
-        tag: `order-${orderId}`,
-        url: buildOrderTrackingUrl(orderId),
-      };
-    case 'ACCEPTED':
-      return {
-        title: 'Coffee Hub \u2615',
-        body: `Order ${orderNumber} accepted \u2615`,
+        body: `Your order ${orderNumber} is waiting for confirmation`,
         orderId,
         preferenceKey: 'orderUpdates',
         status: normalizedStatus,
@@ -545,7 +620,7 @@ export const buildCustomerOrderNotification = ({
     case 'PREPARING':
       return {
         title: 'Coffee Hub \u2615',
-        body: `Order ${orderNumber} is being prepared \u2615`,
+        body: `Your order ${orderNumber} is being prepared`,
         orderId,
         preferenceKey: 'orderUpdates',
         status: normalizedStatus,
@@ -555,7 +630,7 @@ export const buildCustomerOrderNotification = ({
     case 'OUT_FOR_DELIVERY':
       return {
         title: 'Coffee Hub \u2615',
-        body: `Order ${orderNumber} is out for delivery \u{1F69A}`,
+        body: `Your order ${orderNumber} is out for delivery`,
         orderId,
         preferenceKey: 'orderUpdates',
         status: normalizedStatus,
@@ -565,7 +640,7 @@ export const buildCustomerOrderNotification = ({
     case 'DELIVERED':
       return {
         title: 'Coffee Hub \u2615',
-        body: `Order ${orderNumber} delivered \u2705`,
+        body: `Your order ${orderNumber} has been delivered`,
         orderId,
         preferenceKey: 'orderUpdates',
         status: normalizedStatus,
@@ -576,8 +651,8 @@ export const buildCustomerOrderNotification = ({
       return {
         title: 'Coffee Hub \u2615',
         body: rejectionReason
-          ? `Order ${orderNumber} rejected \u274C. Reason: ${rejectionReason}`
-          : `Order ${orderNumber} rejected \u274C`,
+          ? `Your order ${orderNumber} was rejected. Reason: ${rejectionReason}`
+          : `Your order ${orderNumber} was rejected`,
         orderId,
         preferenceKey: 'orderUpdates',
         status: normalizedStatus,
@@ -633,7 +708,7 @@ export const buildAdminOrderCancelledNotification = (orderId: string): PushMessa
 
 export const buildAgentAssignmentNotification = (orderId: string): PushMessageContent => ({
   title: 'New Delivery Assigned',
-  body: `You have a new order to deliver. Order #${orderId}`,
+  body: `New delivery assigned. Order #${orderId}`,
   preferenceKey: 'orderUpdates',
   tag: `agent-order-${orderId}`,
   url: '/?scope=agent',

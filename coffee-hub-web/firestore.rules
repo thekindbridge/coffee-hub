@@ -105,6 +105,7 @@ service cloud.firestore {
 
     function isValidOrderStatus(value) {
       return value is string && value in [
+        'waiting',
         'pending',
         'accepted',
         'preparing',
@@ -112,6 +113,7 @@ service cloud.firestore {
         'delivered',
         'rejected',
         'cancelled',
+        'WAITING',
         'PENDING',
         'ACCEPTED',
         'PREPARING',
@@ -152,15 +154,15 @@ service cloud.firestore {
     }
 
     function isPendingOrderStatus(status, orderStatus, statusCode) {
-      return status in ['pending', 'PENDING'] &&
-        (orderStatus == null || orderStatus == 'PENDING') &&
-        (statusCode == null || statusCode == 'PENDING');
+      return status in ['waiting', 'WAITING', 'pending', 'PENDING', 'accepted', 'ACCEPTED'] &&
+        (orderStatus == null || orderStatus in ['WAITING', 'PENDING', 'ACCEPTED']) &&
+        (statusCode == null || statusCode in ['WAITING', 'PENDING', 'ACCEPTED']);
     }
 
     function isAcceptedOrderStatus(status, orderStatus, statusCode) {
       return status in ['accepted', 'ACCEPTED'] &&
-        (orderStatus == null || orderStatus == 'ACCEPTED') &&
-        (statusCode == null || statusCode == 'ACCEPTED');
+        (orderStatus == null || orderStatus in ['WAITING', 'ACCEPTED']) &&
+        (statusCode == null || statusCode in ['WAITING', 'ACCEPTED']);
     }
 
     function isPreparingOrderStatus(status, orderStatus, statusCode) {
@@ -203,6 +205,93 @@ service cloud.firestore {
         isRejectedOrderStatus(status, orderStatus, statusCode) ||
         isCancelledOrderStatus(status, orderStatus, statusCode)
       );
+    }
+
+    function isWaitingLikeOrderStatus(status, orderStatus, statusCode) {
+      return status in ['waiting', 'WAITING', 'pending', 'PENDING'] &&
+        (orderStatus == null || orderStatus in ['WAITING', 'PENDING']) &&
+        (statusCode == null || statusCode in ['WAITING', 'PENDING']);
+    }
+
+    function isPreparingLikeOrderStatus(status, orderStatus, statusCode) {
+      return status in ['preparing', 'PREPARING', 'accepted', 'ACCEPTED'] &&
+        (orderStatus == null || orderStatus in ['PREPARING', 'ACCEPTED']) &&
+        (statusCode == null || statusCode in ['PREPARING', 'ACCEPTED']);
+    }
+
+    function isSamePhaseOrderStatus(beforeStatus, beforeOrderStatus, beforeStatusCode, afterStatus, afterOrderStatus, afterStatusCode) {
+      return (
+        isWaitingLikeOrderStatus(beforeStatus, beforeOrderStatus, beforeStatusCode) &&
+        isWaitingLikeOrderStatus(afterStatus, afterOrderStatus, afterStatusCode)
+      ) || (
+        isPreparingLikeOrderStatus(beforeStatus, beforeOrderStatus, beforeStatusCode) &&
+        isPreparingLikeOrderStatus(afterStatus, afterOrderStatus, afterStatusCode)
+      ) || (
+        isOutForDeliveryOrderStatus(beforeStatus, beforeOrderStatus, beforeStatusCode) &&
+        isOutForDeliveryOrderStatus(afterStatus, afterOrderStatus, afterStatusCode)
+      ) || (
+        isDeliveredOrderStatus(beforeStatus, beforeOrderStatus, beforeStatusCode) &&
+        isDeliveredOrderStatus(afterStatus, afterOrderStatus, afterStatusCode)
+      ) || (
+        isRejectedOrderStatus(beforeStatus, beforeOrderStatus, beforeStatusCode) &&
+        isRejectedOrderStatus(afterStatus, afterOrderStatus, afterStatusCode)
+      ) || (
+        isCancelledOrderStatus(beforeStatus, beforeOrderStatus, beforeStatusCode) &&
+        isCancelledOrderStatus(afterStatus, afterOrderStatus, afterStatusCode)
+      );
+    }
+
+    function isValidPhase2OrderTransition(beforeStatus, beforeOrderStatus, beforeStatusCode, afterStatus, afterOrderStatus, afterStatusCode) {
+      return isSamePhaseOrderStatus(
+        beforeStatus,
+        beforeOrderStatus,
+        beforeStatusCode,
+        afterStatus,
+        afterOrderStatus,
+        afterStatusCode,
+      ) || (
+        isWaitingLikeOrderStatus(beforeStatus, beforeOrderStatus, beforeStatusCode) &&
+        (
+          isPreparingLikeOrderStatus(afterStatus, afterOrderStatus, afterStatusCode) ||
+          isRejectedOrderStatus(afterStatus, afterOrderStatus, afterStatusCode) ||
+          isCancelledOrderStatus(afterStatus, afterOrderStatus, afterStatusCode)
+        )
+      ) || (
+        isPreparingLikeOrderStatus(beforeStatus, beforeOrderStatus, beforeStatusCode) &&
+        isOutForDeliveryOrderStatus(afterStatus, afterOrderStatus, afterStatusCode)
+      ) || (
+        isOutForDeliveryOrderStatus(beforeStatus, beforeOrderStatus, beforeStatusCode) &&
+        isDeliveredOrderStatus(afterStatus, afterOrderStatus, afterStatusCode)
+      );
+    }
+
+    function hasValidRejectedFields(data) {
+      return isRejectedOrderStatus(data.status, data.orderStatus, data.status_code)
+        ? (
+            isNonEmptyString(data.rejectReason, 500) ||
+            isNonEmptyString(data.rejectionReason, 500) ||
+            isNonEmptyString(data.rejection_reason, 500)
+          )
+        : (
+            (data.rejectReason == null || data.rejectReason == '') &&
+            isOptionalString(data.rejectionReason, 500) &&
+            isOptionalString(data.rejection_reason, 500)
+          );
+    }
+
+    function hasValidCancelledFields(data) {
+      return isCancelledOrderStatus(data.status, data.orderStatus, data.status_code)
+        ? data.cancelledBy == 'customer'
+        : (data.cancelledBy == null || data.cancelledBy == '');
+    }
+
+    function requiresAssignedAgentForDeliveryAction(data) {
+      return (
+        isOutForDeliveryOrderStatus(data.status, data.orderStatus, data.status_code) ||
+        isDeliveredOrderStatus(data.status, data.orderStatus, data.status_code)
+      )
+        ? hasAssignedAgentIdentity(data)
+        : true;
     }
 
     function isAgentDocumentOwner(agentId) {
@@ -324,8 +413,10 @@ service cloud.firestore {
         'status',
         'orderStatus',
         'status_code',
+        'rejectReason',
         'rejectionReason',
         'rejection_reason',
+        'cancelledBy',
         'cancellationReason',
         'cancellation_reason',
         'createdAt',
@@ -378,7 +469,9 @@ service cloud.firestore {
         'delivery_agent_name',
         'delivery_agent_phone',
         'delivery_agent_email',
-        'delivery_agent_vehicle'
+        'delivery_agent_vehicle',
+        'rejectReason',
+        'cancelledBy'
       ]);
     }
 
@@ -403,13 +496,15 @@ service cloud.firestore {
         isValidPaymentStatus(data.paymentStatus) &&
         isValidOrderStatus(data.status) &&
         isValidOrderStatus(data.orderStatus) &&
-        isOptionalString(data.status_code, 40) &&
+        isNonEmptyString(data.status_code, 40) &&
         hasMatchingOrderStatuses(data.status, data.orderStatus, data.status_code) &&
         data.status in ['pending', 'PENDING'] &&
-        data.orderStatus == 'PENDING' &&
-        (data.status_code == null || data.status_code == 'PENDING') &&
+        data.orderStatus == 'WAITING' &&
+        data.status_code == 'WAITING' &&
         (data.paymentStatus == null || data.paymentStatus in ['PENDING', 'pending']) &&
+        (data.rejectReason == null || data.rejectReason == '') &&
         (data.rejectionReason == null || data.rejectionReason == '') &&
+        (data.cancelledBy == null || data.cancelledBy == '') &&
         (data.cancellationReason == null || data.cancellationReason == '') &&
         isValidLocation(data.customerLocation) &&
         isValidLocation(data.customer_location) &&
@@ -418,7 +513,7 @@ service cloud.firestore {
         isValidOrderTimestamps(data.timestamps) &&
         isOptionalTimestamp(data.createdAt) &&
         isOptionalTimestamp(data.created_at) &&
-        isOptionalTimestamp(data.updatedAt) &&
+        data.updatedAt is timestamp &&
         isOptionalTimestamp(data.updated_at) &&
         (data.assignedAgentId == null || data.assignedAgentId == '') &&
         (data.assignedAgentName == null || data.assignedAgentName == '') &&
@@ -447,10 +542,12 @@ service cloud.firestore {
         'status',
         'orderStatus',
         'status_code',
+        'rejectReason',
         'paymentStatus',
         'payment_status',
         'rejectionReason',
         'rejection_reason',
+        'cancelledBy',
         'cancellationReason',
         'cancellation_reason',
         'updatedAt',
@@ -498,7 +595,12 @@ service cloud.firestore {
         'agentName',
         'agentPhone',
         'agentEmail',
-        'agentVehicle'
+        'agentVehicle',
+        'delivery_agent_id',
+        'delivery_agent_name',
+        'delivery_agent_phone',
+        'delivery_agent_email',
+        'delivery_agent_vehicle'
       ]);
     }
 
@@ -531,11 +633,14 @@ service cloud.firestore {
         ) &&
         isValidPaymentStatus(request.resource.data.paymentStatus) &&
         isValidPaymentStatus(request.resource.data.payment_status) &&
+        isOptionalString(request.resource.data.rejectReason, 500) &&
         isOptionalString(request.resource.data.rejectionReason, 500) &&
         isOptionalString(request.resource.data.rejection_reason, 500) &&
         isOptionalString(request.resource.data.cancellationReason, 500) &&
         isOptionalString(request.resource.data.cancellation_reason, 500) &&
-        isOptionalString(request.resource.data.status_code, 40) &&
+        isNonEmptyString(request.resource.data.status_code, 40) &&
+        hasValidRejectedFields(request.resource.data) &&
+        hasValidCancelledFields(request.resource.data) &&
         isOptionalString(request.resource.data.assignedAgentId, 120) &&
         isOptionalString(request.resource.data.assignedAgentName, 120) &&
         isOptionalString(request.resource.data.assignedAgentPhone, 30) &&
@@ -551,10 +656,16 @@ service cloud.firestore {
         isOptionalString(request.resource.data.agentPhone, 30) &&
         isOptionalString(request.resource.data.agentEmail, 320) &&
         isOptionalString(request.resource.data.agentVehicle, 120) &&
+        isOptionalString(request.resource.data.delivery_agent_id, 120) &&
+        isOptionalString(request.resource.data.delivery_agent_name, 120) &&
+        isOptionalString(request.resource.data.delivery_agent_phone, 30) &&
+        isOptionalString(request.resource.data.delivery_agent_email, 320) &&
+        isOptionalString(request.resource.data.delivery_agent_vehicle, 120) &&
+        requiresAssignedAgentForDeliveryAction(request.resource.data) &&
         isValidLocation(request.resource.data.deliveryLocation) &&
         isValidLocation(request.resource.data.delivery_location) &&
         isValidOrderTimestamps(request.resource.data.timestamps) &&
-        isOptionalTimestamp(request.resource.data.updatedAt) &&
+        request.resource.data.updatedAt is timestamp &&
         isOptionalTimestamp(request.resource.data.updated_at) &&
         isOptionalTimestamp(request.resource.data.acceptedAt) &&
         isOptionalTimestamp(request.resource.data.accepted_at) &&
@@ -581,7 +692,161 @@ service cloud.firestore {
         isOptionalTimestamp(request.resource.data.rejectedAt) &&
         isOptionalTimestamp(request.resource.data.rejected_at) &&
         isOptionalTimestamp(request.resource.data.cancelledAt) &&
-        isOptionalTimestamp(request.resource.data.cancelled_at);
+        isOptionalTimestamp(request.resource.data.cancelled_at) &&
+        (
+          (
+            isWaitingLikeOrderStatus(
+              resource.data.status,
+              resource.data.orderStatus,
+              resource.data.status_code,
+            ) &&
+            isPreparingLikeOrderStatus(
+              request.resource.data.status,
+              request.resource.data.orderStatus,
+              request.resource.data.status_code,
+            )
+          ) ||
+          (
+            isWaitingLikeOrderStatus(
+              resource.data.status,
+              resource.data.orderStatus,
+              resource.data.status_code,
+            ) &&
+            isRejectedOrderStatus(
+              request.resource.data.status,
+              request.resource.data.orderStatus,
+              request.resource.data.status_code,
+            )
+          ) ||
+          (
+            isPreparingLikeOrderStatus(
+              resource.data.status,
+              resource.data.orderStatus,
+              resource.data.status_code,
+            ) &&
+            isPreparingLikeOrderStatus(
+              request.resource.data.status,
+              request.resource.data.orderStatus,
+              request.resource.data.status_code,
+            )
+          ) ||
+          (
+            isPreparingLikeOrderStatus(
+              resource.data.status,
+              resource.data.orderStatus,
+              resource.data.status_code,
+            ) &&
+            isOutForDeliveryOrderStatus(
+              request.resource.data.status,
+              request.resource.data.orderStatus,
+              request.resource.data.status_code,
+            )
+          ) ||
+          (
+            isOutForDeliveryOrderStatus(
+              resource.data.status,
+              resource.data.orderStatus,
+              resource.data.status_code,
+            ) &&
+            isDeliveredOrderStatus(
+              request.resource.data.status,
+              request.resource.data.orderStatus,
+              request.resource.data.status_code,
+            )
+          )
+        );
+    }
+
+    function hasOnlyCustomerManagedOrderChanges() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        'status',
+        'orderStatus',
+        'status_code',
+        'cancelledBy',
+        'cancellationReason',
+        'cancellation_reason',
+        'updatedAt',
+        'updated_at',
+        'timestamps',
+        'cancelledAt',
+        'cancelled_at'
+      ]);
+    }
+
+    function isValidCustomerOrderUpdate() {
+      return hasAllowedOrderKeys(request.resource.data) &&
+        hasOnlyCustomerManagedOrderChanges() &&
+        isOwner(resource.data.userId) &&
+        request.resource.data.orderId == resource.data.orderId &&
+        request.resource.data.userId == resource.data.userId &&
+        request.resource.data.name == resource.data.name &&
+        request.resource.data.phone == resource.data.phone &&
+        request.resource.data.address == resource.data.address &&
+        request.resource.data.items == resource.data.items &&
+        request.resource.data.subtotal == resource.data.subtotal &&
+        request.resource.data.discount == resource.data.discount &&
+        request.resource.data.deliveryFee == resource.data.deliveryFee &&
+        request.resource.data.couponCode == resource.data.couponCode &&
+        request.resource.data.totalAmount == resource.data.totalAmount &&
+        request.resource.data.finalAmount == resource.data.finalAmount &&
+        request.resource.data.paymentMode == resource.data.paymentMode &&
+        request.resource.data.paymentStatus == resource.data.paymentStatus &&
+        request.resource.data.payment_status == resource.data.payment_status &&
+        request.resource.data.rejectReason == resource.data.rejectReason &&
+        request.resource.data.rejectionReason == resource.data.rejectionReason &&
+        request.resource.data.rejection_reason == resource.data.rejection_reason &&
+        request.resource.data.assignedAgentId == resource.data.assignedAgentId &&
+        request.resource.data.assignedAgentName == resource.data.assignedAgentName &&
+        request.resource.data.assignedAgentPhone == resource.data.assignedAgentPhone &&
+        request.resource.data.assignedAgentEmail == resource.data.assignedAgentEmail &&
+        request.resource.data.assignedAgentVehicle == resource.data.assignedAgentVehicle &&
+        request.resource.data.deliveryAgentId == resource.data.deliveryAgentId &&
+        request.resource.data.deliveryAgentName == resource.data.deliveryAgentName &&
+        request.resource.data.deliveryAgentPhone == resource.data.deliveryAgentPhone &&
+        request.resource.data.deliveryAgentEmail == resource.data.deliveryAgentEmail &&
+        request.resource.data.deliveryAgentVehicle == resource.data.deliveryAgentVehicle &&
+        request.resource.data.agentId == resource.data.agentId &&
+        request.resource.data.agentName == resource.data.agentName &&
+        request.resource.data.agentPhone == resource.data.agentPhone &&
+        request.resource.data.agentEmail == resource.data.agentEmail &&
+        request.resource.data.agentVehicle == resource.data.agentVehicle &&
+        request.resource.data.delivery_agent_id == resource.data.delivery_agent_id &&
+        request.resource.data.delivery_agent_name == resource.data.delivery_agent_name &&
+        request.resource.data.delivery_agent_phone == resource.data.delivery_agent_phone &&
+        request.resource.data.delivery_agent_email == resource.data.delivery_agent_email &&
+        request.resource.data.delivery_agent_vehicle == resource.data.delivery_agent_vehicle &&
+        request.resource.data.customerLocation == resource.data.customerLocation &&
+        request.resource.data.customer_location == resource.data.customer_location &&
+        request.resource.data.deliveryLocation == resource.data.deliveryLocation &&
+        request.resource.data.delivery_location == resource.data.delivery_location &&
+        request.resource.data.createdAt == resource.data.createdAt &&
+        request.resource.data.created_at == resource.data.created_at &&
+        isValidOrderStatus(request.resource.data.status) &&
+        isValidOrderStatus(request.resource.data.orderStatus) &&
+        hasMatchingOrderStatuses(
+          request.resource.data.status,
+          request.resource.data.orderStatus,
+          request.resource.data.status_code,
+        ) &&
+        isNonEmptyString(request.resource.data.status_code, 40) &&
+        request.resource.data.updatedAt is timestamp &&
+        isOptionalTimestamp(request.resource.data.updated_at) &&
+        isOptionalString(request.resource.data.cancellationReason, 500) &&
+        isOptionalString(request.resource.data.cancellation_reason, 500) &&
+        hasValidCancelledFields(request.resource.data) &&
+        isValidOrderTimestamps(request.resource.data.timestamps) &&
+        isOptionalTimestamp(request.resource.data.cancelledAt) &&
+        isOptionalTimestamp(request.resource.data.cancelled_at) &&
+        isWaitingLikeOrderStatus(
+          resource.data.status,
+          resource.data.orderStatus,
+          resource.data.status_code,
+        ) &&
+        isCancelledOrderStatus(
+          request.resource.data.status,
+          request.resource.data.orderStatus,
+          request.resource.data.status_code,
+        );
     }
 
     function hasOnlyAgentManagedOrderChanges() {
@@ -589,6 +854,8 @@ service cloud.firestore {
         'status',
         'orderStatus',
         'status_code',
+        'rejectReason',
+        'cancelledBy',
         'updatedAt',
         'updated_at',
         'pickedAt',
@@ -623,8 +890,10 @@ service cloud.firestore {
         request.resource.data.paymentMode == resource.data.paymentMode &&
         request.resource.data.paymentStatus == resource.data.paymentStatus &&
         request.resource.data.payment_status == resource.data.payment_status &&
+        request.resource.data.rejectReason == resource.data.rejectReason &&
         request.resource.data.rejectionReason == resource.data.rejectionReason &&
         request.resource.data.rejection_reason == resource.data.rejection_reason &&
+        request.resource.data.cancelledBy == resource.data.cancelledBy &&
         request.resource.data.cancellationReason == resource.data.cancellationReason &&
         request.resource.data.cancellation_reason == resource.data.cancellation_reason &&
         request.resource.data.assignedAgentId == resource.data.assignedAgentId &&
@@ -642,6 +911,11 @@ service cloud.firestore {
         request.resource.data.agentPhone == resource.data.agentPhone &&
         request.resource.data.agentEmail == resource.data.agentEmail &&
         request.resource.data.agentVehicle == resource.data.agentVehicle &&
+        request.resource.data.delivery_agent_id == resource.data.delivery_agent_id &&
+        request.resource.data.delivery_agent_name == resource.data.delivery_agent_name &&
+        request.resource.data.delivery_agent_phone == resource.data.delivery_agent_phone &&
+        request.resource.data.delivery_agent_email == resource.data.delivery_agent_email &&
+        request.resource.data.delivery_agent_vehicle == resource.data.delivery_agent_vehicle &&
         request.resource.data.customerLocation == resource.data.customerLocation &&
         request.resource.data.customer_location == resource.data.customer_location &&
         request.resource.data.createdAt == resource.data.createdAt &&
@@ -649,6 +923,8 @@ service cloud.firestore {
         isValidLocation(request.resource.data.deliveryLocation) &&
         isValidLocation(request.resource.data.delivery_location) &&
         isValidOrderTimestamps(request.resource.data.timestamps) &&
+        isNonEmptyString(request.resource.data.status_code, 40) &&
+        request.resource.data.updatedAt is timestamp &&
         (
           (
             isOutForDeliveryOrderStatus(
@@ -920,6 +1196,41 @@ service cloud.firestore {
         isOptionalTimestamp(data.updatedAt);
     }
 
+    function hasAllowedNotificationKeys(data) {
+      return data.keys().hasOnly([
+        'userId',
+        'role',
+        'title',
+        'body',
+        'createdAt',
+        'updatedAt',
+        'read',
+        'url',
+        'tag',
+        'orderId',
+        'status'
+      ]);
+    }
+
+    function isValidNotificationRole(value) {
+      return value is string && value in ['admin', 'customer', 'delivery_agent'];
+    }
+
+    function isValidNotificationDocument(data) {
+      return hasAllowedNotificationKeys(data) &&
+        isNonEmptyString(data.userId, 120) &&
+        isValidNotificationRole(data.role) &&
+        isNonEmptyString(data.title, 160) &&
+        isOptionalString(data.body, 1000) &&
+        data.read is bool &&
+        isOptionalString(data.url, 512) &&
+        isOptionalString(data.tag, 160) &&
+        isOptionalString(data.orderId, 120) &&
+        isOptionalString(data.status, 60) &&
+        isOptionalTimestamp(data.createdAt) &&
+        isOptionalTimestamp(data.updatedAt);
+    }
+
     // menu_items: public catalog, admin-managed writes
     match /menu_items/{itemId} {
       allow read: if true;
@@ -953,6 +1264,7 @@ service cloud.firestore {
       allow create: if false;
       allow update: if
         (isAdmin() && isValidAdminOrderUpdate()) ||
+        isValidCustomerOrderUpdate() ||
         (isDeliveryAgent() && isValidAgentOrderUpdate());
       allow delete: if false;
     }
@@ -991,6 +1303,26 @@ service cloud.firestore {
         ) &&
         isValidDeliverySessionDocument(request.resource.data, orderId);
       allow delete: if isAdmin();
+    }
+
+    match /notifications/{notificationId} {
+      allow read: if isOwner(resource.data.userId);
+      allow create: if false;
+      allow update: if
+        isOwner(resource.data.userId) &&
+        request.resource.data.userId == resource.data.userId &&
+        request.resource.data.role == resource.data.role &&
+        request.resource.data.title == resource.data.title &&
+        request.resource.data.body == resource.data.body &&
+        request.resource.data.createdAt == resource.data.createdAt &&
+        request.resource.data.url == resource.data.url &&
+        request.resource.data.tag == resource.data.tag &&
+        request.resource.data.orderId == resource.data.orderId &&
+        request.resource.data.status == resource.data.status &&
+        request.resource.data.read is bool &&
+        isOptionalTimestamp(request.resource.data.updatedAt) &&
+        isValidNotificationDocument(request.resource.data);
+      allow delete: if false;
     }
 
     match /agent_locations/{orderId} {

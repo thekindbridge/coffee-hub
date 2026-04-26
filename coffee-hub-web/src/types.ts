@@ -55,6 +55,20 @@ export interface DeliverySession {
   completed_at?: string;
 }
 
+export interface AppNotification {
+  id: string;
+  user_id: string;
+  role: 'admin' | 'customer' | 'delivery_agent';
+  title: string;
+  body: string;
+  created_at: string;
+  read: boolean;
+  url?: string;
+  tag?: string;
+  order_id?: string;
+  status?: string;
+}
+
 export interface DeliveryRouteMetrics {
   distance_meters: number | null;
   distance_text: string;

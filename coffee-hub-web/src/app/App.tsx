@@ -30,6 +30,9 @@ export default function App() {
     isAuthReady: session.isAuthReady,
     isLoggedIn: session.isLoggedIn,
     currentUserId: session.currentUserId,
+    currentUserPhone: session.currentUserPhone,
+    isDeliveryAgent: session.isDeliveryAgent,
+    role: session.role,
   });
 
   const offersState = useOffers({

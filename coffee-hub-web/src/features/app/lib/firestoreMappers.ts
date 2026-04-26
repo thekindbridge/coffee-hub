@@ -4,6 +4,7 @@ import {
   normalizeOrderStatusCode,
 } from '../../../../shared/orderStatus';
 import type {
+  AppNotification,
   DeliveryAgent,
   DeliveryLocation,
   DeliverySession,
@@ -148,6 +149,31 @@ export const mapDeliverySessionDocToSession = (
   snapshot: QueryDocumentSnapshot,
 ): DeliverySession =>
   mapDeliverySessionRecordToSession(snapshot.id, snapshot.data() as Record<string, unknown>);
+
+export const mapNotificationRecordToNotification = (
+  notificationId: string,
+  data: Record<string, unknown>,
+): AppNotification => ({
+  id: notificationId,
+  body: `${data.body || ''}`.trim(),
+  created_at: mapTimestampToIsoString(data.createdAt) || FALLBACK_TIMESTAMP_ISO,
+  order_id: `${data.orderId || ''}`.trim(),
+  read: data.read === true,
+  role:
+    data.role === 'admin' || data.role === 'delivery_agent'
+      ? data.role
+      : 'customer',
+  status: `${data.status || ''}`.trim(),
+  tag: `${data.tag || ''}`.trim(),
+  title: `${data.title || ''}`.trim(),
+  url: `${data.url || ''}`.trim(),
+  user_id: `${data.userId || ''}`.trim(),
+});
+
+export const mapNotificationDocToNotification = (
+  snapshot: QueryDocumentSnapshot,
+): AppNotification =>
+  mapNotificationRecordToNotification(snapshot.id, snapshot.data() as Record<string, unknown>);
 
 export const normalizeOrderStatus = (status: unknown): Order['status'] =>
   getOrderStatusLabel(normalizeOrderStatusCode(status));
@@ -359,7 +385,9 @@ export const mapOrderRecordToOrder = (
   const createdAt = createdAtValue?.toDate()?.toISOString() || FALLBACK_TIMESTAMP_ISO;
   const updatedAt = updatedAtValue?.toDate()?.toISOString() || '';
   const orderId = ((data.orderId as string) || docId).toUpperCase();
-  const statusCode = normalizeOrderStatusCode(data.status ?? data.orderStatus);
+  const statusCode = normalizeOrderStatusCode(
+    data.status_code ?? data.status ?? data.orderStatus,
+  );
   const subtotal = Number(data.subtotal ?? data.totalAmount ?? data.finalTotal ?? data.total ?? 0);
   const discount = Number(data.discount || 0);
   const deliveryFee = Number(data.deliveryFee || 0);
@@ -428,8 +456,10 @@ export const mapOrderRecordToOrder = (
     final_total: finalTotal,
     status: getOrderStatusLabel(statusCode),
     status_code: statusCode,
-    rejection_reason: ((data.rejectionReason as string) || '').trim(),
-    cancellation_reason: ((data.cancellationReason as string) || '').trim(),
+    rejection_reason: (((data.rejectionReason ?? data.rejectReason) as string) || '').trim(),
+    cancellation_reason: (
+      ((data.cancellationReason ?? data.cancellation_reason) as string) || ''
+    ).trim(),
     payment_method: normalizePaymentMethod(data.paymentMode ?? data.paymentMethod),
     payment_status: normalizePaymentStatus(data.paymentStatus),
     created_at: createdAt,

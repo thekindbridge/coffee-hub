@@ -3,12 +3,15 @@ import type {
   AgentTrackerPermissionState,
   AgentTrackerStatus,
 } from '../../agent/agentTracker';
+import type { AgentStatus } from '../../features/app/types';
 import type { DeliveryAgent, DeliverySession } from '../../types';
 import { formatDateTime } from '../utils/formatTime';
 
 export interface ProfilePageProps {
   deliveryAgent: DeliveryAgent | null;
   deliverySession: DeliverySession | null;
+  isAvailabilitySaving?: boolean;
+  onAvailabilityChange?: (status: AgentStatus) => void | Promise<void>;
   permissionState: AgentTrackerPermissionState;
   trackerStatus: AgentTrackerStatus;
 }
@@ -16,6 +19,8 @@ export interface ProfilePageProps {
 export const ProfilePage = ({
   deliveryAgent,
   deliverySession,
+  isAvailabilitySaving = false,
+  onAvailabilityChange,
   permissionState,
   trackerStatus,
 }: ProfilePageProps) => (
@@ -52,6 +57,33 @@ export const ProfilePage = ({
         <p className="mt-2 text-lg font-black capitalize text-ink">
           {deliveryAgent?.status || (deliveryAgent?.is_active ? 'available' : 'offline')}
         </p>
+        {onAvailabilityChange && (
+          <div className="mt-4 flex gap-2">
+            {(['Available', 'Offline'] as AgentStatus[]).map(status => {
+              const isActive = (
+                deliveryAgent?.status || (deliveryAgent?.is_active ? 'available' : 'offline')
+              ).toLowerCase() === status.toLowerCase();
+
+              return (
+                <button
+                  key={status}
+                  type="button"
+                  onClick={() => {
+                    void onAvailabilityChange(status);
+                  }}
+                  disabled={isAvailabilitySaving || isActive}
+                  className={`inline-flex min-h-10 flex-1 items-center justify-center rounded-full px-4 text-xs font-semibold uppercase tracking-[0.18em] transition ${
+                    isActive
+                      ? 'border border-[#d7b26d]/40 bg-[#d7b26d]/14 text-[#f4d58e]'
+                      : 'border border-white/10 bg-white/5 text-ink-muted hover:text-accent'
+                  } disabled:cursor-not-allowed disabled:opacity-60`}
+                >
+                  {isAvailabilitySaving && isActive ? 'Saving...' : status}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </article>
 
       <article className="rounded-[26px] border border-white/10 bg-white/5 p-4">
