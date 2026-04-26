@@ -31,12 +31,12 @@ import { DEFAULT_TRACKER_STATUS } from '../../app/lib/constants';
 type UseOrderOperationsParams = {
   adminOrders: Order[];
   setAdminOrders: Dispatch<SetStateAction<Order[]>>;
+  agentOrders: Order[];
   userOrders: Order[];
   setUserOrders: Dispatch<SetStateAction<Order[]>>;
   orderStatus: Order | null;
   setOrderStatus: Dispatch<SetStateAction<Order | null>>;
   setNewOrderDocIds: Dispatch<SetStateAction<string[]>>;
-  currentDeliveryOrder: Order | null;
   currentDeliveryAgent: DeliveryAgent | null;
   normalizedCurrentPhone: string;
   agentTrackerRef: MutableRefObject<ReturnType<typeof createAgentTracker> | null>;
@@ -52,12 +52,12 @@ type UseOrderOperationsParams = {
 export const useOrderOperations = ({
   adminOrders,
   setAdminOrders,
+  agentOrders,
   userOrders,
   setUserOrders,
   orderStatus,
   setOrderStatus,
   setNewOrderDocIds,
-  currentDeliveryOrder,
   currentDeliveryAgent,
   normalizedCurrentPhone,
   agentTrackerRef,
@@ -92,19 +92,28 @@ export const useOrderOperations = ({
     accuracy: location.accuracy ?? null,
   });
 
-  const handleStartDelivery = async () => {
-    if (!currentDeliveryOrder?.customer_location) {
+  const resolveAgentOrder = (orderDocId: string) => (
+    agentOrders.find(order => order.doc_id === orderDocId) ||
+    adminOrders.find(order => order.doc_id === orderDocId) ||
+    userOrders.find(order => order.doc_id === orderDocId) ||
+    (orderStatus?.doc_id === orderDocId ? orderStatus : null)
+  );
+
+  const handleStartDelivery = async (orderDocId: string) => {
+    const orderToStart = resolveAgentOrder(orderDocId);
+
+    if (!orderToStart?.customer_location) {
       dialogAdapter.alert('This order is missing customer coordinates, so live delivery cannot start.');
       return;
     }
 
-    if (currentDeliveryOrder.status_code !== 'OUT_FOR_DELIVERY') {
+    if (orderToStart.status_code !== 'OUT_FOR_DELIVERY') {
       dialogAdapter.alert('Tracking can only start once the order is out for delivery.');
       return;
     }
 
     const agentId =
-      currentDeliveryOrder.delivery_agent_id ||
+      orderToStart.delivery_agent_id ||
       currentDeliveryAgent?.id ||
       normalizedCurrentPhone;
     if (!agentId) {
@@ -135,7 +144,8 @@ export const useOrderOperations = ({
           );
         },
         orderDocId: currentDeliveryOrder.doc_id,
-        orderId: currentDeliveryOrder.id,
+        orderDocId: orderToStart.doc_id,
+        orderId: orderToStart.id,
       });
 
       agentTrackerRef.current = tracker;
@@ -145,17 +155,17 @@ export const useOrderOperations = ({
         return;
       }
 
-      trackedOrderIdRef.current = currentDeliveryOrder.id;
+      trackedOrderIdRef.current = orderToStart.id;
 
       await persistActiveDeliverySession({
         agentId,
         agentName:
           currentDeliveryAgent?.name ||
-          currentDeliveryOrder.delivery_agent_name ||
+          orderToStart.delivery_agent_name ||
           'Assigned agent',
-        customerLocation: currentDeliveryOrder.customer_location,
-        orderDocId: currentDeliveryOrder.doc_id,
-        orderId: currentDeliveryOrder.id,
+        customerLocation: orderToStart.customer_location,
+        orderDocId: orderToStart.doc_id,
+        orderId: orderToStart.id,
       });
     } catch (error) {
       console.error('Failed to start delivery tracking', error);
@@ -173,10 +183,7 @@ export const useOrderOperations = ({
 
   const handleEndDelivery = async (orderDocId: string) => {
     const orderToComplete =
-      (currentDeliveryOrder?.doc_id === orderDocId ? currentDeliveryOrder : null) ||
-      adminOrders.find(order => order.doc_id === orderDocId) ||
-      userOrders.find(order => order.doc_id === orderDocId) ||
-      (orderStatus?.doc_id === orderDocId ? orderStatus : null);
+      resolveAgentOrder(orderDocId);
 
     if (!orderToComplete) {
       dialogAdapter.alert('Unable to find the order for this delivery.');

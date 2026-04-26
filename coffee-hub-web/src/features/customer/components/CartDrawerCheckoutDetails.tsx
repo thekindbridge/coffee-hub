@@ -4,6 +4,7 @@ import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import { CURRENCY_SYMBOL } from '../../app/lib/constants';
 import type { CartItem, CheckoutCustomerDetails } from '../../../types';
 import type { SavedAddressOption, SelectedAddressIndex } from '../../app/types';
+import type { LocationSettingsTarget } from '../../../services/platform/locationAdapter';
 
 type CartDrawerCheckoutDetailsProps = {
   cart: CartItem[];
@@ -28,6 +29,7 @@ type CartDrawerCheckoutDetailsProps = {
   isLocatingCustomer: boolean;
   customerLocationError: string;
   canOpenLocationSettings: boolean;
+  locationSettingsTarget: LocationSettingsTarget | null;
   hasCheckoutAddressSelectionRef: MutableRefObject<boolean>;
   onCaptureLocation: () => void;
   onOpenLocationSettings: () => void;
@@ -56,11 +58,23 @@ export const CartDrawerCheckoutDetails = ({
   isLocatingCustomer,
   customerLocationError,
   canOpenLocationSettings,
+  locationSettingsTarget,
   hasCheckoutAddressSelectionRef,
   onCaptureLocation,
   onOpenLocationSettings,
-}: CartDrawerCheckoutDetailsProps) => (
-  <div className="space-y-5">
+}: CartDrawerCheckoutDetailsProps) => {
+  const locationButtonLabel = isLocatingCustomer
+    ? 'Fetching...'
+    : customerDetails.location
+      ? 'Refresh Location'
+      : 'Fetch Location';
+
+  const locationSettingsLabel = locationSettingsTarget === 'location'
+    ? 'Open GPS Settings'
+    : 'Open App Settings';
+
+  return (
+    <div className="space-y-5">
     {!isShopOpen && (
       <div className="rounded-[24px] border border-[#f4c16e]/24 bg-[linear-gradient(135deg,rgba(244,193,110,0.12),rgba(65,43,26,0.74))] px-4 py-3 text-sm text-[#fff0d5]">
         <p className="font-semibold text-accent">Ordering update</p>
@@ -275,26 +289,52 @@ export const CartDrawerCheckoutDetails = ({
           <label className="block text-[11px] font-semibold uppercase tracking-[0.22em] text-ink-muted">
             Live Delivery Location
           </label>
+          <p className="mt-2 max-w-[22rem] text-xs leading-5 text-ink-muted">
+            GPS helps the admin and delivery team find you faster. You can still place the order with your address if location is unavailable.
+          </p>
         </div>
         <button
           onClick={onCaptureLocation}
           disabled={isLocatingCustomer}
           className="coffee-btn-primary min-h-11 px-4 text-[11px] uppercase tracking-[0.18em] disabled:opacity-60"
         >
-          {isLocatingCustomer ? 'Locating...' : 'Location'}
+          {locationButtonLabel}
         </button>
       </div>
       <div className="mt-4 rounded-[18px] border border-white/10 bg-[#120d0b]/80 px-4 py-3 text-sm">
         {customerDetails.location ? (
-          <p className="font-semibold text-accent">Location captured successfully.</p>
+          <>
+            <p className="font-semibold text-accent">Live location added successfully.</p>
+            <p className="mt-1 text-xs leading-5 text-ink-muted">
+              Accuracy:{' '}
+              {typeof customerDetails.location.accuracy === 'number'
+                ? `${Math.round(customerDetails.location.accuracy)}m`
+                : 'Waiting for GPS accuracy'}
+            </p>
+          </>
+        ) : isLocatingCustomer ? (
+          <>
+            <p className="font-semibold text-accent">Fetching your location...</p>
+            <p className="mt-1 text-xs leading-5 text-ink-muted">
+              Keep GPS on and wait a few seconds. Some low-end devices may take longer to lock the signal.
+            </p>
+          </>
         ) : (
-          <p className="text-ink-muted">Location not added yet.</p>
+          <>
+            <p className="font-semibold text-accent">Location not added yet.</p>
+            <p className="mt-1 text-xs leading-5 text-ink-muted">
+              Turn on GPS for better accuracy, then tap Fetch Location whenever you are ready.
+            </p>
+          </>
         )}
       </div>
       {customerLocationError && (
         <div className="mt-3 rounded-[18px] border border-primary/25 bg-primary/10 px-3 py-3">
           <p className="text-xs font-semibold text-primary">
             {customerLocationError}
+          </p>
+          <p className="mt-2 text-xs leading-5 text-[#f5ddbb]">
+            You can retry now, or continue checkout with your delivery address.
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             <button
@@ -303,7 +343,7 @@ export const CartDrawerCheckoutDetails = ({
               disabled={isLocatingCustomer}
               className="coffee-btn-secondary min-h-10 px-3 text-[11px] uppercase tracking-[0.14em] disabled:opacity-60"
             >
-              {isLocatingCustomer ? 'Requesting...' : 'Enable Location'}
+              {isLocatingCustomer ? 'Fetching...' : 'Retry'}
             </button>
             {canOpenLocationSettings && (
               <button
@@ -311,7 +351,7 @@ export const CartDrawerCheckoutDetails = ({
                 onClick={onOpenLocationSettings}
                 className="coffee-btn-secondary min-h-10 px-3 text-[11px] uppercase tracking-[0.14em]"
               >
-                Open Settings
+                {locationSettingsLabel}
               </button>
             )}
           </div>
@@ -340,4 +380,5 @@ export const CartDrawerCheckoutDetails = ({
       </div>
     )}
   </div>
-);
+  );
+};

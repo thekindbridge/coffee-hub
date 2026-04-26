@@ -119,7 +119,7 @@ export class AgentTracker {
       geolocationOptions: options.geolocationOptions ?? {
         enableHighAccuracy: true,
         maximumAgeMs: 0,
-        timeoutMs: 15000,
+        timeoutMs: 18000,
       },
     };
   }

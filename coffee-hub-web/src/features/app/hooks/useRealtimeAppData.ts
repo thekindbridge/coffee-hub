@@ -81,7 +81,12 @@ export const useRealtimeAppData = () => {
     // Delivery
     deliveryAgents: delivery.deliveryAgents,
     deliverySessions: delivery.deliverySessions,
+    agentNewOrders: delivery.agentNewOrders,
+    agentInProgressOrders: delivery.agentInProgressOrders,
+    agentCompletedOrders: delivery.agentCompletedOrders,
     agentOrders: delivery.agentOrders,
+    agentOrdersError: delivery.agentOrdersError,
+    isAgentOrdersLoading: delivery.isAgentOrdersLoading,
     agentTrackerRef: delivery.agentTrackerRef,
     trackedOrderIdRef: delivery.trackedOrderIdRef,
     isAgentTracking: delivery.isAgentTracking,

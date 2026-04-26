@@ -3,6 +3,11 @@ import { Geolocation, type PermissionStatus } from '@capacitor/geolocation';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { PushNotifications } from '@capacitor/push-notifications';
 import type { DeliveryLocation } from '../../types';
+import type { LocationSettingsTarget } from './locationAdapter';
+import {
+  openNativeAppSettings,
+  openNativeLocationSettings,
+} from '../native/locationSettingsService';
 
 export type AppPermissionState =
   | 'default'
@@ -17,13 +22,16 @@ export type LocationPermissionResult = {
   location: DeliveryLocation | null;
   message?: string;
   requiresSettings: boolean;
+  settingsTarget: LocationSettingsTarget | null;
   state: AppPermissionState;
 };
 
 const LOCATION_PERMISSION_MESSAGE =
-  'Location access is required to deliver your order.';
+  'Permission required to get your location.';
 const LOCATION_SETTINGS_MESSAGE =
-  'Please enable location permission from Settings.';
+  'Open App Settings and allow location access.';
+const LOCATION_SERVICES_MESSAGE =
+  'Turn on GPS for better accuracy.';
 const NOTIFICATION_UNSUPPORTED_MESSAGE =
   'Notifications are not supported on this device.';
 
@@ -64,6 +72,96 @@ const getBrowserNotificationState = (): AppPermissionState => {
   }
 
   return Notification.permission;
+};
+
+const getLocationErrorDetails = (error: unknown) => {
+  if (error && typeof error === 'object') {
+    const data = error as {
+      code?: unknown;
+      localizedMessage?: unknown;
+      message?: unknown;
+    };
+
+    return {
+      code: typeof data.code === 'string' ? data.code : '',
+      message:
+        typeof data.message === 'string' && data.message.trim()
+          ? data.message.trim()
+          : typeof data.localizedMessage === 'string' && data.localizedMessage.trim()
+            ? data.localizedMessage.trim()
+            : '',
+    };
+  }
+
+  if (error instanceof Error) {
+    return {
+      code: '',
+      message: error.message.trim(),
+    };
+  }
+
+  return {
+    code: '',
+    message: '',
+  };
+};
+
+const mapLocationPermissionFailure = (
+  error: unknown,
+): Omit<LocationPermissionResult, 'location'> => {
+  const { code, message } = getLocationErrorDetails(error);
+  const normalizedMessage = message.toLowerCase();
+
+  if (
+    code === 'OS-PLUG-GLOC-0007' ||
+    code === 'OS-PLUG-GLOC-0009' ||
+    code === 'OS-PLUG-GLOC-0016' ||
+    code === 'OS-PLUG-GLOC-0017' ||
+    normalizedMessage.includes('location services are not enabled') ||
+    normalizedMessage.includes('request to enable location was denied') ||
+    normalizedMessage.includes('both network and location turned off')
+  ) {
+    return {
+      message: LOCATION_SERVICES_MESSAGE,
+      requiresSettings: true,
+      settingsTarget: 'location',
+      state: 'unavailable',
+    };
+  }
+
+  if (
+    code === 'OS-PLUG-GLOC-0003' ||
+    normalizedMessage.includes('location permission') ||
+    normalizedMessage.includes('permission request was denied') ||
+    normalizedMessage.includes('permission was denied') ||
+    normalizedMessage.includes('user denied geolocation')
+  ) {
+    return {
+      message: LOCATION_SETTINGS_MESSAGE,
+      requiresSettings: true,
+      settingsTarget: 'app',
+      state: 'denied',
+    };
+  }
+
+  if (
+    normalizedMessage.includes('not supported') ||
+    normalizedMessage.includes('not implemented on web')
+  ) {
+    return {
+      message: 'Location is not supported on this device.',
+      requiresSettings: false,
+      settingsTarget: null,
+      state: 'unsupported',
+    };
+  }
+
+  return {
+    message: LOCATION_PERMISSION_MESSAGE,
+    requiresSettings: false,
+    settingsTarget: null,
+    state: 'unavailable',
+  };
 };
 
 export const checkNotificationPermission = async (): Promise<AppPermissionState> => {
@@ -140,54 +238,20 @@ const normalizeLocationPermission = (permission: PermissionStatus): AppPermissio
 };
 
 export const checkLocationPermission = async (): Promise<AppPermissionState> => {
-  if (isCapacitorNative()) {
-    return normalizeLocationPermission(await Geolocation.checkPermissions());
-  }
-
-  if (typeof navigator === 'undefined' || !('geolocation' in navigator)) {
+  if (typeof navigator === 'undefined' && !isCapacitorNative()) {
     return 'unsupported';
   }
 
-  if (!('permissions' in navigator) || typeof navigator.permissions.query !== 'function') {
-    return 'unavailable';
-  }
-
   try {
-    const permissionResult = await navigator.permissions.query({
-      name: 'geolocation' as PermissionName,
-    });
+    return normalizeLocationPermission(await Geolocation.checkPermissions());
+  } catch (error) {
+    if (mapLocationPermissionFailure(error).state === 'unsupported') {
+      return 'unsupported';
+    }
 
-    return normalizePermissionState(permissionResult.state);
-  } catch {
     return 'unavailable';
   }
 };
-
-const getBrowserCurrentPosition = () =>
-  new Promise<DeliveryLocation>((resolve, reject) => {
-    if (typeof navigator === 'undefined' || !('geolocation' in navigator)) {
-      reject(new Error('Location is not supported on this device.'));
-      return;
-    }
-
-    navigator.geolocation.getCurrentPosition(
-      position => {
-        resolve({
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
-          accuracy: Number.isFinite(position.coords.accuracy)
-            ? Number(position.coords.accuracy.toFixed(1))
-            : undefined,
-        });
-      },
-      error => reject(error),
-      {
-        enableHighAccuracy: true,
-        maximumAge: 0,
-        timeout: 15000,
-      },
-    );
-  });
 
 export const requestLocationPermission = async (): Promise<LocationPermissionResult> => {
   if (isCapacitorNative()) {
@@ -195,29 +259,48 @@ export const requestLocationPermission = async (): Promise<LocationPermissionRes
     let nextState = beforeRequestState;
 
     if (beforeRequestState !== 'granted') {
-      nextState = normalizeLocationPermission(await Geolocation.requestPermissions());
+      try {
+        nextState = normalizeLocationPermission(await Geolocation.requestPermissions());
+      } catch (error) {
+        return {
+          location: null,
+          ...mapLocationPermissionFailure(error),
+        };
+      }
     }
 
     if (nextState !== 'granted') {
       return {
         location: null,
-        message: nextState === 'denied' ? LOCATION_SETTINGS_MESSAGE : LOCATION_PERMISSION_MESSAGE,
+        message: nextState === 'denied'
+          ? LOCATION_SETTINGS_MESSAGE
+          : LOCATION_PERMISSION_MESSAGE,
         requiresSettings: nextState === 'denied',
+        settingsTarget: nextState === 'denied' ? 'app' : null,
         state: nextState,
       };
     }
 
-    const position = await Geolocation.getCurrentPosition({
-      enableHighAccuracy: true,
-      maximumAge: 0,
-      timeout: 15000,
-    });
+    try {
+      const position = await Geolocation.getCurrentPosition({
+        enableHighAccuracy: true,
+        enableLocationFallback: true,
+        maximumAge: 0,
+        timeout: 18000,
+      });
 
-    return {
-      location: mapNativePosition(position),
-      requiresSettings: false,
-      state: 'granted',
-    };
+      return {
+        location: mapNativePosition(position),
+        requiresSettings: false,
+        settingsTarget: null,
+        state: 'granted',
+      };
+    } catch (error) {
+      return {
+        location: null,
+        ...mapLocationPermissionFailure(error),
+      };
+    }
   }
 
   const permissionState = await checkLocationPermission();
@@ -226,44 +309,58 @@ export const requestLocationPermission = async (): Promise<LocationPermissionRes
       location: null,
       message: 'Location is not supported on this device.',
       requiresSettings: false,
+      settingsTarget: null,
       state: 'unsupported',
     };
   }
 
   try {
+    const position = await Geolocation.getCurrentPosition({
+      enableHighAccuracy: true,
+      maximumAge: 0,
+      timeout: 18000,
+    });
+
     return {
-      location: await getBrowserCurrentPosition(),
+      location: mapNativePosition(position),
       requiresSettings: false,
+      settingsTarget: null,
       state: 'granted',
     };
-  } catch {
+  } catch (error) {
+    const failure = mapLocationPermissionFailure(error);
     const nextState = await checkLocationPermission();
     const isDenied = nextState === 'denied';
 
     return {
       location: null,
-      message: isDenied ? LOCATION_SETTINGS_MESSAGE : LOCATION_PERMISSION_MESSAGE,
-      requiresSettings: isDenied,
+      message: isDenied ? LOCATION_SETTINGS_MESSAGE : failure.message,
+      requiresSettings: isDenied || failure.requiresSettings,
+      settingsTarget: isDenied ? 'app' : failure.settingsTarget,
       state: nextState === 'unavailable' ? permissionState : nextState,
     };
   }
 };
 
-export const openPermissionSettings = async () => {
+export const openPermissionSettings = async (
+  target: LocationSettingsTarget = 'app',
+) => {
   if (!isCapacitorNative()) {
     return false;
   }
 
-  const capacitorWithPlugins = Capacitor as unknown as {
-    Plugins?: Record<string, { openSettings?: () => Promise<void> }>;
-  };
-  const appPlugin = capacitorWithPlugins.Plugins?.App;
-  if (typeof appPlugin?.openSettings !== 'function') {
+  try {
+    if (target === 'location') {
+      await openNativeLocationSettings();
+      return true;
+    }
+
+    await openNativeAppSettings();
+    return true;
+  } catch (error) {
+    console.error('Unable to open permission settings', error);
     return false;
   }
-
-  await appPlugin.openSettings();
-  return true;
 };
 
 export const getFriendlyLocationPermissionMessage = (state: AppPermissionState) => {
@@ -273,6 +370,10 @@ export const getFriendlyLocationPermissionMessage = (state: AppPermissionState) 
 
   if (state === 'unsupported') {
     return 'Location is not supported on this device.';
+  }
+
+  if (state === 'unavailable') {
+    return LOCATION_SERVICES_MESSAGE;
   }
 
   return LOCATION_PERMISSION_MESSAGE;

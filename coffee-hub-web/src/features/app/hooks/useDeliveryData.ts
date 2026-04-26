@@ -9,8 +9,12 @@ import { useDeliveryStatus } from '../../../delivery-agent/hooks/useDeliveryStat
 import type { DeliveryAgent, DeliveryLocation, DeliverySession, Order } from '../../../types';
 
 export type DeliveryData = {
+  agentCompletedOrders: Order[];
+  agentInProgressOrders: Order[];
   agentLastTrackedLocation: DeliveryLocation | null;
+  agentNewOrders: Order[];
   agentOrders: Order[];
+  agentOrdersError: string;
   agentPermissionState: AgentTrackerPermissionState;
   agentTrackerRef: MutableRefObject<ReturnType<typeof createAgentTracker> | null>;
   agentTrackerStatus: AgentTrackerStatus;
@@ -19,6 +23,7 @@ export type DeliveryData = {
   currentDeliverySession: DeliverySession | null;
   deliveryAgents: DeliveryAgent[];
   deliverySessions: DeliverySession[];
+  isAgentOrdersLoading: boolean;
   isAgentTracking: boolean;
   setAgentLastTrackedLocation: Dispatch<SetStateAction<DeliveryLocation | null>>;
   setAgentPermissionState: Dispatch<SetStateAction<AgentTrackerPermissionState>>;
@@ -37,11 +42,15 @@ export const useDeliveryData = (
     isDeliveryAgent,
     normalizedCurrentPhone,
   });
-  const deliveryStatus = useDeliveryStatus(deliveryOrders.currentDeliveryOrder);
+  const deliveryStatus = useDeliveryStatus(deliveryOrders.orders);
 
   return {
+    agentCompletedOrders: deliveryOrders.completedOrders,
+    agentInProgressOrders: deliveryOrders.inProgressOrders,
     agentLastTrackedLocation: deliveryStatus.agentLastTrackedLocation,
+    agentNewOrders: deliveryOrders.newOrders,
     agentOrders: deliveryOrders.orders,
+    agentOrdersError: deliveryOrders.ordersError,
     agentPermissionState: deliveryStatus.agentPermissionState,
     agentTrackerRef: deliveryStatus.agentTrackerRef,
     agentTrackerStatus: deliveryStatus.agentTrackerStatus,
@@ -50,6 +59,7 @@ export const useDeliveryData = (
     currentDeliverySession: deliveryOrders.currentDeliverySession,
     deliveryAgents: deliveryOrders.deliveryAgents,
     deliverySessions: deliveryOrders.deliverySessions,
+    isAgentOrdersLoading: deliveryOrders.isOrdersLoading,
     isAgentTracking: deliveryStatus.isAgentTracking,
     setAgentLastTrackedLocation: deliveryStatus.setAgentLastTrackedLocation,
     setAgentPermissionState: deliveryStatus.setAgentPermissionState,

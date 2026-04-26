@@ -22,6 +22,7 @@ import type {
   SelectedAddressIndex,
 } from '../../app/types';
 import { CartDrawerCheckoutDetails } from './CartDrawerCheckoutDetails';
+import type { LocationSettingsTarget } from '../../../services/platform/locationAdapter';
 
 type CartDrawerProps = {
   isOpen: boolean;
@@ -51,6 +52,7 @@ type CartDrawerProps = {
   isLocatingCustomer: boolean;
   customerLocationError: string;
   canOpenLocationSettings: boolean;
+  locationSettingsTarget: LocationSettingsTarget | null;
   isPlacingOrder: boolean;
   couponInput: string;
   setCouponInput: Dispatch<SetStateAction<string>>;
@@ -102,6 +104,7 @@ export const CartDrawer = ({
   isLocatingCustomer,
   customerLocationError,
   canOpenLocationSettings,
+  locationSettingsTarget,
   isPlacingOrder,
   couponInput,
   setCouponInput,
@@ -334,6 +337,7 @@ export const CartDrawer = ({
                 isLocatingCustomer={isLocatingCustomer}
                 customerLocationError={customerLocationError}
                 canOpenLocationSettings={canOpenLocationSettings}
+                locationSettingsTarget={locationSettingsTarget}
                 hasCheckoutAddressSelectionRef={hasCheckoutAddressSelectionRef}
                 onCaptureLocation={onCaptureLocation}
                 onOpenLocationSettings={onOpenLocationSettings}

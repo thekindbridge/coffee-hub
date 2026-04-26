@@ -392,6 +392,7 @@ export const CustomerAppShell = ({
                 customerDetails={customerExperience.checkout.customerDetails}
                 customerLocationError={customerExperience.checkout.customerLocationError}
                 canOpenLocationSettings={customerExperience.checkout.canOpenLocationSettings}
+                locationSettingsTarget={customerExperience.checkout.locationSettingsTarget}
                 deliveryFee={customerExperience.checkout.deliveryFee}
                 discountAmount={customerExperience.checkout.discountAmount}
                 hasCartItems={customerExperience.checkout.hasCartItems}

@@ -1,6 +1,5 @@
 import {
   collection,
-  doc,
   onSnapshot,
   query,
   where,
@@ -32,16 +31,14 @@ export const subscribeToDeliveryAgents = (
   },
 );
 
-export const subscribeToAgentOrdersByStatus = (
+export const subscribeToAgentOrders = (
   agentId: string,
-  status: 'OUT_FOR_DELIVERY' | 'DELIVERED',
   onData: (orders: Order[]) => void,
   onError: (error: Error) => void,
 ) => onSnapshot(
   query(
     collection(db, 'orders'),
     where('assignedAgentId', '==', agentId),
-    where('status_code', '==', status),
   ),
   snapshot => {
     const mappedOrders = snapshot.docs
@@ -52,30 +49,28 @@ export const subscribeToAgentOrdersByStatus = (
     onData(mappedOrders);
   },
   error => {
-    onError(toAppServiceError(error, `Unable to subscribe to ${status} agent orders.`));
+    onError(toAppServiceError(error, 'Unable to subscribe to delivery orders.'));
   },
 );
 
-export const subscribeToCurrentDeliverySession = (
-  orderId: string,
+export const subscribeToAgentDeliverySessions = (
+  agentId: string,
   onData: (sessions: DeliverySession[]) => void,
   onError: (error: Error) => void,
 ) => onSnapshot(
-  doc(db, 'delivery_sessions', orderId),
+  query(
+    collection(db, 'delivery_sessions'),
+    where('agentId', '==', agentId),
+  ),
   snapshot => {
-    if (!snapshot.exists()) {
-      onData([]);
-      return;
-    }
-
-    onData([
-      mapDeliverySessionRecordToSession(
-        snapshot.id,
-        snapshot.data() as Record<string, unknown>,
-      ),
-    ]);
+    onData(
+      snapshot.docs.map(docSnapshot => mapDeliverySessionRecordToSession(
+        docSnapshot.id,
+        docSnapshot.data() as Record<string, unknown>,
+      )),
+    );
   },
   error => {
-    onError(toAppServiceError(error, 'Unable to subscribe to the delivery session.'));
+    onError(toAppServiceError(error, 'Unable to subscribe to delivery sessions.'));
   },
 );

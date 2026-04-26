@@ -98,6 +98,7 @@ export const useCheckoutFlow = ({
     isLocatingCustomer: orderFlow.isLocatingCustomer,
     customerLocationError: orderFlow.customerLocationError,
     canOpenLocationSettings: orderFlow.canOpenLocationSettings,
+    locationSettingsTarget: orderFlow.locationSettingsTarget,
     isPlacingOrder: orderFlow.isPlacingOrder,
     draftOrderId: orderFlow.draftOrderId,
     setDraftOrderId: orderFlow.setDraftOrderId,

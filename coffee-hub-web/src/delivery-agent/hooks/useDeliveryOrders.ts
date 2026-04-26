@@ -1,28 +1,28 @@
-import {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type MutableRefObject,
-} from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { DeliveryAgent, DeliverySession, Order } from '../../types';
 import {
+  classifyAgentOrders,
+  sortDeliveryOrders,
+} from '../utils/orderHelpers';
+import {
   hydrateOrdersWithItems,
-  subscribeToAgentOrdersByStatus,
-  subscribeToCurrentDeliverySession,
+  subscribeToAgentDeliverySessions,
+  subscribeToAgentOrders,
   subscribeToDeliveryAgents,
 } from '../services/deliveryService';
-import { sortDeliveryOrders } from '../utils/orderHelpers';
 
 export type DeliveryOrdersState = {
-  activeOrders: Order[];
   completedOrders: Order[];
   currentDeliveryAgent: DeliveryAgent | null;
   currentDeliveryOrder: Order | null;
   currentDeliverySession: DeliverySession | null;
   deliveryAgents: DeliveryAgent[];
   deliverySessions: DeliverySession[];
+  inProgressOrders: Order[];
+  isOrdersLoading: boolean;
+  newOrders: Order[];
   orders: Order[];
+  ordersError: string;
 };
 
 type UseDeliveryOrdersParams = {
@@ -38,10 +38,10 @@ export const useDeliveryOrders = ({
 }: UseDeliveryOrdersParams): DeliveryOrdersState => {
   const [deliveryAgents, setDeliveryAgents] = useState<DeliveryAgent[]>([]);
   const [deliverySessions, setDeliverySessions] = useState<DeliverySession[]>([]);
-  const [activeOrders, setActiveOrders] = useState<Order[]>([]);
-  const [completedOrders, setCompletedOrders] = useState<Order[]>([]);
-  const activeOrdersSnapshotVersionRef = useRef(0);
-  const completedOrdersSnapshotVersionRef = useRef(0);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [isOrdersLoading, setIsOrdersLoading] = useState(false);
+  const [ordersError, setOrdersError] = useState('');
+  const ordersSnapshotVersionRef = useRef(0);
 
   useEffect(() => {
     if (!isAdmin && !isDeliveryAgent) {
@@ -78,101 +78,93 @@ export const useDeliveryOrders = ({
     ? (currentDeliveryAgent?.id || normalizedCurrentPhone)
     : '';
 
-  const subscribeToHydratedOrders = (
-    agentId: string,
-    status: 'OUT_FOR_DELIVERY' | 'DELIVERED',
-    onOrdersChange: (orders: Order[]) => void,
-    snapshotVersionRef: MutableRefObject<number>,
-  ) => subscribeToAgentOrdersByStatus(
-    agentId,
-    status,
-    mappedOrders => {
-      onOrdersChange(mappedOrders);
-
-      const snapshotVersion = snapshotVersionRef.current + 1;
-      snapshotVersionRef.current = snapshotVersion;
-
-      void hydrateOrdersWithItems(mappedOrders)
-        .then(hydratedOrders => {
-          if (snapshotVersionRef.current !== snapshotVersion) {
-            return;
-          }
-
-          onOrdersChange(hydratedOrders);
-        })
-        .catch(error => {
-          console.error(`Failed to hydrate ${status} agent orders`, error);
-        });
-    },
-    error => {
-      console.error(`Failed to subscribe to ${status} agent orders`, error);
-      onOrdersChange([]);
-    },
-  );
-
   useEffect(() => {
     if (!isDeliveryAgent || !currentAgentId) {
-      setActiveOrders([]);
-      setCompletedOrders([]);
+      setOrders([]);
       setDeliverySessions([]);
+      setOrdersError('');
+      setIsOrdersLoading(false);
       return;
     }
 
-    const unsubscribeActive = subscribeToHydratedOrders(
+    setOrdersError('');
+    setIsOrdersLoading(true);
+
+    const unsubscribeOrders = subscribeToAgentOrders(
       currentAgentId,
-      'OUT_FOR_DELIVERY',
-      setActiveOrders,
-      activeOrdersSnapshotVersionRef,
-    );
-    const unsubscribeCompleted = subscribeToHydratedOrders(
-      currentAgentId,
-      'DELIVERED',
-      setCompletedOrders,
-      completedOrdersSnapshotVersionRef,
-    );
+      mappedOrders => {
+        setIsOrdersLoading(false);
+        setOrders(mappedOrders);
 
-    return () => {
-      unsubscribeActive();
-      unsubscribeCompleted();
-    };
-  }, [currentAgentId, isDeliveryAgent]);
+        const snapshotVersion = ordersSnapshotVersionRef.current + 1;
+        ordersSnapshotVersionRef.current = snapshotVersion;
 
-  const currentDeliveryOrder = useMemo(
-    () => activeOrders[0] || null,
-    [activeOrders],
-  );
+        void hydrateOrdersWithItems(mappedOrders)
+          .then(hydratedOrders => {
+            if (ordersSnapshotVersionRef.current !== snapshotVersion) {
+              return;
+            }
 
-  useEffect(() => {
-    if (!currentDeliveryOrder?.doc_id) {
-      setDeliverySessions([]);
-      return;
-    }
-
-    const unsubscribe = subscribeToCurrentDeliverySession(
-      currentDeliveryOrder.doc_id,
-      setDeliverySessions,
+            setOrders(hydratedOrders);
+          })
+          .catch(error => {
+            console.error('Failed to hydrate agent orders', error);
+          });
+      },
       error => {
-        console.error('Failed to subscribe to current delivery session', error);
+        console.error('Failed to subscribe to agent orders', error);
+        setOrders([]);
+        setOrdersError('Unable to load delivery orders right now.');
+        setIsOrdersLoading(false);
+      },
+    );
+
+    const unsubscribeSessions = subscribeToAgentDeliverySessions(
+      currentAgentId,
+      nextSessions => {
+        setDeliverySessions(nextSessions);
+      },
+      error => {
+        console.error('Failed to subscribe to agent delivery sessions', error);
         setDeliverySessions([]);
       },
     );
 
-    return unsubscribe;
-  }, [currentDeliveryOrder?.doc_id]);
+    return () => {
+      unsubscribeOrders();
+      unsubscribeSessions();
+    };
+  }, [currentAgentId, isDeliveryAgent]);
 
-  const orders = useMemo(
-    () => sortDeliveryOrders([...activeOrders, ...completedOrders]),
-    [activeOrders, completedOrders],
+  const groupedOrders = useMemo(
+    () => classifyAgentOrders(orders, deliverySessions),
+    [deliverySessions, orders],
   );
 
+  const currentDeliveryOrder = groupedOrders.inProgressOrders[0] || groupedOrders.newOrders[0] || null;
+
+  const currentDeliverySession = useMemo(() => {
+    if (!currentDeliveryOrder) {
+      return null;
+    }
+
+    return deliverySessions.find(session =>
+      session.order_doc_id === currentDeliveryOrder.doc_id ||
+      session.order_id === currentDeliveryOrder.id,
+    ) || null;
+  }, [currentDeliveryOrder, deliverySessions]);
+
   return {
-    activeOrders,
-    completedOrders,
+    completedOrders: groupedOrders.completedOrders,
     currentDeliveryAgent,
     currentDeliveryOrder,
-    currentDeliverySession: deliverySessions[0] || null,
+    currentDeliverySession,
     deliveryAgents,
     deliverySessions,
-    orders,
+    inProgressOrders: groupedOrders.inProgressOrders,
+    isOrdersLoading,
+    newOrders: groupedOrders.newOrders,
+    orders: sortDeliveryOrders(groupedOrders.executableOrders),
+    ordersError,
   };
 };

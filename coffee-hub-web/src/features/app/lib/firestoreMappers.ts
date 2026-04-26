@@ -446,7 +446,7 @@ export const mapOrderRecordToOrder = (
     customer_name: (data.name as string) || (data.customerName as string) || '',
     phone: (data.phone as string) || '',
     address: (data.address as string) || '',
-    customer_location: mapLocationRecord(data.customerLocation),
+    customer_location: mapLocationRecord(data.customerLocation ?? data.location),
     delivery_location: mapLocationRecord(data.deliveryLocation ?? data.delivery_location),
     total_amount: finalTotal,
     subtotal,

@@ -2,7 +2,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import { createOrderRequest } from '../../../services/api/ordersService';
 import { getCurrentUserIdToken } from '../../../services/auth/authService';
-import { locationAdapter } from '../../../services/platform/locationAdapter';
+import {
+  locationAdapter,
+  LocationAdapterError,
+  type LocationSettingsTarget,
+} from '../../../services/platform/locationAdapter';
 import { navigationAdapter } from '../../../services/platform/navigationAdapter';
 import { openPermissionSettings } from '../../../services/platform/permissionService';
 import { getAppServiceErrorMessage } from '../../../services/platform/serviceError';
@@ -67,6 +71,7 @@ export type PaymentFlowState = {
   isLocatingCustomer: boolean;
   customerLocationError: string;
   canOpenLocationSettings: boolean;
+  locationSettingsTarget: LocationSettingsTarget | null;
   isPlacingOrder: boolean;
   draftOrderId: string;
   setDraftOrderId: Dispatch<SetStateAction<string>>;
@@ -120,6 +125,8 @@ export const usePaymentFlow = ({
   const [isLocatingCustomer, setIsLocatingCustomer] = useState(false);
   const [customerLocationError, setCustomerLocationError] = useState('');
   const [canOpenLocationSettings, setCanOpenLocationSettings] = useState(false);
+  const [locationSettingsTarget, setLocationSettingsTarget] =
+    useState<LocationSettingsTarget | null>(null);
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [draftOrderId, setDraftOrderId] = useState('');
   const [currentTime, setCurrentTime] = useState(() => Date.now());
@@ -228,28 +235,62 @@ export const usePaymentFlow = ({
     return () => clearInterval(intervalId);
   }, []);
 
+  const resolveLocationFailure = (error: unknown) => {
+    if (error instanceof LocationAdapterError) {
+      return {
+        message: error.message,
+        settingsTarget:
+          error.recoveryAction === 'open-app-settings'
+            ? 'app'
+            : error.recoveryAction === 'open-location-settings'
+              ? 'location'
+              : null,
+      } satisfies {
+        message: string;
+        settingsTarget: LocationSettingsTarget | null;
+      };
+    }
+
+    return {
+      message: getAppServiceErrorMessage(
+        error,
+        'Unable to capture your location right now.',
+      ),
+      settingsTarget: null,
+    } satisfies {
+      message: string;
+      settingsTarget: LocationSettingsTarget | null;
+    };
+  };
+
   const captureLocation = async () => {
     setIsLocatingCustomer(true);
     setCustomerLocationError('');
     setCanOpenLocationSettings(false);
+    setLocationSettingsTarget(null);
     setCheckoutError('');
     try {
-      const nextLocation = await locationAdapter.getCurrentLocation();
+      const nextLocation = await locationAdapter.getCurrentLocation({
+        enableHighAccuracy: true,
+        enableLocationFallback: true,
+        maxAttempts: 2,
+        maximumAgeMs: 0,
+        timeoutMs: 18000,
+      });
       setCustomerDetails(prev => ({ ...prev, location: nextLocation }));
+      setCustomerLocationError('');
+      setCanOpenLocationSettings(false);
+      setLocationSettingsTarget(null);
       return nextLocation;
     } catch (error) {
-      const code = typeof error === 'object' && error && 'code' in error
-        ? String((error as { code?: unknown }).code)
-        : '';
-      const isPermissionError = code === 'permission_denied';
-      const message = isPermissionError
-        ? 'Location access is required to deliver your order.'
-        : getAppServiceErrorMessage(
-          error,
-          'Unable to capture your location right now.',
-        );
+      const { message, settingsTarget } = resolveLocationFailure(error);
+      console.error('Customer location capture failed', {
+        error,
+        settingsTarget,
+      });
       setCustomerLocationError(message);
-      setCanOpenLocationSettings(isPermissionError);
+      setCanOpenLocationSettings(settingsTarget !== null);
+      setLocationSettingsTarget(settingsTarget);
       return null;
     } finally {
       setIsLocatingCustomer(false);
@@ -261,9 +302,14 @@ export const usePaymentFlow = ({
   };
 
   const handleOpenLocationSettings = async () => {
-    const didOpenSettings = await openPermissionSettings();
+    const target = locationSettingsTarget ?? 'app';
+    const didOpenSettings = await openPermissionSettings(target);
     if (!didOpenSettings) {
-      setCustomerLocationError('Please enable location permission from Settings.');
+      setCustomerLocationError(
+        target === 'location'
+          ? 'Turn on GPS for better accuracy.'
+          : 'Open App Settings and allow location access.',
+      );
     }
   };
 
@@ -272,6 +318,9 @@ export const usePaymentFlow = ({
     setIsCartOpen(false);
     setCheckoutStep('cart');
     setCheckoutError('');
+    setCustomerLocationError('');
+    setCanOpenLocationSettings(false);
+    setLocationSettingsTarget(null);
     setDraftOrderId('');
     navigationAdapter.scrollToSectionOrTop('menu-section');
   };
@@ -285,6 +334,9 @@ export const usePaymentFlow = ({
     setCouponSuccess('');
     setCouponError('');
     setCheckoutError('');
+    setCustomerLocationError('');
+    setCanOpenLocationSettings(false);
+    setLocationSettingsTarget(null);
   };
 
   const buildDraft = async (): Promise<{ order: CheckoutOrderDraft } | null> => {
@@ -297,14 +349,14 @@ export const usePaymentFlow = ({
       setCheckoutError('Please fill in your name, phone number, and delivery address.');
       return null;
     }
+
     if (!customerLocation) {
       const captured = await captureLocation();
-      if (!captured) {
-        setCheckoutError('Location required for delivery.');
-        return null;
+      if (captured) {
+        customerLocation = captured;
       }
-      customerLocation = captured;
     }
+
     if (cart.length === 0) { setCheckoutError('Your cart is empty.'); return null; }
     if (!currentUserId) { setCheckoutError('Please sign in with your mobile number to place an order.'); return null; }
 
@@ -427,6 +479,7 @@ export const usePaymentFlow = ({
     isLocatingCustomer,
     customerLocationError,
     canOpenLocationSettings,
+    locationSettingsTarget,
     isPlacingOrder,
     draftOrderId,
     setDraftOrderId,

@@ -71,12 +71,12 @@ export default function App() {
   const orderOperations = useOrderOperations({
     adminOrders: session.adminOrders,
     setAdminOrders: session.setAdminOrders,
+    agentOrders: session.agentOrders,
     userOrders: session.userOrders,
     setUserOrders: session.setUserOrders,
     orderStatus,
     setOrderStatus,
     setNewOrderDocIds: session.setNewOrderDocIds,
-    currentDeliveryOrder: session.currentDeliveryOrder,
     currentDeliveryAgent: session.currentDeliveryAgent,
     normalizedCurrentPhone: session.normalizedCurrentPhone,
     agentTrackerRef: session.agentTrackerRef,

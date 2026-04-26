@@ -30,6 +30,7 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
+        registerPlugin(CoffeeHubSettingsPlugin.class);
         super.onCreate(savedInstanceState);
         NotificationChannelHelper.ensureChannels(this);
         configureWebView();

@@ -126,6 +126,7 @@ const buildStoredOrderRecord = (
   phone: orderDraft.customer.phone,
   address: orderDraft.customer.address,
   customerLocation: orderDraft.customer.location,
+  location: orderDraft.customer.location,
   items: pricing.items.map(item => ({
     itemId: item.id,
     name: item.name,
@@ -918,7 +919,7 @@ const assignAgentResponse = async (
         agentPhone,
         agentVehicle,
         completedAt: null,
-        customerLocation: orderData.customerLocation || null,
+        customerLocation: orderData.customerLocation ?? orderData.location ?? null,
         lastLocation: null,
         orderDocId: orderRef.id,
         orderId: orderNumber,
@@ -1268,7 +1269,7 @@ const updateDeliveryTrackingResponse = async (
       {
         agentId,
         agentName: agentName || order.assignedAgentName || order.deliveryAgentName || order.agentName || '',
-        customerLocation: customerLocation ?? order.customerLocation ?? null,
+        customerLocation: customerLocation ?? order.customerLocation ?? order.location ?? null,
         ...(trackedLocation ? { lastLocation: trackedLocation } : {}),
         orderDocId: orderRef.id,
         orderId,

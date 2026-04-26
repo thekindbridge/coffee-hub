@@ -15,11 +15,13 @@ class BrowserLocationError extends Error {
   }
 }
 
-const DEFAULT_LOCATION_OPTIONS: Required<LocationRequestOptions> = {
+const DEFAULT_LOCATION_OPTIONS = {
   enableHighAccuracy: true,
   maximumAgeMs: 0,
   timeoutMs: 15000,
-};
+} satisfies Required<
+  Pick<LocationRequestOptions, 'enableHighAccuracy' | 'maximumAgeMs' | 'timeoutMs'>
+>;
 
 const buildPositionOptions = (
   options: LocationRequestOptions = {},

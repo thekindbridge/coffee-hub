@@ -22,7 +22,9 @@ export interface StoredOrderRecord {
   phone?: string;
   address?: string;
   customerLocation?: Record<string, unknown> | null;
+  location?: Record<string, unknown> | null;
   deliveryLocation?: Record<string, unknown> | null;
+  delivery_location?: Record<string, unknown> | null;
   items?: StoredOrderItem[];
   subtotal?: number;
   discount?: number;
@@ -220,8 +222,8 @@ export const mapOrderRecordToResponse = (
     customer_name: record.name || '',
     phone: record.phone || '',
     address: record.address || '',
-    customer_location: mapLocationRecord(record.customerLocation),
-    delivery_location: mapLocationRecord(record.deliveryLocation),
+    customer_location: mapLocationRecord(record.customerLocation ?? record.location),
+    delivery_location: mapLocationRecord(record.deliveryLocation ?? record.delivery_location),
     assigned_agent_id: agentId,
     assigned_agent_name:
       record.assignedAgentName ||

@@ -29,7 +29,7 @@ export type DeliveryStatusState = {
 };
 
 export const useDeliveryStatus = (
-  currentDeliveryOrder: Order | null,
+  agentOrders: Order[],
 ): DeliveryStatusState => {
   const [isAgentTracking, setIsAgentTracking] = useState(false);
   const [agentPermissionState, setAgentPermissionState] =
@@ -47,12 +47,11 @@ export const useDeliveryStatus = (
   }, []);
 
   useEffect(() => {
-    if (
-      agentTrackerRef.current &&
-      trackedOrderIdRef.current &&
-      currentDeliveryOrder?.id &&
-      currentDeliveryOrder.id !== trackedOrderIdRef.current
-    ) {
+    const trackedOrder = trackedOrderIdRef.current
+      ? agentOrders.find(order => order.id === trackedOrderIdRef.current) || null
+      : null;
+
+    if (!trackedOrder && agentTrackerRef.current) {
       agentTrackerRef.current.stop();
       agentTrackerRef.current = null;
       trackedOrderIdRef.current = '';
@@ -62,21 +61,7 @@ export const useDeliveryStatus = (
       return;
     }
 
-    if (!currentDeliveryOrder && agentTrackerRef.current) {
-      agentTrackerRef.current.stop();
-      agentTrackerRef.current = null;
-      trackedOrderIdRef.current = '';
-      setIsAgentTracking(false);
-      setAgentTrackerStatus(DEFAULT_TRACKER_STATUS);
-      setAgentLastTrackedLocation(null);
-      return;
-    }
-
-    if (
-      currentDeliveryOrder &&
-      normalizeStatus(currentDeliveryOrder.status_code) === 'DELIVERED' &&
-      agentTrackerRef.current
-    ) {
+    if (trackedOrder && normalizeStatus(trackedOrder.status_code) === 'DELIVERED' && agentTrackerRef.current) {
       agentTrackerRef.current.stop();
       agentTrackerRef.current = null;
       trackedOrderIdRef.current = '';
@@ -86,7 +71,7 @@ export const useDeliveryStatus = (
         message: 'Delivery completed and GPS tracking stopped.',
       });
     }
-  }, [currentDeliveryOrder?.doc_id, currentDeliveryOrder?.id, currentDeliveryOrder?.status_code]);
+  }, [agentOrders]);
 
   return {
     agentLastTrackedLocation,
