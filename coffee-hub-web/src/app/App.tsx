@@ -1,4 +1,4 @@
-import { Suspense, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import type { Order } from '../types';
 import { useOffers } from '../features/offers/hooks/useOffers';
 import { useRealtimeAppData } from '../features/app/hooks/useRealtimeAppData';
@@ -11,6 +11,9 @@ import { useInstallPrompt } from '../features/customer/hooks/useInstallPrompt';
 import { Loader } from '../components/ui/Loader';
 import { lazyNamed } from '../utils/lazyNamed';
 import { AppRouter } from './router/AppRouter';
+import { storageAdapter } from '../services/platform/storageAdapter';
+
+const NOTIFICATION_PERMISSION_REQUESTED_KEY = 'notification_permission_requested';
 
 const AuthLoadingPage = lazyNamed(
   () => import('../pages/AuthLoading/AuthLoadingPage'),
@@ -34,6 +37,28 @@ export default function App() {
     isDeliveryAgent: session.isDeliveryAgent,
     role: session.role,
   });
+
+  useEffect(() => {
+    if (!session.isAuthReady || !pushNotifications.isSupported) {
+      return;
+    }
+
+    if (pushNotifications.permissionState !== 'default') {
+      return;
+    }
+
+    if (storageAdapter.read(NOTIFICATION_PERMISSION_REQUESTED_KEY) === 'true') {
+      return;
+    }
+
+    storageAdapter.write(NOTIFICATION_PERMISSION_REQUESTED_KEY, 'true');
+    void pushNotifications.requestPermission();
+  }, [
+    pushNotifications,
+    pushNotifications.isSupported,
+    pushNotifications.permissionState,
+    session.isAuthReady,
+  ]);
 
   const offersState = useOffers({
     enabled: session.isAuthResolved,

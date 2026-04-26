@@ -97,6 +97,7 @@ export const useCheckoutFlow = ({
     setCheckoutError: orderFlow.setCheckoutError,
     isLocatingCustomer: orderFlow.isLocatingCustomer,
     customerLocationError: orderFlow.customerLocationError,
+    canOpenLocationSettings: orderFlow.canOpenLocationSettings,
     isPlacingOrder: orderFlow.isPlacingOrder,
     draftOrderId: orderFlow.draftOrderId,
     setDraftOrderId: orderFlow.setDraftOrderId,
@@ -110,6 +111,7 @@ export const useCheckoutFlow = ({
     hasCheckoutAddressSelectionRef: orderFlow.hasCheckoutAddressSelectionRef,
     handleBrowseMenu: orderFlow.handleBrowseMenu,
     handleCaptureCustomerLocation: orderFlow.handleCaptureCustomerLocation,
+    handleOpenLocationSettings: orderFlow.handleOpenLocationSettings,
     handlePlaceOrder: orderFlow.handlePlaceOrder,
   };
 };

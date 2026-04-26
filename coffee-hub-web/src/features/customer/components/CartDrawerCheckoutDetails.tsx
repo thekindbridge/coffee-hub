@@ -27,8 +27,10 @@ type CartDrawerCheckoutDetailsProps = {
   setCheckoutError: Dispatch<SetStateAction<string>>;
   isLocatingCustomer: boolean;
   customerLocationError: string;
+  canOpenLocationSettings: boolean;
   hasCheckoutAddressSelectionRef: MutableRefObject<boolean>;
   onCaptureLocation: () => void;
+  onOpenLocationSettings: () => void;
 };
 
 export const CartDrawerCheckoutDetails = ({
@@ -53,8 +55,10 @@ export const CartDrawerCheckoutDetails = ({
   setCheckoutError,
   isLocatingCustomer,
   customerLocationError,
+  canOpenLocationSettings,
   hasCheckoutAddressSelectionRef,
   onCaptureLocation,
+  onOpenLocationSettings,
 }: CartDrawerCheckoutDetailsProps) => (
   <div className="space-y-5">
     {!isShopOpen && (
@@ -288,7 +292,30 @@ export const CartDrawerCheckoutDetails = ({
         )}
       </div>
       {customerLocationError && (
-        <p className="mt-3 text-xs font-semibold text-primary">{customerLocationError}</p>
+        <div className="mt-3 rounded-[18px] border border-primary/25 bg-primary/10 px-3 py-3">
+          <p className="text-xs font-semibold text-primary">
+            {customerLocationError}
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={onCaptureLocation}
+              disabled={isLocatingCustomer}
+              className="coffee-btn-secondary min-h-10 px-3 text-[11px] uppercase tracking-[0.14em] disabled:opacity-60"
+            >
+              {isLocatingCustomer ? 'Requesting...' : 'Enable Location'}
+            </button>
+            {canOpenLocationSettings && (
+              <button
+                type="button"
+                onClick={onOpenLocationSettings}
+                className="coffee-btn-secondary min-h-10 px-3 text-[11px] uppercase tracking-[0.14em]"
+              >
+                Open Settings
+              </button>
+            )}
+          </div>
+        </div>
       )}
     </div>
 

@@ -50,6 +50,7 @@ type CartDrawerProps = {
   setCheckoutError: Dispatch<SetStateAction<string>>;
   isLocatingCustomer: boolean;
   customerLocationError: string;
+  canOpenLocationSettings: boolean;
   isPlacingOrder: boolean;
   couponInput: string;
   setCouponInput: Dispatch<SetStateAction<string>>;
@@ -68,6 +69,7 @@ type CartDrawerProps = {
   onApplyCoupon: () => void;
   onRemoveCoupon: () => void;
   onCaptureLocation: () => void;
+  onOpenLocationSettings: () => void;
   onPlaceOrder: () => void;
   onTrackOrder: () => void;
 };
@@ -99,6 +101,7 @@ export const CartDrawer = ({
   setCheckoutError,
   isLocatingCustomer,
   customerLocationError,
+  canOpenLocationSettings,
   isPlacingOrder,
   couponInput,
   setCouponInput,
@@ -117,6 +120,7 @@ export const CartDrawer = ({
   onApplyCoupon,
   onRemoveCoupon,
   onCaptureLocation,
+  onOpenLocationSettings,
   onPlaceOrder,
   onTrackOrder,
 }: CartDrawerProps) => (
@@ -322,8 +326,10 @@ export const CartDrawer = ({
                 setCheckoutError={setCheckoutError}
                 isLocatingCustomer={isLocatingCustomer}
                 customerLocationError={customerLocationError}
+                canOpenLocationSettings={canOpenLocationSettings}
                 hasCheckoutAddressSelectionRef={hasCheckoutAddressSelectionRef}
                 onCaptureLocation={onCaptureLocation}
+                onOpenLocationSettings={onOpenLocationSettings}
               />
             )}
 

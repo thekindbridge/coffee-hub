@@ -3,20 +3,21 @@ import type { UserRole } from '../types';
 import {
   detectFirebaseMessagingSupport,
   getDeviceToken,
-  requestNotificationPermission,
   subscribeToMessagingForeground,
   type FirebaseForegroundNotification,
   type FirebaseMessagingPermissionState,
 } from '../../../services/firebase/firebaseMessaging';
 import { saveUserFcmToken } from '../../../services/firebase/profileService';
 import {
-  getNativeNotificationPermissionState,
   isNativeAndroidNotificationRuntime,
   playRoleNotificationEffect,
-  requestNativeNotificationPermission,
   resolveNotificationRole,
   subscribeToNativePushNotifications,
 } from '../../../services/platform/notificationService';
+import {
+  checkNotificationPermission,
+  requestNotificationPermission as requestPlatformNotificationPermission,
+} from '../../../services/platform/permissionService';
 import { storageAdapter } from '../../../services/platform/storageAdapter';
 
 type UsePushNotificationsParams = {
@@ -46,6 +47,24 @@ const getPromptDismissKey = (currentUserId: string) =>
     ? `${PUSH_PROMPT_DISMISS_KEY}:${currentUserId}`
     : PUSH_PROMPT_DISMISS_KEY;
 
+const toFirebasePermissionState = (
+  permissionState: Awaited<ReturnType<typeof checkNotificationPermission>>,
+): FirebaseMessagingPermissionState => {
+  if (
+    permissionState === 'granted' ||
+    permissionState === 'denied' ||
+    permissionState === 'default'
+  ) {
+    return permissionState;
+  }
+
+  if (permissionState === 'unsupported') {
+    return 'unsupported';
+  }
+
+  return 'default';
+};
+
 export const usePushNotifications = ({
   isAuthReady,
   isLoggedIn,
@@ -74,13 +93,13 @@ export const usePushNotifications = ({
     const detectSupport = async () => {
       try {
         if (isNativeAndroid) {
-          const nativePermission = await getNativeNotificationPermissionState();
+          const nativePermission = await checkNotificationPermission();
           if (!isMounted) {
             return;
           }
 
           setIsSupported(true);
-          setPermissionState(nativePermission);
+          setPermissionState(toFirebasePermissionState(nativePermission));
           return;
         }
 
@@ -299,10 +318,8 @@ export const usePushNotifications = ({
 
     try {
       setSyncError('');
-      const nextPermission = isNativeAndroid
-        ? await requestNativeNotificationPermission()
-        : await requestNotificationPermission();
-      setPermissionState(nextPermission);
+      const nextPermission = await requestPlatformNotificationPermission();
+      setPermissionState(toFirebasePermissionState(nextPermission));
 
       if (nextPermission === 'granted') {
         storageAdapter.remove(getPromptDismissKey(currentUserId));

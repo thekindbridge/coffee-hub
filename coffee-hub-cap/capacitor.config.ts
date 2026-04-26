@@ -1,5 +1,6 @@
 /// <reference types="@capacitor/local-notifications" />
 /// <reference types="@capacitor/push-notifications" />
+/// <reference types="@capacitor/geolocation" />
 
 import type { CapacitorConfig } from '@capacitor/cli';
 

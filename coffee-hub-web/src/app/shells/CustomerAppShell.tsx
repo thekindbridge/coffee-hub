@@ -389,6 +389,7 @@ export const CustomerAppShell = ({
                 couponSuccess={customerExperience.checkout.couponSuccess}
                 customerDetails={customerExperience.checkout.customerDetails}
                 customerLocationError={customerExperience.checkout.customerLocationError}
+                canOpenLocationSettings={customerExperience.checkout.canOpenLocationSettings}
                 deliveryFee={customerExperience.checkout.deliveryFee}
                 discountAmount={customerExperience.checkout.discountAmount}
                 hasCartItems={customerExperience.checkout.hasCartItems}
@@ -404,6 +405,7 @@ export const CustomerAppShell = ({
                 onBrowseMenu={customerExperience.checkout.handleBrowseMenu}
                 onCaptureLocation={() => void customerExperience.checkout.handleCaptureCustomerLocation()}
                 onClose={() => customerExperience.checkout.setIsCartOpen(false)}
+                onOpenLocationSettings={() => void customerExperience.checkout.handleOpenLocationSettings()}
                 onPlaceOrder={() => void customerExperience.checkout.handlePlaceOrder()}
                 onQuantityChange={customerExperience.checkout.handleAddToCart}
                 onRemoveCoupon={customerExperience.checkout.handleRemoveCoupon}

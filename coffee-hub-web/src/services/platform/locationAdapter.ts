@@ -1,4 +1,6 @@
 import type { DeliveryLocation } from '../../types';
+import { Capacitor } from '@capacitor/core';
+import { Geolocation } from '@capacitor/geolocation';
 import {
   clearBrowserLocationSubscription,
   getCurrentBrowserLocation,
@@ -6,6 +8,10 @@ import {
   queryBrowserGeolocationPermission,
   subscribeToBrowserLocation,
 } from '../browser/geolocationService';
+import {
+  checkLocationPermission,
+  requestLocationPermission,
+} from './permissionService';
 
 export type LocationPermissionState =
   | 'granted'
@@ -38,7 +44,7 @@ export class LocationAdapterError extends Error {
 }
 
 export interface LocationAdapter {
-  clearWatch(watchId: number): void;
+  clearWatch(watchId: number | string): void;
   getCurrentLocation(options?: LocationRequestOptions): Promise<DeliveryLocation>;
   isSupported(): boolean;
   queryPermission(): Promise<LocationPermissionState>;
@@ -46,13 +52,117 @@ export interface LocationAdapter {
     onError: (error: LocationAdapterError) => void;
     onLocation: (location: DeliveryLocation) => void;
     options?: LocationRequestOptions;
-  }): number | null;
+  }): Promise<number | string | null> | number | null;
 }
 
+const isNativeRuntime = () => Capacitor.isNativePlatform();
+
+const mapPermissionState = async (): Promise<LocationPermissionState> => {
+  const state = await checkLocationPermission();
+
+  if (
+    state === 'granted' ||
+    state === 'denied' ||
+    state === 'prompt' ||
+    state === 'unsupported' ||
+    state === 'unavailable'
+  ) {
+    return state;
+  }
+
+  return state === 'prompt-with-rationale' ? 'prompt' : 'unavailable';
+};
+
+const getNativeCurrentLocation = async () => {
+  const result = await requestLocationPermission();
+  if (result.location) {
+    return result.location;
+  }
+
+  throw new LocationAdapterError(
+    result.message || 'Location access is required to deliver your order.',
+    result.state === 'unsupported' ? 'unsupported' : 'permission_denied',
+  );
+};
+
+const watchNativeLocation: LocationAdapter['watchLocation'] = async ({
+  onError,
+  onLocation,
+  options,
+}) => {
+  const permissionState = await mapPermissionState();
+  if (permissionState !== 'granted') {
+    const permissionResult = await requestLocationPermission();
+    if (!permissionResult.location && permissionResult.state !== 'granted') {
+      onError(new LocationAdapterError(
+        permissionResult.message || 'Location access is required to deliver your order.',
+        permissionResult.state === 'unsupported' ? 'unsupported' : 'permission_denied',
+      ));
+      return null;
+    }
+  }
+
+  return Geolocation.watchPosition(
+    {
+      enableHighAccuracy: options?.enableHighAccuracy ?? true,
+      maximumAge: options?.maximumAgeMs ?? 0,
+      timeout: options?.timeoutMs ?? 15000,
+    },
+    (position, error) => {
+      if (error) {
+        onError(new LocationAdapterError(
+          error.message || 'Unable to access your location.',
+          error.message?.toLowerCase().includes('denied')
+            ? 'permission_denied'
+            : 'unknown',
+        ));
+        return;
+      }
+
+      if (!position) {
+        onError(new LocationAdapterError(
+          'Location data is unavailable.',
+          'position_unavailable',
+        ));
+        return;
+      }
+
+      onLocation({
+        lat: position.coords.latitude,
+        lng: position.coords.longitude,
+        accuracy: Number.isFinite(position.coords.accuracy)
+          ? Number(position.coords.accuracy.toFixed(1))
+          : undefined,
+      });
+    },
+  );
+};
+
 export const locationAdapter: LocationAdapter = {
-  clearWatch: clearBrowserLocationSubscription,
-  getCurrentLocation: getCurrentBrowserLocation,
-  isSupported: isBrowserGeolocationSupported,
-  queryPermission: queryBrowserGeolocationPermission,
-  watchLocation: subscribeToBrowserLocation,
+  clearWatch: watchId => {
+    if (isNativeRuntime() && typeof watchId === 'string') {
+      void Geolocation.clearWatch({ id: watchId });
+      return;
+    }
+
+    if (typeof watchId === 'number') {
+      clearBrowserLocationSubscription(watchId);
+    }
+  },
+  getCurrentLocation: options => (
+    isNativeRuntime()
+      ? getNativeCurrentLocation()
+      : getCurrentBrowserLocation(options)
+  ),
+  isSupported: () => isNativeRuntime() || isBrowserGeolocationSupported(),
+  queryPermission: () => (
+    isNativeRuntime()
+      ? mapPermissionState()
+      : queryBrowserGeolocationPermission()
+  ),
+  watchLocation: params => (
+    isNativeRuntime()
+      ? watchNativeLocation(params)
+      : subscribeToBrowserLocation(params)
+  ),
 };

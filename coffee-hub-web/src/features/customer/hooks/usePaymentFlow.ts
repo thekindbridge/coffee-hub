@@ -4,6 +4,7 @@ import { createOrderRequest } from '../../../services/api/ordersService';
 import { getCurrentUserIdToken } from '../../../services/auth/authService';
 import { locationAdapter } from '../../../services/platform/locationAdapter';
 import { navigationAdapter } from '../../../services/platform/navigationAdapter';
+import { openPermissionSettings } from '../../../services/platform/permissionService';
 import { getAppServiceErrorMessage } from '../../../services/platform/serviceError';
 import { calculateDiscount } from '../../../utils/calculateDiscount';
 import type {
@@ -65,6 +66,7 @@ export type PaymentFlowState = {
   setCheckoutError: Dispatch<SetStateAction<string>>;
   isLocatingCustomer: boolean;
   customerLocationError: string;
+  canOpenLocationSettings: boolean;
   isPlacingOrder: boolean;
   draftOrderId: string;
   setDraftOrderId: Dispatch<SetStateAction<string>>;
@@ -78,6 +80,7 @@ export type PaymentFlowState = {
   hasCheckoutAddressSelectionRef: MutableRefObject<boolean>;
   handleBrowseMenu: () => void;
   handleCaptureCustomerLocation: () => Promise<void>;
+  handleOpenLocationSettings: () => Promise<void>;
   handlePlaceOrder: () => Promise<void>;
 };
 
@@ -116,6 +119,7 @@ export const usePaymentFlow = ({
   const [checkoutError, setCheckoutError] = useState('');
   const [isLocatingCustomer, setIsLocatingCustomer] = useState(false);
   const [customerLocationError, setCustomerLocationError] = useState('');
+  const [canOpenLocationSettings, setCanOpenLocationSettings] = useState(false);
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [draftOrderId, setDraftOrderId] = useState('');
   const [currentTime, setCurrentTime] = useState(() => Date.now());
@@ -226,18 +230,26 @@ export const usePaymentFlow = ({
   const captureLocation = async () => {
     setIsLocatingCustomer(true);
     setCustomerLocationError('');
+    setCanOpenLocationSettings(false);
     setCheckoutError('');
     try {
       const nextLocation = await locationAdapter.getCurrentLocation();
       setCustomerDetails(prev => ({ ...prev, location: nextLocation }));
       return nextLocation;
     } catch (error) {
-      const message = getAppServiceErrorMessage(
-        error,
-        'Unable to capture your location right now.',
-      );
+      const code = typeof error === 'object' && error && 'code' in error
+        ? String((error as { code?: unknown }).code)
+        : '';
+      const isPermissionError = code === 'permission_denied';
+      const message = isPermissionError
+        ? 'Location access is required to deliver your order.'
+        : getAppServiceErrorMessage(
+          error,
+          'Unable to capture your location right now.',
+        );
       console.error('Failed to capture customer location', error);
       setCustomerLocationError(message);
+      setCanOpenLocationSettings(isPermissionError);
       return null;
     } finally {
       setIsLocatingCustomer(false);
@@ -246,6 +258,13 @@ export const usePaymentFlow = ({
 
   const handleCaptureCustomerLocation = async () => {
     await captureLocation();
+  };
+
+  const handleOpenLocationSettings = async () => {
+    const didOpenSettings = await openPermissionSettings();
+    if (!didOpenSettings) {
+      setCustomerLocationError('Please enable location permission from Settings.');
+    }
   };
 
   const handleBrowseMenu = () => {
@@ -281,7 +300,7 @@ export const usePaymentFlow = ({
     if (!customerLocation) {
       const captured = await captureLocation();
       if (!captured) {
-        setCheckoutError('Share your live delivery location to enable rider tracking and ETA updates.');
+        setCheckoutError('Location required for delivery.');
         return null;
       }
       customerLocation = captured;
@@ -400,6 +419,7 @@ export const usePaymentFlow = ({
     setCheckoutError,
     isLocatingCustomer,
     customerLocationError,
+    canOpenLocationSettings,
     isPlacingOrder,
     draftOrderId,
     setDraftOrderId,
@@ -413,6 +433,7 @@ export const usePaymentFlow = ({
     hasCheckoutAddressSelectionRef,
     handleBrowseMenu,
     handleCaptureCustomerLocation,
+    handleOpenLocationSettings,
     handlePlaceOrder,
   };
 };

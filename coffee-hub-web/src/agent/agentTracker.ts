@@ -93,7 +93,7 @@ export class AgentTracker {
       'onLocation' | 'onStatusChange' | 'onPermissionChange' | 'onError'
     >;
 
-  private watchId: number | null = null;
+  private watchId: number | string | null = null;
   private restartTimeoutId: ReturnType<typeof setTimeout> | null = null;
   private healthIntervalId: ReturnType<typeof setInterval> | null = null;
   private lastPersistedLocation: DeliveryLocation | null = null;
@@ -145,7 +145,7 @@ export class AgentTracker {
       return false;
     }
 
-    this.beginWatch('watching', 'Streaming live delivery location...');
+    await this.beginWatch('watching', 'Streaming live delivery location...');
     return this.watchId !== null;
   }
 
@@ -168,12 +168,12 @@ export class AgentTracker {
     }
   }
 
-  private beginWatch(lifecycle: AgentTrackerLifecycle, message: string) {
+  private async beginWatch(lifecycle: AgentTrackerLifecycle, message: string) {
     this.clearWatch();
     this.clearRestartTimer();
     this.lastPositionSeenAt = Date.now();
 
-    this.watchId = locationAdapter.watchLocation({
+    this.watchId = await locationAdapter.watchLocation({
       onLocation: location => {
         this.lastPositionSeenAt = Date.now();
         this.handleLocation(location);
@@ -301,7 +301,7 @@ export class AgentTracker {
         return;
       }
 
-      this.beginWatch('watching', 'Live tracking restored.');
+      void this.beginWatch('watching', 'Live tracking restored.');
     }, this.options.restartDelayMs);
   }
 
