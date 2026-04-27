@@ -24,6 +24,15 @@ import type {
 import { CartDrawerCheckoutDetails } from './CartDrawerCheckoutDetails';
 import type { LocationSettingsTarget } from '../../../services/platform/locationAdapter';
 
+const getOptimizedCartImageUrl = (imageUrl: string) => {
+  const trimmedImageUrl = imageUrl.trim();
+  if (!trimmedImageUrl || !trimmedImageUrl.includes('res.cloudinary.com')) {
+    return trimmedImageUrl;
+  }
+
+  return trimmedImageUrl.replace('/upload/', '/upload/f_auto,q_auto:eco,w_180,c_fill,ar_1:1/');
+};
+
 type CartDrawerProps = {
   isOpen: boolean;
   cart: CartItem[];
@@ -211,12 +220,14 @@ export const CartDrawer = ({
                       <div key={item.id} className="coffee-surface-soft flex gap-3 rounded-[24px] p-3">
                         <div className="h-[78px] w-[78px] flex-shrink-0 overflow-hidden rounded-[20px]">
                           <img
-                            src={item.image_url}
+                            src={getOptimizedCartImageUrl(item.image_url)}
                             alt={item.name}
                             className="h-full w-full object-cover"
                             loading="lazy"
                             decoding="async"
+                            fetchPriority="low"
                             referrerPolicy="no-referrer"
+                            sizes="78px"
                           />
                         </div>
                         <div className="min-w-0 flex-grow">
@@ -241,7 +252,7 @@ export const CartDrawer = ({
                               onClick={() => onRemoveItem(item.id)}
                               className="text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-muted hover:text-accent"
                             >
-                              Remove
+                              Cancel
                             </button>
                           </div>
                         </div>

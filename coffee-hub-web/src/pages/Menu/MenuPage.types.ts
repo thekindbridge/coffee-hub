@@ -10,6 +10,8 @@ export type MenuPageProps = {
   menuError: string;
   onAddToCart: (item: MenuItem, delta: number) => void;
   onCategoryChange: (category: string) => void;
+  onOpenCart: () => void;
+  onRemoveFromCart: (itemId: string) => void;
   onRetryMenu: () => void;
   onSearchChange: (value: string) => void;
   searchQuery: string;

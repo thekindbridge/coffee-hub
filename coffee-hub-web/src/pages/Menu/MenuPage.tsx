@@ -12,6 +12,8 @@ export const MenuPage = ({
   menuError,
   onAddToCart,
   onCategoryChange,
+  onOpenCart,
+  onRemoveFromCart,
   onRetryMenu,
   onSearchChange,
   searchQuery,
@@ -50,6 +52,8 @@ export const MenuPage = ({
         isMenuLoading={isMenuLoading}
         isShopOpen={isShopOpen}
         onAddToCart={onAddToCart}
+        onOpenCart={onOpenCart}
+        onRemoveFromCart={onRemoveFromCart}
         onRetryMenu={onRetryMenu}
         shopAvailabilityMessage={shopAvailabilityMessage}
       />

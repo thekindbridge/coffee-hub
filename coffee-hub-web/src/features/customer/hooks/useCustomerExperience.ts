@@ -1,5 +1,12 @@
 import type { Dispatch, SetStateAction } from 'react';
-import { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react';
+import {
+  startTransition,
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
 import type { MenuItem, Offer, Order, ShopTiming } from '../../../types';
 import type { CustomerProfile } from '../../app/types';
 import type { CustomerTab } from '../../../constants/routes';
@@ -132,17 +139,39 @@ export const useCustomerExperience = ({
   }, [isUserOrdersLoading, setOrderStatus, userOrders]);
 
   const categories = useMemo(
-    () => ['All', ...new Set(menu.map(item => item.category))],
+    () => [
+      'All',
+      ...Array.from(
+        new Set(
+          menu
+            .map(item => item.category.trim())
+            .filter(Boolean),
+        ),
+      ).sort((leftCategory, rightCategory) => leftCategory.localeCompare(rightCategory)),
+    ],
     [menu],
   );
 
+  useEffect(() => {
+    if (selectedCategory === 'All' || categories.includes(selectedCategory)) {
+      return;
+    }
+
+    setSelectedCategory('All');
+  }, [categories, selectedCategory]);
+
+  const normalizedSearchQuery = deferredSearchQuery.trim().toLowerCase();
+
   const filteredMenu = useMemo(
     () => menu.filter(item => {
-      const matchesSearch = item.name.toLowerCase().includes(deferredSearchQuery.toLowerCase());
+      const matchesSearch =
+        !normalizedSearchQuery ||
+        item.name.toLowerCase().includes(normalizedSearchQuery) ||
+        item.category.toLowerCase().includes(normalizedSearchQuery);
       const matchesCategory = selectedCategory === 'All' || item.category === selectedCategory;
       return matchesSearch && matchesCategory;
     }),
-    [deferredSearchQuery, menu, selectedCategory],
+    [menu, normalizedSearchQuery, selectedCategory],
   );
 
   const shopAvailabilityMessage = useMemo(
@@ -188,12 +217,32 @@ export const useCustomerExperience = ({
     setTrackingError('');
   }, [setOrderStatus]);
 
+  const handleCategoryChange = useCallback((nextCategory: string) => {
+    startTransition(() => {
+      setSelectedCategory(nextCategory);
+    });
+  }, []);
+
+  const handleSearchChange = useCallback((nextQuery: string) => {
+    startTransition(() => {
+      setSearchQuery(nextQuery);
+    });
+  }, []);
+
+  const handleOpenCartFromMenu = useCallback(() => {
+    checkout.setCheckoutStep('cart');
+    checkout.setIsCartOpen(true);
+  }, [checkout.setCheckoutStep, checkout.setIsCartOpen]);
+
   return {
     activeTab,
     categories,
     checkout,
     clearTracking,
     filteredMenu,
+    handleCategoryChange,
+    handleOpenCartFromMenu,
+    handleSearchChange,
     handleTrackFromOrder,
     handleTrackOrderLookup,
     isCartFloatingVisible,
@@ -201,8 +250,6 @@ export const useCustomerExperience = ({
     searchQuery,
     selectedCategory,
     setActiveTab,
-    setSearchQuery,
-    setSelectedCategory,
     setTrackingOrderId,
     shopAvailabilityMessage,
     shouldShowShopClosedBanner,

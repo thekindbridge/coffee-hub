@@ -268,7 +268,6 @@ export const usePaymentFlow = ({
         error,
         'Unable to fetch location. Try again.',
       );
-      console.error('Customer location capture failed', error);
       setCustomerLocationError(message);
       setCanOpenLocationSettings(false);
       setLocationSettingsTarget(null);
