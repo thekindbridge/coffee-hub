@@ -29,7 +29,7 @@ export const MenuToolbar = memo(function MenuToolbar({
   const categoryCount = Math.max(categories.length - 1, 0);
 
   return (
-  <div className="sticky top-[72px] z-30 rounded-[24px] border border-white/8 bg-[#0f0b09]/90 px-3 py-3 shadow-[0_12px_34px_rgba(0,0,0,0.32)] backdrop-blur-xl">
+  <div className="sticky top-[var(--app-header-sticky-offset)] z-30 rounded-[24px] border border-white/8 bg-[#0f0b09]/90 px-3 py-3 shadow-[0_12px_34px_rgba(0,0,0,0.32)] backdrop-blur-xl">
     <div className="relative mb-3">
       <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-ink-muted" size={18} />
       <input

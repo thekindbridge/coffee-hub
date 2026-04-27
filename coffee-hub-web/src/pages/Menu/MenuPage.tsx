@@ -23,7 +23,7 @@ export const MenuPage = ({
   <div
     id="menu-section"
     className={`px-4 pb-28 sm:px-6 ${
-      hasStatusBanner ? 'pt-2 sm:pt-3' : 'pt-20'
+      hasStatusBanner ? 'pt-2 sm:pt-3' : 'pt-0'
     }`}
   >
     <div className="mx-auto max-w-screen-md">

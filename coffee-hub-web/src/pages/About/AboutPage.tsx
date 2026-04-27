@@ -1,5 +1,5 @@
 export const AboutPage = () => (
-  <div className="mx-auto max-w-2xl px-6 pb-24 pt-24">
+  <div className="mx-auto max-w-2xl px-6 pb-24 pt-0">
     <h2 className="mb-8 text-4xl font-black">Our Story</h2>
     <div className="mb-8 aspect-video overflow-hidden rounded-[40px]">
       <img

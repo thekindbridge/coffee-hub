@@ -7,11 +7,11 @@ type MenuPageSkeletonProps = {
 export const MenuPageSkeleton = ({ hasStatusBanner }: MenuPageSkeletonProps) => (
   <div
     className={`px-4 pb-28 sm:px-6 ${
-      hasStatusBanner ? 'pt-2 sm:pt-3' : 'pt-20'
+      hasStatusBanner ? 'pt-2 sm:pt-3' : 'pt-0'
     }`}
   >
     <div className="mx-auto max-w-screen-md">
-      <div className="sticky top-[72px] z-30 rounded-[24px] border border-white/8 bg-[#0f0b09]/88 px-3 py-3 shadow-[0_12px_34px_rgba(0,0,0,0.32)] backdrop-blur-xl">
+      <div className="sticky top-[var(--app-header-sticky-offset)] z-30 rounded-[24px] border border-white/8 bg-[#0f0b09]/88 px-3 py-3 shadow-[0_12px_34px_rgba(0,0,0,0.32)] backdrop-blur-xl">
         <div className="h-12 animate-pulse rounded-[20px] bg-white/8" />
         <div className="mt-3 flex items-center justify-between gap-3 px-1">
           <div className="h-3 w-24 animate-pulse rounded-full bg-white/8" />

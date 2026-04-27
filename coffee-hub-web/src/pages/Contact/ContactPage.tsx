@@ -1,7 +1,7 @@
 import { Mail, MapPin, Phone } from 'lucide-react';
 
 export const ContactPage = () => (
-  <div className="mx-auto max-w-2xl px-6 pb-24 pt-24">
+  <div className="mx-auto max-w-2xl px-6 pb-24 pt-0">
     <h2 className="mb-8 text-4xl font-black">Contact Us</h2>
 
     <div className="mb-12 grid grid-cols-1 gap-8 md:grid-cols-2">

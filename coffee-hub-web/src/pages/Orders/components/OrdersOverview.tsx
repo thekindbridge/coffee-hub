@@ -229,7 +229,7 @@ export const OrdersOverview = memo(function OrdersOverview({
 
   if (orders.length === 0) {
     return (
-      <div className="px-4 pb-28 pt-24 sm:px-6">
+      <div className="px-4 pb-28 sm:px-6">
         <div className="coffee-surface-soft mx-auto max-w-screen-md rounded-[24px] p-8 text-center">
           <PackageSearch className="mx-auto mb-4 text-ink-muted opacity-80" size={36} />
           <h2 className="mb-2 text-[1.55rem] font-semibold text-accent">Nothing here yet ☕</h2>
@@ -243,7 +243,7 @@ export const OrdersOverview = memo(function OrdersOverview({
   }
 
   return (
-    <div className="px-4 pb-28 pt-24 sm:px-6">
+    <div className="px-4 pb-28 sm:px-6">
       <div className="mx-auto max-w-screen-md space-y-8">
         <section>
           <div className="mb-4 flex items-center justify-between">

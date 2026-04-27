@@ -25,7 +25,7 @@ export const HeroBanner = ({
 }: HeroBannerProps) => (
   <section
     className={`relative overflow-hidden px-4 sm:px-6 ${
-      hasStatusBanner ? 'pt-2 sm:pt-3' : 'pt-20'
+      hasStatusBanner ? 'pt-2 sm:pt-3' : 'pt-0'
     }`}
   >
     <motion.div

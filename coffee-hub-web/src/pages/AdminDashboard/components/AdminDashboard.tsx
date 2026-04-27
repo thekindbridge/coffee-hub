@@ -103,7 +103,7 @@ export default function AdminDashboard({
   const sectionFallback = <Loader label="Loading admin section..." minHeightClassName="min-h-[320px]" />;
 
   return (
-    <div className="px-4 pb-28 pt-24 sm:px-6">
+    <div className="px-4 pb-28 sm:px-6">
       <div className="mx-auto max-w-screen-md space-y-5">
         {activeSection === 'dashboard' && (
           <section className="space-y-4">

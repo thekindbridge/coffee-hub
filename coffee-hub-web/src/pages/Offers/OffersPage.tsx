@@ -6,7 +6,7 @@ export const OffersPage = ({
   error,
   isLoading,
 }: OffersPageProps) => (
-  <div className="space-y-6 px-6 pb-24 pt-24">
+  <div className="space-y-6 px-6 pb-24 pt-0">
     <h2 className="mb-8 text-3xl font-black">Exclusive Offers</h2>
 
     {error ? (

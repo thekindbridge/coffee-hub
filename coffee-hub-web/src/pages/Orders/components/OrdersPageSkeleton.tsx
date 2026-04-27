@@ -1,5 +1,5 @@
 export const OrdersPageSkeleton = () => (
-  <div className="px-4 pb-28 pt-24 sm:px-6">
+  <div className="px-4 pb-28 sm:px-6">
     <div className="mx-auto max-w-screen-md space-y-8">
       {Array.from({ length: 2 }).map((_, sectionIndex) => (
         <section key={sectionIndex}>

@@ -21,7 +21,7 @@ export const TrackingPage = ({
   trackingError,
   trackingOrderId,
 }: TrackingPageProps) => (
-  <div className="px-4 pb-24 pt-24 sm:px-6">
+  <div className="px-4 pb-24 sm:px-6">
     {!orderStatus ? (
       <div className="mx-auto max-w-screen-md py-16">
         <div className="overflow-hidden rounded-[34px] border border-white/10 bg-[linear-gradient(180deg,rgba(23,16,14,0.98),rgba(11,8,7,0.98))] px-6 py-10 text-center shadow-[0_26px_80px_rgba(0,0,0,0.28)]">

@@ -1,7 +1,7 @@
 import { DeliveryTrackingMapSkeleton } from '../../../components/DeliveryTrackingMapSkeleton';
 
 export const TrackingPageSkeleton = () => (
-  <div className="px-4 pb-24 pt-24 sm:px-6">
+  <div className="px-4 pb-24 sm:px-6">
     <div className="mx-auto max-w-screen-lg space-y-4">
       <div className="rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,#18110d,#0f0a08)] px-5 py-5 shadow-[0_18px_50px_rgba(8,5,4,0.24)]">
         <div className="h-3 w-28 animate-pulse rounded-full bg-white/12" />

@@ -49,6 +49,7 @@
     --app-inset-highlight: rgba(255, 255, 255, 0.03);
     --app-tab-active-background: linear-gradient(135deg, rgba(111, 78, 55, 0.5), rgba(62, 39, 35, 0.9));
     --app-nav-active-background: linear-gradient(180deg, rgba(192, 138, 93, 0.18), rgba(111, 78, 55, 0.28));
+    --app-header-sticky-offset: calc(4.5rem + env(safe-area-inset-top));
     --app-header-shell-border: rgba(255, 255, 255, 0.06);
     --app-header-shell-background: rgba(18, 13, 11, 0.78);
     --app-header-card-border: rgba(255, 255, 255, 0.08);
