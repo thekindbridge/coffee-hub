@@ -3,12 +3,13 @@ import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import { createOrderRequest } from '../../../services/api/ordersService';
 import { getCurrentUserIdToken } from '../../../services/auth/authService';
 import {
-  locationAdapter,
-  LocationAdapterError,
   type LocationSettingsTarget,
 } from '../../../services/platform/locationAdapter';
+import {
+  captureCurrentLocation,
+  openLocationSettings,
+} from '../../../services/platform/locationService';
 import { navigationAdapter } from '../../../services/platform/navigationAdapter';
-import { openPermissionSettings } from '../../../services/platform/permissionService';
 import { getAppServiceErrorMessage } from '../../../services/platform/serviceError';
 import { calculateDiscount } from '../../../utils/calculateDiscount';
 import type {
@@ -235,34 +236,6 @@ export const usePaymentFlow = ({
     return () => clearInterval(intervalId);
   }, []);
 
-  const resolveLocationFailure = (error: unknown) => {
-    if (error instanceof LocationAdapterError) {
-      return {
-        message: error.message,
-        settingsTarget:
-          error.recoveryAction === 'open-app-settings'
-            ? 'app'
-            : error.recoveryAction === 'open-location-settings'
-              ? 'location'
-              : null,
-      } satisfies {
-        message: string;
-        settingsTarget: LocationSettingsTarget | null;
-      };
-    }
-
-    return {
-      message: getAppServiceErrorMessage(
-        error,
-        'Unable to capture your location right now.',
-      ),
-      settingsTarget: null,
-    } satisfies {
-      message: string;
-      settingsTarget: LocationSettingsTarget | null;
-    };
-  };
-
   const captureLocation = async () => {
     setIsLocatingCustomer(true);
     setCustomerLocationError('');
@@ -270,27 +243,35 @@ export const usePaymentFlow = ({
     setLocationSettingsTarget(null);
     setCheckoutError('');
     try {
-      const nextLocation = await locationAdapter.getCurrentLocation({
+      const captureResult = await captureCurrentLocation({
         enableHighAccuracy: true,
         enableLocationFallback: true,
         maxAttempts: 2,
         maximumAgeMs: 0,
         timeoutMs: 18000,
       });
-      setCustomerDetails(prev => ({ ...prev, location: nextLocation }));
+
+      if (!captureResult.location) {
+        setCustomerLocationError(captureResult.message);
+        setCanOpenLocationSettings(captureResult.canOpenLocationSettings);
+        setLocationSettingsTarget(captureResult.locationSettingsTarget);
+        return null;
+      }
+
+      setCustomerDetails(prev => ({ ...prev, location: captureResult.location }));
       setCustomerLocationError('');
       setCanOpenLocationSettings(false);
       setLocationSettingsTarget(null);
-      return nextLocation;
+      return captureResult.location;
     } catch (error) {
-      const { message, settingsTarget } = resolveLocationFailure(error);
-      console.error('Customer location capture failed', {
+      const message = getAppServiceErrorMessage(
         error,
-        settingsTarget,
-      });
+        'Unable to fetch location. Try again.',
+      );
+      console.error('Customer location capture failed', error);
       setCustomerLocationError(message);
-      setCanOpenLocationSettings(settingsTarget !== null);
-      setLocationSettingsTarget(settingsTarget);
+      setCanOpenLocationSettings(false);
+      setLocationSettingsTarget(null);
       return null;
     } finally {
       setIsLocatingCustomer(false);
@@ -303,12 +284,12 @@ export const usePaymentFlow = ({
 
   const handleOpenLocationSettings = async () => {
     const target = locationSettingsTarget ?? 'app';
-    const didOpenSettings = await openPermissionSettings(target);
+    const didOpenSettings = await openLocationSettings(target);
     if (!didOpenSettings) {
       setCustomerLocationError(
         target === 'location'
-          ? 'Turn on GPS for better accuracy.'
-          : 'Open App Settings and allow location access.',
+          ? 'Turn on GPS to continue.'
+          : 'Please enable location in app settings.',
       );
     }
   };

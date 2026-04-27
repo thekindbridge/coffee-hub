@@ -70,13 +70,13 @@ export const CartDrawerCheckoutDetails = ({
       : 'Fetch Location';
 
   const locationSettingsLabel = locationSettingsTarget === 'location'
-    ? 'Open GPS Settings'
-    : 'Open App Settings';
+    ? 'Open Location Settings'
+    : 'Enable Location';
 
   return (
     <div className="space-y-5">
     {!isShopOpen && (
-      <div className="rounded-[24px] border border-[#f4c16e]/24 bg-[linear-gradient(135deg,rgba(244,193,110,0.12),rgba(65,43,26,0.74))] px-4 py-3 text-sm text-[#fff0d5]">
+      <div className="rounded-3xl border border-[#f4c16e]/24 bg-[linear-gradient(135deg,rgba(244,193,110,0.12),rgba(65,43,26,0.74))] px-4 py-3 text-sm text-[#fff0d5]">
         <p className="font-semibold text-accent">Ordering update</p>
         <p className="mt-1 text-xs leading-5 text-[#f5ddbb]">{shopStatusMessage}</p>
       </div>
@@ -247,7 +247,7 @@ export const CartDrawerCheckoutDetails = ({
                 </button>
                 {selectedAddressIndex === 'new' && (
                   <textarea
-                    className="coffee-textarea min-h-[88px]"
+                    className="coffee-textarea min-h-22"
                     value={customerDetails.address}
                     onChange={event => {
                       setCheckoutError('');
@@ -283,14 +283,14 @@ export const CartDrawerCheckoutDetails = ({
       )}
     </div>
 
-    <div className="rounded-[24px] border border-white/10 bg-white/5 p-4">
+    <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <label className="block text-[11px] font-semibold uppercase tracking-[0.22em] text-ink-muted">
             Live Delivery Location
           </label>
-          <p className="mt-2 max-w-[22rem] text-xs leading-5 text-ink-muted">
-            GPS helps the admin and delivery team find you faster. You can still place the order with your address if location is unavailable.
+          <p className="mt-2 max-w-88 text-xs leading-5 text-ink-muted">
+            GPS helps the delivery team and admin find you faster. If the lock fails, keep your delivery address ready and retry from here.
           </p>
         </div>
         <button
@@ -314,16 +314,23 @@ export const CartDrawerCheckoutDetails = ({
           </>
         ) : isLocatingCustomer ? (
           <>
-            <p className="font-semibold text-accent">Fetching your location...</p>
+            <div className="flex items-center gap-2 font-semibold text-accent">
+              <span>Fetching your location</span>
+              <span className="flex items-center gap-1">
+                <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-accent [animation-delay:-0.2s]" />
+                <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-accent [animation-delay:-0.1s]" />
+                <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-accent" />
+              </span>
+            </div>
             <p className="mt-1 text-xs leading-5 text-ink-muted">
-              Keep GPS on and wait a few seconds. Some low-end devices may take longer to lock the signal.
+              Keep GPS on and wait a few seconds. The app will retry once automatically before showing an action button.
             </p>
           </>
         ) : (
           <>
             <p className="font-semibold text-accent">Location not added yet.</p>
             <p className="mt-1 text-xs leading-5 text-ink-muted">
-              Turn on GPS for better accuracy, then tap Fetch Location whenever you are ready.
+              Tap Fetch Location to use GPS. If that fails, continue with your delivery address and retry when ready.
             </p>
           </>
         )}
@@ -361,7 +368,7 @@ export const CartDrawerCheckoutDetails = ({
 
     <div>
       <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.22em] text-ink-muted">Payment Method</label>
-      <div className="rounded-[24px] border border-secondary/30 bg-[linear-gradient(135deg,rgba(111,78,55,0.22),rgba(62,39,35,0.78))] px-4 py-4 shadow-[0_16px_32px_rgba(62,39,35,0.18)]">
+      <div className="rounded-3xl border border-secondary/30 bg-[linear-gradient(135deg,rgba(111,78,55,0.22),rgba(62,39,35,0.78))] px-4 py-4 shadow-[0_16px_32px_rgba(62,39,35,0.18)]">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/10 text-secondary">
             <Wallet size={18} />

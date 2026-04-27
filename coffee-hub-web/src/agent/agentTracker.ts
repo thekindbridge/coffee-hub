@@ -134,14 +134,14 @@ export class AgentTracker {
     }
 
     this.hasStopped = false;
-    this.emitStatus(createStatus('starting', 'Checking GPS permission...'));
+    this.emitStatus(createStatus('starting', 'Checking location permission...'));
     await this.syncPermissionState();
 
     if (this.permissionState === 'denied') {
       this.emitStatus(
-        createStatus('denied', 'Location permission is blocked. Enable GPS permission to start delivery.'),
+        createStatus('denied', 'Location access denied. Enable location permission to continue.'),
       );
-      this.emitError('Location permission is blocked for this device.');
+      this.emitError('Location access denied.');
       return false;
     }
 
@@ -275,9 +275,9 @@ export class AgentTracker {
       this.clearWatch();
       this.clearHealthInterval();
       this.emitStatus(
-        createStatus('denied', 'GPS permission denied. Enable location permission to continue.'),
+        createStatus('denied', 'Location access denied. Enable location permission to continue.'),
       );
-      this.emitError('GPS permission denied.');
+      this.emitError('Location access denied.');
       return;
     }
 

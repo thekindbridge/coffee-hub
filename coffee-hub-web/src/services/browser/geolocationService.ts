@@ -1,4 +1,6 @@
 import type { DeliveryLocation } from '../../types';
+import { Capacitor } from '@capacitor/core';
+import { Geolocation, type PermissionStatus, type PositionOptions } from '@capacitor/geolocation';
 import type {
   LocationAdapterErrorCode,
   LocationPermissionState,
@@ -18,7 +20,7 @@ class BrowserLocationError extends Error {
 const DEFAULT_LOCATION_OPTIONS = {
   enableHighAccuracy: true,
   maximumAgeMs: 0,
-  timeoutMs: 15000,
+  timeoutMs: 18000,
 } satisfies Required<
   Pick<LocationRequestOptions, 'enableHighAccuracy' | 'maximumAgeMs' | 'timeoutMs'>
 >;
@@ -31,7 +33,9 @@ const buildPositionOptions = (
   timeout: options.timeoutMs ?? DEFAULT_LOCATION_OPTIONS.timeoutMs,
 });
 
-const mapBrowserPosition = (position: GeolocationPosition): DeliveryLocation => ({
+const mapBrowserPosition = (
+  position: Awaited<ReturnType<typeof Geolocation.getCurrentPosition>>,
+): DeliveryLocation => ({
   lat: position.coords.latitude,
   lng: position.coords.longitude,
   accuracy: Number.isFinite(position.coords.accuracy)
@@ -44,57 +48,114 @@ const createLocationError = (
   code: LocationAdapterErrorCode,
 ) => new BrowserLocationError(message, code);
 
-const mapLocationError = (error: GeolocationPositionError) => {
-  if (error.code === error.PERMISSION_DENIED) {
-    return createLocationError(
-      error.message || 'Location permission was denied.',
-      'permission_denied',
-    );
+const isNativeRuntime = () => Capacitor.isNativePlatform();
+
+const getErrorDetails = (error: unknown) => {
+  if (error && typeof error === 'object') {
+    const data = error as {
+      code?: unknown;
+      localizedMessage?: unknown;
+      message?: unknown;
+    };
+
+    return {
+      code: typeof data.code === 'string'
+        ? data.code
+        : typeof data.code === 'number'
+          ? String(data.code)
+          : '',
+      message:
+        typeof data.message === 'string' && data.message.trim()
+          ? data.message.trim()
+          : typeof data.localizedMessage === 'string' && data.localizedMessage.trim()
+            ? data.localizedMessage.trim()
+            : '',
+    };
   }
 
-  if (error.code === error.TIMEOUT) {
-    return createLocationError(
-      error.message || 'Location request timed out.',
-      'timeout',
-    );
+  if (error instanceof Error) {
+    return { code: '', message: error.message.trim() };
   }
 
-  if (error.code === error.POSITION_UNAVAILABLE) {
-    return createLocationError(
-      error.message || 'Location data is unavailable.',
-      'position_unavailable',
-    );
+  return { code: '', message: '' };
+};
+
+const mapLocationError = (error: unknown) => {
+  const { code, message } = getErrorDetails(error);
+  const lowerMessage = message.toLowerCase();
+
+  if (
+    code === '1' ||
+    code === 'OS-PLUG-GLOC-0003' ||
+    lowerMessage.includes('location permission') ||
+    lowerMessage.includes('permission request was denied') ||
+    lowerMessage.includes('permission was denied') ||
+    lowerMessage.includes('user denied geolocation')
+  ) {
+    return createLocationError('Location access denied.', 'permission_denied');
   }
 
-  return createLocationError(
-    error.message || 'Unable to access your location.',
-    'unknown',
-  );
+  if (
+    code === 'OS-PLUG-GLOC-0007' ||
+    code === 'OS-PLUG-GLOC-0009' ||
+    code === 'OS-PLUG-GLOC-0016' ||
+    code === 'OS-PLUG-GLOC-0017' ||
+    lowerMessage.includes('location services are not enabled') ||
+    lowerMessage.includes('request to enable location was denied') ||
+    lowerMessage.includes('both network and location turned off')
+  ) {
+    return createLocationError('Turn on GPS to continue.', 'services_disabled');
+  }
+
+  if (
+    code === '3' ||
+    code === 'OS-PLUG-GLOC-0010' ||
+    lowerMessage.includes('timed out')
+  ) {
+    return createLocationError('Unable to fetch location. Try again.', 'timeout');
+  }
+
+  if (
+    code === 'OS-PLUG-GLOC-0002' ||
+    code === '2' ||
+    lowerMessage.includes('position unavailable') ||
+    lowerMessage.includes('unable to retrieve')
+  ) {
+    return createLocationError('Unable to fetch location. Try again.', 'position_unavailable');
+  }
+
+  if (
+    lowerMessage.includes('not implemented on web') ||
+    lowerMessage.includes('not supported') ||
+    lowerMessage.includes('permissions api not available')
+  ) {
+    return createLocationError('Location is not supported on this device.', 'unsupported');
+  }
+
+  return createLocationError(message || 'Unable to fetch location. Try again.', 'unknown');
 };
 
 export const isBrowserGeolocationSupported = () =>
-  typeof navigator !== 'undefined' && 'geolocation' in navigator;
+  isNativeRuntime() || (typeof navigator !== 'undefined' && 'geolocation' in navigator);
 
 export const queryBrowserGeolocationPermission = async (): Promise<LocationPermissionState> => {
   if (!isBrowserGeolocationSupported()) {
     return 'unsupported';
   }
 
-  if (!('permissions' in navigator) || typeof navigator.permissions.query !== 'function') {
-    return 'unavailable';
-  }
-
   try {
-    const permissionResult = await navigator.permissions.query({
-      name: 'geolocation' as PermissionName,
-    });
+    const permission: PermissionStatus = await Geolocation.checkPermissions();
 
-    if (
-      permissionResult.state === 'granted' ||
-      permissionResult.state === 'denied' ||
-      permissionResult.state === 'prompt'
-    ) {
-      return permissionResult.state;
+    if (permission.location === 'granted' || permission.coarseLocation === 'granted') {
+      return 'granted';
+    }
+
+    if (permission.location === 'denied' && permission.coarseLocation === 'denied') {
+      return 'denied';
+    }
+
+    if (permission.location === 'prompt' || permission.coarseLocation === 'prompt') {
+      return 'prompt';
     }
 
     return 'unavailable';
@@ -116,15 +177,13 @@ export const getCurrentBrowserLocation = (
     return;
   }
 
-  navigator.geolocation.getCurrentPosition(
-    position => {
+  void Geolocation.getCurrentPosition(buildPositionOptions(options))
+    .then(position => {
       resolve(mapBrowserPosition(position));
-    },
-    error => {
+    })
+    .catch(error => {
       reject(mapLocationError(error));
-    },
-    buildPositionOptions(options),
-  );
+    });
 });
 
 export const subscribeToBrowserLocation = ({
@@ -146,14 +205,40 @@ export const subscribeToBrowserLocation = ({
     return null;
   }
 
-  return navigator.geolocation.watchPosition(
-    position => {
+  if (isNativeRuntime()) {
+    return Geolocation.watchPosition(
+      buildPositionOptions(options),
+      (position, error) => {
+        if (error) {
+          onError(mapLocationError(error));
+          return;
+        }
+
+        if (!position) {
+          onError(createLocationError('Unable to fetch location. Try again.', 'position_unavailable'));
+          return;
+        }
+
+        onLocation(mapBrowserPosition(position));
+      },
+    );
+  }
+
+  return Geolocation.watchPosition(
+    buildPositionOptions(options),
+    (position, error) => {
+      if (error) {
+        onError(mapLocationError(error));
+        return;
+      }
+
+      if (!position) {
+        onError(createLocationError('Unable to fetch location. Try again.', 'position_unavailable'));
+        return;
+      }
+
       onLocation(mapBrowserPosition(position));
     },
-    error => {
-      onError(mapLocationError(error));
-    },
-    buildPositionOptions(options),
   );
 };
 
@@ -162,5 +247,5 @@ export const clearBrowserLocationSubscription = (watchId: number) => {
     return;
   }
 
-  navigator.geolocation.clearWatch(watchId);
+  void Geolocation.clearWatch({ id: String(watchId) });
 };

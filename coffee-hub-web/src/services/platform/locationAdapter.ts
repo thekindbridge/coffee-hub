@@ -199,7 +199,7 @@ const mapLocationError = (error: unknown): LocationAdapterError => {
     lowerMessage.includes('user denied geolocation')
   ) {
     return createLocationError(
-      'Permission required to get your location.',
+      'Location access denied.',
       'permission_denied',
       isNativeRuntime() ? 'open-app-settings' : 'retry',
       code,
@@ -216,7 +216,7 @@ const mapLocationError = (error: unknown): LocationAdapterError => {
     lowerMessage.includes('both network and location turned off')
   ) {
     return createLocationError(
-      'Turn on GPS for better accuracy, then try again.',
+      'Turn on GPS to continue.',
       'services_disabled',
       'open-location-settings',
       code,
@@ -229,7 +229,7 @@ const mapLocationError = (error: unknown): LocationAdapterError => {
     lowerMessage.includes('timed out')
   ) {
     return createLocationError(
-      'Fetching your location took too long. Please retry.',
+      'Unable to fetch location. Try again.',
       'timeout',
       'retry',
       code,
@@ -243,7 +243,7 @@ const mapLocationError = (error: unknown): LocationAdapterError => {
     lowerMessage.includes('unable to retrieve')
   ) {
     return createLocationError(
-      'We could not lock your location yet. Please retry in a spot with better GPS signal.',
+      'Unable to fetch location. Try again.',
       'position_unavailable',
       'retry',
       code,
@@ -264,7 +264,7 @@ const mapLocationError = (error: unknown): LocationAdapterError => {
   }
 
   return createLocationError(
-    message || 'Unable to access your location right now.',
+    message || 'Unable to fetch location. Try again.',
     'unknown',
     'retry',
     code,

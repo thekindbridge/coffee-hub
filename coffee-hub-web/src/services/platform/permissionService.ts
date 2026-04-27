@@ -27,11 +27,11 @@ export type LocationPermissionResult = {
 };
 
 const LOCATION_PERMISSION_MESSAGE =
-  'Permission required to get your location.';
+  'Location access denied.';
 const LOCATION_SETTINGS_MESSAGE =
-  'Open App Settings and allow location access.';
+  'Please enable location in app settings.';
 const LOCATION_SERVICES_MESSAGE =
-  'Turn on GPS for better accuracy.';
+  'Turn on GPS to continue.';
 const NOTIFICATION_UNSUPPORTED_MESSAGE =
   'Notifications are not supported on this device.';
 
@@ -137,7 +137,7 @@ const mapLocationPermissionFailure = (
     normalizedMessage.includes('user denied geolocation')
   ) {
     return {
-      message: LOCATION_SETTINGS_MESSAGE,
+      message: 'Location is required to place an order.',
       requiresSettings: true,
       settingsTarget: 'app',
       state: 'denied',
@@ -273,7 +273,7 @@ export const requestLocationPermission = async (): Promise<LocationPermissionRes
       return {
         location: null,
         message: nextState === 'denied'
-          ? LOCATION_SETTINGS_MESSAGE
+          ? 'Location is required to place an order.'
           : LOCATION_PERMISSION_MESSAGE,
         requiresSettings: nextState === 'denied',
         settingsTarget: nextState === 'denied' ? 'app' : null,
@@ -334,7 +334,7 @@ export const requestLocationPermission = async (): Promise<LocationPermissionRes
 
     return {
       location: null,
-      message: isDenied ? LOCATION_SETTINGS_MESSAGE : failure.message,
+      message: isDenied ? 'Location is required to place an order.' : failure.message,
       requiresSettings: isDenied || failure.requiresSettings,
       settingsTarget: isDenied ? 'app' : failure.settingsTarget,
       state: nextState === 'unavailable' ? permissionState : nextState,
@@ -365,7 +365,7 @@ export const openPermissionSettings = async (
 
 export const getFriendlyLocationPermissionMessage = (state: AppPermissionState) => {
   if (state === 'denied') {
-    return LOCATION_SETTINGS_MESSAGE;
+    return 'Location is required to place an order.';
   }
 
   if (state === 'unsupported') {
