@@ -7,7 +7,11 @@ import {
   type FirebaseForegroundNotification,
   type FirebaseMessagingPermissionState,
 } from '../../../services/firebase/firebaseMessaging';
-import { saveUserFcmToken } from '../../../services/firebase/profileService';
+import {
+  type PushRegistrationPermission,
+  registerPushToken,
+} from '../../../services/api/notificationsService';
+import { getCurrentUserIdToken } from '../../../services/auth/authService';
 import {
   isNativeAndroidNotificationRuntime,
   playRoleNotificationEffect,
@@ -65,6 +69,20 @@ const toFirebasePermissionState = (
   return 'default';
 };
 
+const toRegistrationPermission = (
+  permissionState: FirebaseMessagingPermissionState,
+): PushRegistrationPermission | null => {
+  if (
+    permissionState === 'granted' ||
+    permissionState === 'denied' ||
+    permissionState === 'default'
+  ) {
+    return permissionState;
+  }
+
+  return null;
+};
+
 export const usePushNotifications = ({
   isAuthReady,
   isLoggedIn,
@@ -83,7 +101,7 @@ export const usePushNotifications = ({
     useState<FirebaseForegroundNotification | null>(null);
   const [isPermissionBannerDismissed, setIsPermissionBannerDismissed] =
     useState(false);
-  const lastSyncedTokenRef = useRef('');
+  const lastSyncedRegistrationRef = useRef('');
   const resolvedNotificationRole = resolveNotificationRole(role);
   const isNativeAndroid = isNativeAndroidNotificationRuntime();
 
@@ -134,7 +152,7 @@ export const usePushNotifications = ({
 
   useEffect(() => {
     if (!isAuthReady || !isLoggedIn || !currentUserId || !isSupported) {
-      lastSyncedTokenRef.current = '';
+      lastSyncedRegistrationRef.current = '';
       return;
     }
 
@@ -155,22 +173,31 @@ export const usePushNotifications = ({
 
       void subscribeToNativePushNotifications({
         onToken: async token => {
-          if (!token.trim()) {
+          const normalizedToken = token.trim();
+          if (!normalizedToken) {
+            return;
+          }
+
+          const nextSignature = `granted:${normalizedToken}`;
+          if (lastSyncedRegistrationRef.current === nextSignature) {
             return;
           }
 
           setIsSyncing(true);
           setSyncError('');
           try {
-            await saveUserFcmToken({
-              currentUserId,
-              currentUserPhone,
-              isDeliveryAgent,
-              token,
-            });
-            lastSyncedTokenRef.current = token;
+            const idToken = await getCurrentUserIdToken();
+            await registerPushToken(
+              {
+                permission: 'granted',
+                token: normalizedToken,
+                tokenType: 'fcm',
+              },
+              idToken,
+            );
+            lastSyncedRegistrationRef.current = nextSignature;
           } catch (error) {
-            console.error('Failed to save native push token', error);
+            console.error('Failed to sync native push token', error);
             setSyncError(
               error instanceof Error
                 ? error.message
@@ -218,6 +245,15 @@ export const usePushNotifications = ({
         }
 
         cleanup = nextCleanup;
+
+        if (permissionState === 'granted') {
+          void requestPlatformNotificationPermission().catch(error => {
+            console.error('Failed to refresh native push registration', error);
+            if (!isDisposed) {
+              setSyncError('Unable to refresh notifications right now.');
+            }
+          });
+        }
       }).catch(error => {
         console.error('Failed to subscribe to native push notifications', error);
       });
@@ -239,11 +275,10 @@ export const usePushNotifications = ({
     });
   }, [
     currentUserId,
-    currentUserPhone,
-    isDeliveryAgent,
     isLoggedIn,
     isNativeAndroid,
     isSupported,
+    permissionState,
     resolvedNotificationRole,
   ]);
 
@@ -253,7 +288,57 @@ export const usePushNotifications = ({
     }
 
     if (permissionState !== 'granted' || isNativeAndroid) {
-      return;
+      const nextPermission = toRegistrationPermission(permissionState);
+      if (!nextPermission || permissionState === 'granted') {
+        return;
+      }
+
+      let isCancelled = false;
+
+      const clearServerRegistration = async () => {
+        const nextSignature = `${nextPermission}:`;
+        if (lastSyncedRegistrationRef.current === nextSignature) {
+          return;
+        }
+
+        setIsSyncing(true);
+        setSyncError('');
+
+        try {
+          const idToken = await getCurrentUserIdToken();
+          await registerPushToken(
+            {
+              permission: nextPermission,
+              token: '',
+              tokenType: 'fcm',
+            },
+            idToken,
+          );
+
+          if (!isCancelled) {
+            lastSyncedRegistrationRef.current = nextSignature;
+          }
+        } catch (error) {
+          console.error('Failed to clear push registration', error);
+          if (!isCancelled) {
+            setSyncError(
+              error instanceof Error
+                ? error.message
+                : 'Unable to update notifications right now.',
+            );
+          }
+        } finally {
+          if (!isCancelled) {
+            setIsSyncing(false);
+          }
+        }
+      };
+
+      void clearServerRegistration();
+
+      return () => {
+        isCancelled = true;
+      };
     }
 
     let isCancelled = false;
@@ -264,22 +349,26 @@ export const usePushNotifications = ({
 
       try {
         const token = await getDeviceToken();
-        if (!token || isCancelled || lastSyncedTokenRef.current === token) {
+        const nextSignature = `granted:${token}`;
+        if (!token || isCancelled || lastSyncedRegistrationRef.current === nextSignature) {
           return;
         }
 
-        await saveUserFcmToken({
-          currentUserId,
-          currentUserPhone,
-          isDeliveryAgent,
-          token,
-        });
+        const idToken = await getCurrentUserIdToken();
+        await registerPushToken(
+          {
+            permission: 'granted',
+            token,
+            tokenType: 'fcm',
+          },
+          idToken,
+        );
 
         if (!isCancelled) {
-          lastSyncedTokenRef.current = token;
+          lastSyncedRegistrationRef.current = nextSignature;
         }
       } catch (error) {
-        console.error('Failed to sync browser push token', error);
+        console.error('Failed to sync browser push registration', error);
         if (!isCancelled) {
           setSyncError(
             error instanceof Error
@@ -300,14 +389,12 @@ export const usePushNotifications = ({
       isCancelled = true;
     };
   }, [
-    currentUserId,
-    currentUserPhone,
     isAuthReady,
-    isDeliveryAgent,
     isLoggedIn,
     isNativeAndroid,
     isSupported,
     permissionState,
+    currentUserId,
   ]);
 
   const requestPermission = async () => {

@@ -12,6 +12,8 @@ import java.util.Map;
 
 public class CoffeeHubFirebaseMessagingService extends FirebaseMessagingService {
 
+    private static final String APP_WEB_BASE_URL = "https://coffee-hub-inkollu.vercel.app";
+
     @Override
     public void onMessageReceived(RemoteMessage remoteMessage) {
         Map<String, String> data = remoteMessage.getData();
@@ -41,7 +43,7 @@ public class CoffeeHubFirebaseMessagingService extends FirebaseMessagingService 
             null,
             NotificationChannelHelper.resolveChannelId(role)
         );
-        String targetUrl = getValue(data.get("url"), null, "/");
+        String targetUrl = normalizeTargetUrl(getValue(data.get("url"), null, "/"));
         String tag = getValue(data.get("tag"), null, channelId);
         int notificationId = buildNotificationId(tag, body);
 
@@ -63,6 +65,8 @@ public class CoffeeHubFirebaseMessagingService extends FirebaseMessagingService 
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
+            .setOnlyAlertOnce(true)
+            .setStyle(new NotificationCompat.BigTextStyle().bigText(body))
             .setCategory(NotificationCompat.CATEGORY_MESSAGE);
 
         NotificationManagerCompat.from(this).notify(notificationId, notificationBuilder.build());
@@ -90,5 +94,22 @@ public class CoffeeHubFirebaseMessagingService extends FirebaseMessagingService 
     private int buildNotificationId(String tag, String body) {
         String seed = (tag + ":" + body).trim();
         return Math.abs(seed.hashCode());
+    }
+
+    private String normalizeTargetUrl(String value) {
+        String trimmedValue = value == null ? "" : value.trim();
+        if (trimmedValue.isEmpty()) {
+            return APP_WEB_BASE_URL + "/";
+        }
+
+        if (trimmedValue.startsWith("https://") || trimmedValue.startsWith("http://")) {
+            return trimmedValue;
+        }
+
+        if (trimmedValue.startsWith("/")) {
+            return APP_WEB_BASE_URL + trimmedValue;
+        }
+
+        return APP_WEB_BASE_URL + "/" + trimmedValue;
     }
 }

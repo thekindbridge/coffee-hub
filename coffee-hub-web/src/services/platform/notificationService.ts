@@ -1,7 +1,6 @@
 import { Capacitor } from '@capacitor/core';
 import {
   LocalNotifications,
-  type LocalNotificationSchema,
 } from '@capacitor/local-notifications';
 import {
   PushNotifications,
@@ -138,17 +137,6 @@ export const ensureNativeNotificationChannels = async () => {
   );
 };
 
-const buildLocalNotificationId = (tag: string, body: string) => {
-  const seed = `${tag}:${body}`.trim();
-  let value = 0;
-
-  for (let index = 0; index < seed.length; index += 1) {
-    value = ((value << 5) - value + seed.charCodeAt(index)) | 0;
-  }
-
-  return Math.abs(value || Date.now()) % 2147483647;
-};
-
 export const playRoleNotificationEffect = async ({
   body,
   role,
@@ -163,26 +151,8 @@ export const playRoleNotificationEffect = async ({
   url?: string;
 }) => {
   if (isNativeAndroidNotificationRuntime()) {
-    const roleConfig = getNotificationRoleConfig(role);
-    await ensureNativeNotificationChannels();
-    await LocalNotifications.schedule({
-      notifications: [{
-        id: buildLocalNotificationId(tag || title, body),
-        title,
-        body,
-        channelId: roleConfig.channelId,
-        sound: roleConfig.sound,
-        schedule: {
-          at: new Date(Date.now() + 150),
-        },
-        extra: {
-          url: url || '/',
-        },
-      } satisfies LocalNotificationSchema],
-    });
-
     if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
-      navigator.vibrate(roleConfig.vibrationPattern);
+      navigator.vibrate(getNotificationRoleConfig(role).vibrationPattern);
     }
 
     return;

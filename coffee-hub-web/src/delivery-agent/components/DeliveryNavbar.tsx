@@ -17,24 +17,24 @@ export const DeliveryNavbar = <T extends string,>({
   items,
   onChange,
 }: DeliveryNavbarProps<T>) => (
-  <nav className="fixed bottom-0 left-0 right-0 z-[80] border-t border-white/10 bg-background/95 px-2 py-2 backdrop-blur-xl">
-    <div className={`mx-auto grid w-full max-w-4xl gap-2 ${items.length === 1 ? 'grid-cols-1' : items.length > 3 ? 'grid-cols-4' : 'grid-cols-2'}`}>
+  <nav className="fixed bottom-4 left-0 right-0 z-[80] px-4">
+    <div className={`mx-auto grid w-full max-w-[240px] gap-2 rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(28,20,18,0.96),rgba(16,11,10,0.96))] p-2 shadow-[0_18px_40px_rgba(0,0,0,0.28)] backdrop-blur-xl ${items.length === 1 ? 'grid-cols-1' : items.length > 3 ? 'grid-cols-4' : 'grid-cols-2'}`}>
       {items.map(item => {
         const Icon = item.icon;
 
         return (
           <button
             key={item.id}
-            className={`flex min-h-14 flex-col items-center justify-center rounded-2xl text-[10px] font-black uppercase tracking-wide transition-colors ${
+            className={`coffee-nav-pill min-h-14 rounded-[22px] ${
               item.id === activeView
-                ? 'bg-primary text-white'
+                ? 'coffee-nav-pill-active bg-[linear-gradient(180deg,rgba(192,138,93,0.16),rgba(111,78,55,0.3))] text-accent'
                 : 'bg-white/5 text-ink-muted'
             }`}
             onClick={() => onChange(item.id)}
             type="button"
           >
             <Icon size={18} />
-            <span className="mt-1">{item.label}</span>
+            <span>{item.label}</span>
           </button>
         );
       })}

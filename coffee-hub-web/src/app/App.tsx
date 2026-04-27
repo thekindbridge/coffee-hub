@@ -1,4 +1,6 @@
 import { Suspense, useEffect, useState } from 'react';
+import { App as CapacitorApp } from '@capacitor/app';
+import { Capacitor } from '@capacitor/core';
 import type { Order } from '../types';
 import { useOffers } from '../features/offers/hooks/useOffers';
 import { useRealtimeAppData } from '../features/app/hooks/useRealtimeAppData';
@@ -16,6 +18,29 @@ import { AppRouter } from './router/AppRouter';
 import { storageAdapter } from '../services/platform/storageAdapter';
 
 const NOTIFICATION_PERMISSION_REQUESTED_KEY = 'notification_permission_requested';
+const COFFEE_HUB_APP_HOST = 'coffee-hub-inkollu.vercel.app';
+
+const normalizeNativeAppUrl = (rawUrl: string) => {
+  const trimmedUrl = rawUrl.trim();
+  if (!trimmedUrl) {
+    return '';
+  }
+
+  if (trimmedUrl.startsWith('/')) {
+    return trimmedUrl;
+  }
+
+  try {
+    const parsedUrl = new URL(trimmedUrl);
+    if (parsedUrl.protocol === 'https:' && parsedUrl.host === COFFEE_HUB_APP_HOST) {
+      return `${parsedUrl.pathname}${parsedUrl.search}${parsedUrl.hash}` || '/';
+    }
+  } catch {
+    return '';
+  }
+
+  return '';
+};
 
 const AuthLoadingPage = lazyNamed(
   () => import('../pages/AuthLoading/AuthLoadingPage'),
@@ -31,6 +56,46 @@ export default function App() {
   const [orderStatus, setOrderStatus] = useState<Order | null>(null);
   const installPrompt = useInstallPrompt();
   const networkStatus = useNetworkStatus();
+
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform() || typeof window === 'undefined') {
+      return;
+    }
+
+    let isDisposed = false;
+    const navigateToNativeAppUrl = (nextUrl: string) => {
+      const normalizedUrl = normalizeNativeAppUrl(nextUrl);
+      if (!normalizedUrl) {
+        return;
+      }
+
+      const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+      if (currentUrl === normalizedUrl) {
+        return;
+      }
+
+      window.location.assign(normalizedUrl);
+    };
+
+    void CapacitorApp.getLaunchUrl()
+      .then(result => {
+        if (!isDisposed && result?.url) {
+          navigateToNativeAppUrl(result.url);
+        }
+      })
+      .catch(() => undefined);
+
+    const appUrlOpenListener = CapacitorApp.addListener('appUrlOpen', event => {
+      if (!isDisposed && event.url) {
+        navigateToNativeAppUrl(event.url);
+      }
+    });
+
+    return () => {
+      isDisposed = true;
+      void appUrlOpenListener.then(listener => listener.remove());
+    };
+  }, []);
 
   const pushNotifications = usePushNotifications({
     isAuthReady: session.isAuthReady,

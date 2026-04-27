@@ -8,7 +8,9 @@ import type { VercelRequest } from '@vercel/node';
 
 import { ApiError } from '../../../../api/_lib/errors.js';
 import {
+  buildAdminDeliveryAssignedNotification,
   buildAdminNewOrderNotification,
+  buildAdminOrderCompletedNotification,
   buildAdminOrderCancelledNotification,
   buildAgentAssignmentNotification,
   buildAgentOrderCancelledNotification,
@@ -287,7 +289,6 @@ const logStatusTransition = ({
 
 const sendLifecycleNotificationsForStatusTransition = async ({
   adminDb,
-  assignedAgentId,
   fromStatus,
   orderId,
   rejectionReason = '',
@@ -295,7 +296,6 @@ const sendLifecycleNotificationsForStatusTransition = async ({
   userId,
 }: {
   adminDb: Firestore;
-  assignedAgentId?: string;
   fromStatus: OrderStatusCode;
   orderId: string;
   rejectionReason?: string;
@@ -306,7 +306,6 @@ const sendLifecycleNotificationsForStatusTransition = async ({
     return;
   }
 
-  const normalizedAgentId = (assignedAgentId || '').trim().toLowerCase();
   const notificationTasks: Promise<unknown>[] = [];
 
   if (
@@ -336,17 +335,17 @@ const sendLifecycleNotificationsForStatusTransition = async ({
     })());
   }
 
-  if (fromStatus === 'PREPARING' && toStatus === 'OUT_FOR_DELIVERY' && normalizedAgentId) {
+  if (fromStatus === 'OUT_FOR_DELIVERY' && toStatus === 'DELIVERED') {
     notificationTasks.push((async () => {
-      const agentRecipient = await getAgentRecipient(adminDb, normalizedAgentId);
-      if (!agentRecipient) {
+      const adminRecipients = await getAdminRecipients(adminDb);
+      if (adminRecipients.length === 0) {
         return;
       }
 
       await sendPushNotification(
         adminDb,
-        [agentRecipient],
-        buildAgentAssignmentNotification(orderId),
+        adminRecipients,
+        buildAdminOrderCompletedNotification(orderId),
       );
     })());
   }
@@ -784,7 +783,6 @@ const updateOrderStatusResponse = async (
   try {
     await sendLifecycleNotificationsForStatusTransition({
       adminDb,
-      assignedAgentId,
       fromStatus: previousStatus || status,
       orderId: updatedOrder.id,
       rejectionReason,
@@ -939,6 +937,38 @@ const assignAgentResponse = async (
   }
 
   const updatedOrder = mapOrderSnapshotToResponse(updatedOrderSnapshot as QueryDocumentSnapshot);
+
+  try {
+    const [adminRecipients, agentRecipient] = await Promise.all([
+      getAdminRecipients(adminDb),
+      getAgentRecipient(adminDb, agentId),
+    ]);
+    const notificationTasks: Promise<unknown>[] = [];
+
+    if (adminRecipients.length > 0) {
+      notificationTasks.push(
+        sendPushNotification(
+          adminDb,
+          adminRecipients,
+          buildAdminDeliveryAssignedNotification(updatedOrder.id),
+        ),
+      );
+    }
+
+    if (agentRecipient) {
+      notificationTasks.push(
+        sendPushNotification(
+          adminDb,
+          [agentRecipient],
+          buildAgentAssignmentNotification(updatedOrder.id),
+        ),
+      );
+    }
+
+    await Promise.all(notificationTasks);
+  } catch (notificationError) {
+    console.error('Order assigned but notification dispatch failed', notificationError);
+  }
 
   return jsonResponse(200, { order: updatedOrder });
 };
@@ -1439,15 +1469,36 @@ export const createOrderResponse = async (
   const order = mapOrderSnapshotToResponse(createdOrderSnapshot as QueryDocumentSnapshot);
 
   try {
-    const adminRecipients = await getAdminRecipients(adminDb);
+    const [adminRecipients, customerRecipient] = await Promise.all([
+      getAdminRecipients(adminDb),
+      getCustomerRecipient(adminDb, effectiveUserId),
+    ]);
+    const notificationTasks: Promise<unknown>[] = [];
 
-    if (adminRecipients.length > 0) {
-      await sendPushNotification(
-        adminDb,
-        adminRecipients,
-        buildAdminNewOrderNotification(order.id),
+    if (customerRecipient) {
+      notificationTasks.push(
+        sendPushNotification(
+          adminDb,
+          [customerRecipient],
+          buildCustomerOrderNotification({
+            orderId: order.id,
+            status: 'WAITING',
+          }),
+        ),
       );
     }
+
+    if (adminRecipients.length > 0) {
+      notificationTasks.push(
+        sendPushNotification(
+          adminDb,
+          adminRecipients,
+          buildAdminNewOrderNotification(order.id),
+        ),
+      );
+    }
+
+    await Promise.all(notificationTasks);
   } catch (notificationError) {
     console.error('Order created but notification dispatch failed', notificationError);
   }

@@ -22,7 +22,7 @@ export const NotificationPermissionBanner = ({
             Stay Updated
           </p>
           <p className="mt-1 text-sm font-semibold text-white">
-            Enable notifications for order updates 🚀
+            Enable notifications for live order updates
           </p>
           <p className="mt-1 text-xs leading-5 text-[#ead8cc]">
             Get real-time updates without opening the app every time.

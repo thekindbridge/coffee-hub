@@ -158,7 +158,7 @@ export const mapNotificationRecordToNotification = (
   body: `${data.body || ''}`.trim(),
   created_at: mapTimestampToIsoString(data.createdAt) || FALLBACK_TIMESTAMP_ISO,
   order_id: `${data.orderId || ''}`.trim(),
-  read: data.read === true,
+  read: data.read === true || data.isRead === true,
   role:
     data.role === 'admin' || data.role === 'delivery_agent'
       ? data.role
@@ -166,6 +166,7 @@ export const mapNotificationRecordToNotification = (
   status: `${data.status || ''}`.trim(),
   tag: `${data.tag || ''}`.trim(),
   title: `${data.title || ''}`.trim(),
+  type: `${data.type || ''}`.trim(),
   url: `${data.url || ''}`.trim(),
   user_id: `${data.userId || ''}`.trim(),
 });

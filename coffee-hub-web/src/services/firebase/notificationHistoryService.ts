@@ -39,6 +39,7 @@ export const subscribeToUserNotifications = (
 export const markNotificationAsRead = async (notificationId: string) => {
   try {
     await updateDoc(doc(db, NOTIFICATIONS_COLLECTION, notificationId), {
+      isRead: true,
       read: true,
       updatedAt: serverTimestamp(),
     });

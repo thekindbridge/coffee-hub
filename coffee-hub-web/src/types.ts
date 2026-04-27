@@ -61,6 +61,7 @@ export interface AppNotification {
   role: 'admin' | 'customer' | 'delivery_agent';
   title: string;
   body: string;
+  type?: string;
   created_at: string;
   read: boolean;
   url?: string;

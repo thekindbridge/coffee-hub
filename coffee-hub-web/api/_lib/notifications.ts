@@ -31,6 +31,7 @@ type NotificationRecipient = {
 type PushMessageContent = {
   title: string;
   body: string;
+  type: string;
   url?: string;
   tag?: string;
   preferenceKey: NotificationPreferenceKey;
@@ -59,6 +60,7 @@ const NOTIFICATION_JOB_COLLECTION = 'notification_jobs';
 const COLLAPSE_DELAY_MS = 20000;
 const EXPO_PUSH_API_URL = 'https://exp.host/--/api/v2/push/send';
 const EXPO_PUSH_CHUNK_SIZE = 100;
+const FCM_TTL_MS = 60 * 60 * 1000;
 const buildOrderTrackingUrl = (orderId: string) => `/?tab=tracking&orderId=${encodeURIComponent(orderId)}`;
 const NOTIFICATIONS_COLLECTION = 'notifications';
 
@@ -173,6 +175,7 @@ const buildPushDataPayload = (
   ...(content.status ? { status: content.status } : {}),
   tag: content.tag || 'coffee-hub',
   title: content.title,
+  type: content.type,
   url: normalizeUrl(content.url || '/'),
 });
 
@@ -418,6 +421,34 @@ const buildNotificationTargets = (recipient: NotificationRecipient): Notificatio
   return targets;
 };
 
+const buildStableHash = (value: string) => {
+  let hash = 0;
+
+  for (let index = 0; index < value.length; index += 1) {
+    hash = ((hash << 5) - hash + value.charCodeAt(index)) | 0;
+  }
+
+  return Math.abs(hash || value.length || 1).toString(36);
+};
+
+const buildNotificationHistoryId = (
+  recipient: NotificationRecipient,
+  content: PushMessageContent,
+) => {
+  const recipientSeed = recipient.userDocId || recipient.agentDocId || recipient.role;
+  const normalizedRecipientSeed = recipientSeed.replace(/[^a-z0-9_-]/gi, '_').slice(0, 48) || 'recipient';
+  const contentSeed = [
+    recipientSeed,
+    content.type,
+    content.orderId || '',
+    content.status || '',
+    content.tag || '',
+    content.body,
+  ].join('|');
+
+  return `notification_${normalizedRecipientSeed}_${buildStableHash(contentSeed)}`;
+};
+
 const writeNotificationHistoryEntry = async (
   adminDb: Firestore,
   recipient: NotificationRecipient,
@@ -427,15 +458,26 @@ const writeNotificationHistoryEntry = async (
     return;
   }
 
-  await adminDb.collection(NOTIFICATIONS_COLLECTION).add({
+  const historyRef = adminDb
+    .collection(NOTIFICATIONS_COLLECTION)
+    .doc(buildNotificationHistoryId(recipient, content));
+  const existingSnapshot = await historyRef.get();
+  if (existingSnapshot.exists) {
+    return;
+  }
+
+  await historyRef.set({
     body: content.body,
     createdAt: FieldValue.serverTimestamp(),
+    isRead: false,
     orderId: content.orderId || '',
     read: false,
     role: recipient.role,
     status: content.status || '',
     tag: content.tag || '',
     title: content.title,
+    type: content.type,
+    updatedAt: FieldValue.serverTimestamp(),
     url: normalizeUrl(content.url || '/'),
     userId: recipient.userDocId,
   });
@@ -513,6 +555,83 @@ const sendExpoPushNotifications = async (
   };
 };
 
+const sendFcmTargets = async (
+  adminDb: Firestore,
+  targets: NotificationTarget[],
+  content: PushMessageContent,
+) => {
+  if (targets.length === 0) {
+    return {
+      attempted: 0,
+      delivered: 0,
+    };
+  }
+
+  const sendBatch = async (batchTargets: NotificationTarget[]) => {
+    const response = await getAdminMessaging().sendEach(
+      batchTargets.map(target => ({
+        android: {
+          collapseKey: content.tag || 'coffee-hub',
+          priority: 'high',
+          ttl: FCM_TTL_MS,
+        },
+        data: buildPushDataPayload(content, target.recipient.role),
+        token: target.token,
+        webpush: {
+          fcmOptions: {
+            link: normalizeUrl(content.url || '/'),
+          },
+          headers: {
+            Urgency: content.urgency || 'high',
+          },
+          notification: {
+            badge: '/icon-192.png',
+            icon: '/icon-192.png',
+            renotify: false,
+            tag: content.tag || 'coffee-hub',
+          },
+        },
+      })),
+    );
+
+    let delivered = 0;
+    const retryableTargets: NotificationTarget[] = [];
+
+    await Promise.all(response.responses.map(async (result, index) => {
+      if (result.success) {
+        delivered += 1;
+        return;
+      }
+
+      const errorCode = result.error?.code || '';
+      if (isInvalidFcmTokenErrorCode(errorCode)) {
+        await clearInvalidRecipientToken(adminDb, batchTargets[index].recipient, 'fcm');
+        return;
+      }
+
+      retryableTargets.push(batchTargets[index]);
+    }));
+
+    return {
+      delivered,
+      retryableTargets,
+    };
+  };
+
+  const firstAttempt = await sendBatch(targets);
+  let delivered = firstAttempt.delivered;
+
+  if (firstAttempt.retryableTargets.length > 0) {
+    const retryAttempt = await sendBatch(firstAttempt.retryableTargets);
+    delivered += retryAttempt.delivered;
+  }
+
+  return {
+    attempted: targets.length,
+    delivered,
+  };
+};
+
 export const sendPushNotification = async (
   adminDb: Firestore,
   recipients: NotificationRecipient[],
@@ -550,30 +669,8 @@ export const sendPushNotification = async (
   );
 
   if (fcmTargets.length > 0) {
-    const response = await getAdminMessaging().sendEach(
-      fcmTargets.map(target => ({
-        data: buildPushDataPayload(content, target.recipient.role),
-        token: target.token,
-        webpush: {
-          headers: {
-            Urgency: content.urgency || 'high',
-          },
-        },
-      })),
-    );
-
-    delivered += response.successCount;
-
-    await Promise.all(response.responses.map(async (result, index) => {
-      if (result.success) {
-        return;
-      }
-
-      const errorCode = result.error?.code || '';
-      if (isInvalidFcmTokenErrorCode(errorCode)) {
-        await clearInvalidRecipientToken(adminDb, fcmTargets[index].recipient, 'fcm');
-      }
-    }));
+    const fcmResponse = await sendFcmTargets(adminDb, fcmTargets, content);
+    delivered += fcmResponse.delivered;
   }
 
   if (expoTargets.length > 0) {
@@ -610,41 +707,45 @@ export const buildCustomerOrderNotification = ({
     case 'WAITING':
       return {
         title: 'Coffee Hub \u2615',
-        body: `Your order ${orderNumber} is waiting for confirmation`,
+        body: `Order placed successfully. We are confirming ${orderNumber} now.`,
         orderId,
         preferenceKey: 'orderUpdates',
         status: normalizedStatus,
         tag: `order-${orderId}`,
+        type: 'customer_order_placed',
         url: buildOrderTrackingUrl(orderId),
       };
     case 'PREPARING':
       return {
         title: 'Coffee Hub \u2615',
-        body: `Your order ${orderNumber} is being prepared`,
+        body: `Your order ${orderNumber} has been accepted and is being prepared`,
         orderId,
         preferenceKey: 'orderUpdates',
         status: normalizedStatus,
         tag: `order-${orderId}`,
+        type: 'customer_order_accepted',
         url: buildOrderTrackingUrl(orderId),
       };
     case 'OUT_FOR_DELIVERY':
       return {
         title: 'Coffee Hub \u2615',
-        body: `Your order ${orderNumber} is out for delivery`,
+        body: `Your order ${orderNumber} is on the way`,
         orderId,
         preferenceKey: 'orderUpdates',
         status: normalizedStatus,
         tag: `order-${orderId}`,
+        type: 'customer_out_for_delivery',
         url: buildOrderTrackingUrl(orderId),
       };
     case 'DELIVERED':
       return {
         title: 'Coffee Hub \u2615',
-        body: `Your order ${orderNumber} has been delivered`,
+        body: `Your order ${orderNumber} was delivered successfully`,
         orderId,
         preferenceKey: 'orderUpdates',
         status: normalizedStatus,
         tag: `order-${orderId}`,
+        type: 'customer_order_delivered',
         url: buildOrderTrackingUrl(orderId),
       };
     case 'REJECTED':
@@ -657,6 +758,7 @@ export const buildCustomerOrderNotification = ({
         preferenceKey: 'orderUpdates',
         status: normalizedStatus,
         tag: `order-${orderId}`,
+        type: 'customer_order_rejected',
         url: buildOrderTrackingUrl(orderId),
       };
     case 'CANCELLED':
@@ -667,6 +769,7 @@ export const buildCustomerOrderNotification = ({
         preferenceKey: 'orderUpdates',
         status: normalizedStatus,
         tag: `order-${orderId}`,
+        type: 'customer_order_cancelled',
         url: buildOrderTrackingUrl(orderId),
       };
     default:
@@ -677,6 +780,7 @@ export const buildCustomerOrderNotification = ({
         preferenceKey: 'orderUpdates',
         status: normalizedStatus,
         tag: `order-${orderId}`,
+        type: 'customer_order_updated',
         url: buildOrderTrackingUrl(orderId),
       };
   }
@@ -687,6 +791,7 @@ export const buildAdminNewOrderNotification = (orderId: string): PushMessageCont
   body: `A new order has been placed. Order #${orderId}`,
   preferenceKey: 'orderUpdates',
   tag: `admin-order-${orderId}`,
+  type: 'admin_new_order',
   url: '/?scope=admin',
 });
 
@@ -695,6 +800,7 @@ export const buildAdminPaymentNotification = (orderId: string): PushMessageConte
   body: `Payment completed for order #${orderId}`,
   preferenceKey: 'orderUpdates',
   tag: `admin-payment-${orderId}`,
+  type: 'admin_payment_received',
   url: '/?scope=admin',
 });
 
@@ -703,15 +809,35 @@ export const buildAdminOrderCancelledNotification = (orderId: string): PushMessa
   body: `Order #${orderId} was cancelled by the customer.`,
   preferenceKey: 'orderUpdates',
   tag: `admin-order-cancelled-${orderId}`,
+  type: 'admin_order_cancelled',
+  url: '/?scope=admin',
+});
+
+export const buildAdminDeliveryAssignedNotification = (orderId: string): PushMessageContent => ({
+  title: 'Delivery Assigned',
+  body: `A delivery partner was assigned to order #${orderId}.`,
+  preferenceKey: 'orderUpdates',
+  tag: `admin-delivery-assigned-${orderId}`,
+  type: 'admin_delivery_assigned',
+  url: '/?scope=admin',
+});
+
+export const buildAdminOrderCompletedNotification = (orderId: string): PushMessageContent => ({
+  title: 'Order Completed',
+  body: `Order #${orderId} was delivered successfully.`,
+  preferenceKey: 'orderUpdates',
+  tag: `admin-order-completed-${orderId}`,
+  type: 'admin_order_completed',
   url: '/?scope=admin',
 });
 
 export const buildAgentAssignmentNotification = (orderId: string): PushMessageContent => ({
-  title: 'New Delivery Assigned',
-  body: `New delivery assigned. Order #${orderId}`,
+  title: 'New Order Assigned',
+  body: `A new order was assigned to you. Order #${orderId}`,
   preferenceKey: 'orderUpdates',
   tag: `agent-order-${orderId}`,
-  url: '/?scope=agent',
+  type: 'agent_order_assigned',
+  url: '/?scope=delivery',
 });
 
 export const buildAgentOrderCancelledNotification = (orderId: string): PushMessageContent => ({
@@ -719,7 +845,8 @@ export const buildAgentOrderCancelledNotification = (orderId: string): PushMessa
   body: `Assigned order #${orderId} has been cancelled.`,
   preferenceKey: 'orderUpdates',
   tag: `agent-order-cancelled-${orderId}`,
-  url: '/?scope=agent',
+  type: 'agent_order_cancelled',
+  url: '/?scope=delivery',
 });
 
 export const queueCollapsedCustomerStatusNotification = async (
@@ -776,6 +903,7 @@ export const flushQueuedNotifications = async (adminDb: Firestore) => {
         preferenceKey: (jobData.preferenceKey as NotificationPreferenceKey) || 'orderUpdates',
         tag: `${jobData.tag || ''}`.trim(),
         title: `${jobData.title || 'COFFEE-HUB'}`.trim(),
+        type: 'customer_order_updated',
         url: `${jobData.url || '/'}`.trim() || '/',
       });
     }
