@@ -62,7 +62,6 @@ export const AgentAppShell = ({
   );
   const availabilityLabel = formatAgentAvailabilityLabel(session.currentDeliveryAgent);
   const isAgentOnline = availabilityLabel === 'Online';
-  const nextAvailabilityStatus: AgentStatus = isAgentOnline ? 'Offline' : 'Available';
   const availabilityHelperText = isAgentOnline
     ? 'You are live for new deliveries'
     : 'Go online to start receiving tasks';
@@ -85,23 +84,34 @@ export const AgentAppShell = ({
   return (
     <AppShellLayout
       header={(
-        <header className="app-header-shell fixed left-0 right-0 top-0 z-50 px-4 py-3 backdrop-blur-xl sm:px-6">
+        <header className="app-header-shell sticky left-0 right-0 top-0 z-50 px-4 pb-2.5 backdrop-blur-xl sm:px-6">
           <div className="mx-auto max-w-screen-md">
-            <div className="app-header-card rounded-[28px] px-4 py-3">
-              <div className="flex items-start justify-between gap-3">
+            <div className="app-header-card rounded-[26px] px-3.5 py-2.5">
+              <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.26em] text-secondary">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-secondary">
                     Coffee Hub Delivery
                   </p>
-                  <h1 className="mt-1 truncate text-[1.2rem] font-semibold text-accent">
+                  <h1 className="mt-0.5 truncate text-[1.1rem] font-semibold text-accent sm:text-[1.15rem]">
                     Hi, {firstName}
                   </h1>
-                  <p className="mt-1 text-xs text-ink-muted">
-                    {availabilityHelperText}
-                  </p>
+                  <div className="mt-1 flex items-center gap-2">
+                    <span
+                      className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] ${
+                        isAgentOnline
+                          ? 'border-emerald-400/28 bg-emerald-500/12 text-emerald-200'
+                          : 'border-rose-300/24 bg-rose-500/10 text-rose-200'
+                      }`}
+                    >
+                      {availabilityLabel}
+                    </span>
+                    <p className="truncate text-xs text-ink-muted">
+                      {availabilityHelperText}
+                    </p>
+                  </div>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5">
                   <ThemeToggleButton />
                   <button
                     type="button"
@@ -126,31 +136,6 @@ export const AgentAppShell = ({
                     <UserCircle2 size={18} />
                   </button>
                 </div>
-              </div>
-
-              <div className="mt-3 flex items-center justify-between gap-3 rounded-[22px] border border-[var(--app-soft-panel-border)] bg-[var(--app-soft-panel-background)] px-3.5 py-2.5">
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-ink-muted">
-                    Status
-                  </p>
-                  <p className="mt-0.5 text-sm font-semibold text-ink">
-                    {availabilityLabel}
-                  </p>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    void persistAvailability(nextAvailabilityStatus);
-                  }}
-                  disabled={isAvailabilitySaving}
-                  className={`inline-flex h-9 w-[72px] items-center rounded-full px-1 transition ${
-                    isAgentOnline ? 'justify-end bg-emerald-400/24' : 'justify-start bg-[var(--app-soft-panel-hover)]'
-                  } disabled:cursor-not-allowed disabled:opacity-70`}
-                  aria-label={isAgentOnline ? 'Go offline' : 'Go online'}
-                >
-                  <span className="h-7 w-7 rounded-full bg-white shadow-[0_6px_16px_rgba(0,0,0,0.18)]" />
-                </button>
               </div>
             </div>
           </div>
@@ -192,7 +177,7 @@ export const AgentAppShell = ({
         </>
       )}
     >
-      <div className="px-4 pb-32 pt-32 sm:px-6">
+      <div className="px-4 pb-32 sm:px-6">
         {pushNotifications.isPermissionBannerVisible && (
           <div className="pb-4">
             <NotificationPermissionBanner

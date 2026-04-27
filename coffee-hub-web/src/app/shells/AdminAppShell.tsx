@@ -175,7 +175,7 @@ export const AdminAppShell = ({
       )}
     >
       {pushNotifications.isPermissionBannerVisible && (
-        <div className="px-4 pt-20 sm:px-6">
+        <div className="px-4 pb-4 sm:px-6">
           <NotificationPermissionBanner
             isSyncing={pushNotifications.isSyncing}
             onDismiss={pushNotifications.dismissPermissionBanner}

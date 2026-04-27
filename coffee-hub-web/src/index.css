@@ -154,8 +154,20 @@
   .app-shell {
     @apply min-h-screen text-ink;
     min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
     overflow-x: hidden;
     background-image: var(--app-shell-background);
+  }
+
+  .app-shell-main {
+    flex: 1 1 auto;
+    width: 100%;
+    padding-bottom: 1.5rem;
+  }
+
+  .app-shell-main-with-nav {
+    padding-bottom: calc(7.5rem + env(safe-area-inset-bottom));
   }
 
   .app-shell ::selection {
@@ -166,6 +178,7 @@
   .app-header-shell {
     border-bottom: 1px solid var(--app-header-shell-border);
     background: var(--app-header-shell-background);
+    padding-top: max(0.45rem, calc(env(safe-area-inset-top) + 0.2rem));
   }
 
   .app-header-card {
@@ -177,6 +190,7 @@
   .app-bottom-nav-shell {
     border-top: 1px solid var(--app-header-shell-border);
     background: var(--app-bottom-nav-shell-background);
+    padding-bottom: max(0.75rem, calc(env(safe-area-inset-bottom) + 0.3rem));
   }
 
   .app-bottom-nav-card {

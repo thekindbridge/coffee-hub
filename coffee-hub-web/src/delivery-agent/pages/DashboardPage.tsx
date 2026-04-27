@@ -96,38 +96,66 @@ export const DashboardPage = ({
       </section>
 
       <section className="coffee-surface-soft p-4">
-        <div className="flex items-center gap-2">
-          <Power size={16} className="text-secondary" />
-          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-ink-muted">
-            Online / Offline
-          </p>
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Power size={16} className="text-secondary" />
+            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-ink-muted">
+              Online / Offline
+            </p>
+          </div>
+
+          <span
+            className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] ${
+              isAgentOnline
+                ? 'border-emerald-400/28 bg-emerald-500/12 text-emerald-200'
+                : 'border-rose-300/24 bg-rose-500/10 text-rose-200'
+            }`}
+          >
+            {availabilityLabel}
+          </span>
         </div>
 
         <p className="mt-2 text-sm text-ink-muted">
           Toggle availability when you are ready to receive deliveries.
         </p>
 
-        <div className="mt-4 grid grid-cols-2 gap-2">
-          {(['Available', 'Offline'] as AgentStatus[]).map(status => {
-            const isActive = isAgentOnline === (status === 'Available');
+        <div className="mt-4 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+          {([
+            {
+              helper: 'Receive new delivery requests',
+              label: 'Go Online',
+              status: 'Available',
+            },
+            {
+              helper: 'Pause incoming assignments',
+              label: 'Go Offline',
+              status: 'Offline',
+            },
+          ] as const).map(option => {
+            const isActive = isAgentOnline === (option.status === 'Available');
 
             return (
               <button
-                key={status}
+                key={option.status}
                 type="button"
                 onClick={() => {
-                  void onAvailabilityChange?.(status);
+                  void onAvailabilityChange?.(option.status);
                 }}
                 disabled={isAvailabilitySaving || isActive}
-                className={`inline-flex min-h-12 items-center justify-center rounded-[20px] px-4 text-sm font-semibold transition active:scale-[0.985] ${
+                className={`rounded-[22px] border px-4 py-3.5 text-left transition active:scale-[0.985] ${
                   isActive
-                    ? status === 'Available'
-                      ? 'border border-emerald-400/30 bg-emerald-500/14 text-emerald-200'
+                    ? option.status === 'Available'
+                      ? 'border-emerald-400/30 bg-emerald-500/14 text-emerald-200'
                       : 'border border-white/12 bg-white/8 text-accent'
-                    : 'border border-[var(--app-soft-panel-border)] bg-[var(--app-soft-panel-background)] text-ink-muted hover:bg-[var(--app-soft-panel-hover)] hover:text-accent'
+                    : 'border-[var(--app-soft-panel-border)] bg-[var(--app-soft-panel-background)] text-ink hover:bg-[var(--app-soft-panel-hover)]'
                 } disabled:cursor-not-allowed disabled:opacity-70`}
               >
-                {isAvailabilitySaving && isActive ? 'Saving...' : status === 'Available' ? 'Go Online' : 'Go Offline'}
+                <p className="text-sm font-semibold">
+                  {isAvailabilitySaving && isActive ? 'Saving...' : option.label}
+                </p>
+                <p className={`mt-1 text-xs ${isActive ? 'text-current/80' : 'text-ink-muted'}`}>
+                  {option.helper}
+                </p>
               </button>
             );
           })}

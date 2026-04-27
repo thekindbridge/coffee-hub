@@ -462,7 +462,7 @@ export const CustomerAppShell = ({
       )}
     >
       {pushNotifications.isPermissionBannerVisible && (
-        <div className="px-4 pt-20 sm:px-6">
+        <div className="px-4 pb-4 sm:px-6">
           <NotificationPermissionBanner
             isSyncing={pushNotifications.isSyncing}
             onDismiss={pushNotifications.dismissPermissionBanner}
@@ -474,7 +474,7 @@ export const CustomerAppShell = ({
       )}
 
       {customerExperience.shouldShowShopClosedBanner && (
-        <div className="px-4 pt-20 sm:px-6">
+        <div className="px-4 pb-4 sm:px-6">
           <ShopStatusBanner
             closeTime={session.shopTiming.closeTime}
             openTime={session.shopTiming.openTime}
