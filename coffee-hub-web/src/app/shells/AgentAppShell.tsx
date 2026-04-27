@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useState } from 'react';
 import { Bell, MapPin } from 'lucide-react';
 import { formatPhoneForDisplay } from '../../../shared/phone';
 import { ForegroundNotificationToast } from '../../components/ForegroundNotificationToast';
@@ -12,10 +12,6 @@ import { saveDeliveryAgentAvailability } from '../../services/firebase/profileSe
 import { lazyNamed } from '../../utils/lazyNamed';
 import type { ShellSharedProps } from './types';
 
-const ProfileScreen = lazyNamed(
-  () => import('../../features/profile/ProfileScreen'),
-  'ProfileScreen',
-);
 const DeliveryDashboardPage = lazyNamed(
   () => import('../../delivery-agent/pages/DashboardPage'),
   'DashboardPage',
@@ -26,14 +22,11 @@ const NotificationHistoryPage = lazyNamed(
 );
 
 export const AgentAppShell = ({
-  accessManager,
   orderOperations,
-  profileManager,
   pushNotifications,
   session,
-  shopTimingManager,
 }: ShellSharedProps) => {
-  const [hasLoadedStaffDrawer, setHasLoadedStaffDrawer] = useState(false);
+  const [isAgentProfileOpen, setIsAgentProfileOpen] = useState(false);
   const [isAvailabilitySaving, setIsAvailabilitySaving] = useState(false);
   const [isNotificationHistoryOpen, setIsNotificationHistoryOpen] = useState(false);
   const notificationHistory = useNotificationHistory({
@@ -43,81 +36,15 @@ export const AgentAppShell = ({
     role: session.role,
   });
 
-  useEffect(() => {
-    if (profileManager.isProfileOpen) {
-      setHasLoadedStaffDrawer(true);
-    }
-  }, [profileManager.isProfileOpen]);
-
-  const staffDrawerProps = {
-    isOpen: profileManager.isProfileOpen,
-    canAccessAdminPanel: session.canAccessAdminPanel,
-    isDeliveryAgent: session.isDeliveryAgent,
-    isOwner: session.isOwner,
-    role: session.role,
-    profileDraft: profileManager.profileDraft,
-    profileError: profileManager.profileError,
-    profileSyncError: session.profileSyncError,
-    isProfileAddressExpanded: profileManager.isProfileAddressExpanded,
-    isProfileSaving: profileManager.isProfileSaving,
-    isProfileSavedToastVisible: profileManager.isProfileSavedToastVisible,
-    shopTiming: session.shopTiming,
-    shopTimingDraft: shopTimingManager.shopTimingDraft,
-    shopTimingError: shopTimingManager.shopTimingError,
-    shopTimingSuccess: shopTimingManager.shopTimingSuccess,
-    isShopTimingSaving: shopTimingManager.isShopTimingSaving,
-    userRoleEntries: session.userRoleEntries,
-    roleChangeError: accessManager.roleChangeError,
-    roleChangeSuccess: accessManager.roleChangeSuccess,
-    pendingRoleAction: accessManager.pendingRoleAction,
-    pendingRolePhone: accessManager.pendingRolePhone,
-    pendingRoleValue: accessManager.pendingRoleValue,
-    notificationPermissionState: pushNotifications.permissionState,
-    isNotificationSyncing: pushNotifications.isSyncing,
-    notificationSyncError: pushNotifications.syncError,
-    onClose: () => profileManager.setIsProfileOpen(false),
-    onLogout: () => {
-      profileManager.setIsProfileOpen(false);
-      void orderOperations.handleLogout();
-    },
-    onEnablePushNotifications: () => {
-      void pushNotifications.requestPermission();
-    },
-    onNotificationSettingsChange: (settings: typeof profileManager.profileDraft.notificationSettings) => {
-      void profileManager.handleSaveProfileNotificationSettings(settings);
-    },
-    onSave: () => void profileManager.handleSaveProfile(),
-    onProfileDraftChange: profileManager.setProfileDraft,
-    onProfileAddressExpandedChange: profileManager.setIsProfileAddressExpanded,
-    onShopTimingDraftChange: shopTimingManager.handleShopTimingDraftChange,
-    onSaveShopTiming: () => void shopTimingManager.handleSaveShopTiming(),
-    onAssignUserRole: (phone, role) => {
-      if (accessManager.roleChangeError) {
-        accessManager.setRoleChangeError('');
-      }
-      if (accessManager.roleChangeSuccess) {
-        accessManager.setRoleChangeSuccess('');
-      }
-      void accessManager.handleAssignUserRole(phone, role);
-    },
-    onRemoveUserRole: entry => {
-      if (accessManager.roleChangeError) {
-        accessManager.setRoleChangeError('');
-      }
-      if (accessManager.roleChangeSuccess) {
-        accessManager.setRoleChangeSuccess('');
-      }
-      void accessManager.handleRemoveUserRole(entry);
-    },
-  };
-
   return (
     <AppShellLayout
       header={(
         <RoleHeader
           eyebrow="Delivery panel"
           icon={MapPin}
-          onProfileClick={profileManager.handleOpenProfile}
+          onProfileClick={() => {
+            setIsAgentProfileOpen(previous => !previous);
+          }}
           rightSlot={(
             <>
               <button
@@ -143,19 +70,6 @@ export const AgentAppShell = ({
       )}
       overlays={(
         <>
-          {hasLoadedStaffDrawer && (
-            <Suspense
-              fallback={(
-                <Loader
-                  className="fixed inset-0 z-[95] bg-black/60 backdrop-blur-sm"
-                  fullScreen
-                  label="Loading staff profile..."
-                />
-              )}
-            >
-              <ProfileScreen {...staffDrawerProps} />
-            </Suspense>
-          )}
           <ForegroundNotificationToast
             notification={pushNotifications.foregroundNotification}
             onDismiss={pushNotifications.dismissForegroundNotification}
@@ -188,13 +102,13 @@ export const AgentAppShell = ({
 
       <Suspense fallback={<Loader label="Loading delivery dashboard..." minHeightClassName="min-h-[420px]" />}>
         <DeliveryDashboardPage
-          activeOrder={session.currentDeliveryOrder}
+          completedOrders={session.agentCompletedOrders}
           deliveryAgent={session.currentDeliveryAgent}
-          deliverySession={session.currentDeliverySession}
+          inProgressOrders={session.agentInProgressOrders}
           isAvailabilitySaving={isAvailabilitySaving}
           isAuthorized={session.isDeliveryAgent}
-          isTracking={session.isAgentTracking}
-          lastTrackedLocation={session.agentLastTrackedLocation}
+          isProfileOpen={isAgentProfileOpen}
+          newOrders={session.agentNewOrders}
           onAvailabilityChange={async (nextStatus: AgentStatus) => {
             setIsAvailabilitySaving(true);
             try {
@@ -209,11 +123,11 @@ export const AgentAppShell = ({
               setIsAvailabilitySaving(false);
             }
           }}
-          orders={session.agentOrders}
-          permissionState={session.agentPermissionState}
-          trackerStatus={session.agentTrackerStatus}
+          onProfileToggle={() => {
+            setIsAgentProfileOpen(previous => !previous);
+          }}
           onEndDelivery={orderDocId => { void orderOperations.handleEndDelivery(orderDocId); }}
-          onStartDelivery={() => { void orderOperations.handleStartDelivery(); }}
+          onStartDelivery={orderDocId => { void orderOperations.handleStartDelivery(orderDocId); }}
         />
       </Suspense>
     </AppShellLayout>

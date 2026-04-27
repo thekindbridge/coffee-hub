@@ -1,4 +1,4 @@
-import { OrdersPage } from '../../../delivery-agent/pages/OrdersPage';
+import { DeliveryOrdersScreen } from '../../../delivery-agent/pages/DeliveryOrdersScreen';
 import type { Order } from '../../../types';
 
 interface AgentHistoryProps {
@@ -6,5 +6,13 @@ interface AgentHistoryProps {
 }
 
 export default function AgentHistory({ orders }: AgentHistoryProps) {
-  return <OrdersPage initialFilter="completed" orders={orders} />;
+  return (
+    <DeliveryOrdersScreen
+      completedOrders={orders}
+      inProgressOrders={[]}
+      newOrders={[]}
+      onMarkDelivered={() => undefined}
+      onStartDelivery={() => undefined}
+    />
+  );
 }

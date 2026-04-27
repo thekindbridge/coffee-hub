@@ -141,7 +141,15 @@ export const useDeliveryOrders = ({
     [deliverySessions, orders],
   );
 
-  const currentDeliveryOrder = groupedOrders.inProgressOrders[0] || groupedOrders.newOrders[0] || null;
+  const filteredNewOrders = useMemo(() => {
+    if (!currentDeliveryAgent?.is_active) {
+      return [];
+    }
+
+    return groupedOrders.newOrders;
+  }, [currentDeliveryAgent?.is_active, groupedOrders.newOrders]);
+
+  const currentDeliveryOrder = groupedOrders.inProgressOrders[0] || filteredNewOrders[0] || null;
 
   const currentDeliverySession = useMemo(() => {
     if (!currentDeliveryOrder) {
@@ -163,7 +171,7 @@ export const useDeliveryOrders = ({
     deliverySessions,
     inProgressOrders: groupedOrders.inProgressOrders,
     isOrdersLoading,
-    newOrders: groupedOrders.newOrders,
+    newOrders: filteredNewOrders,
     orders: sortDeliveryOrders(groupedOrders.executableOrders),
     ordersError,
   };

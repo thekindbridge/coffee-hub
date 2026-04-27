@@ -143,7 +143,6 @@ export const useOrderOperations = ({
               status.lifecycle === 'restarting',
           );
         },
-        orderDocId: currentDeliveryOrder.doc_id,
         orderDocId: orderToStart.doc_id,
         orderId: orderToStart.id,
       });

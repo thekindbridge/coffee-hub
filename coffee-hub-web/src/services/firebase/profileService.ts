@@ -101,6 +101,7 @@ export const saveUserProfile = async ({
         : 'AVAILABLE';
     const agentPayload: Record<string, unknown> = {
       accessOnly: false,
+      availability: !shouldMarkOffline,
       isActive: !shouldMarkOffline,
       name: profileDraft.name.trim(),
       notificationSettings: profileDraft.notificationSettings,
@@ -265,6 +266,7 @@ export const saveDeliveryAgentAvailability = async ({
 
     const agentPayload: Record<string, unknown> = {
       accessOnly: false,
+      availability: !shouldMarkOffline,
       isActive: !shouldMarkOffline,
       name: profileDraft.name.trim(),
       phone: normalizedPhone,

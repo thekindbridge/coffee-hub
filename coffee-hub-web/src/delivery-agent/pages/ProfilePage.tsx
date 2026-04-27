@@ -1,28 +1,17 @@
-import { ShieldCheck, UserCircle2 } from 'lucide-react';
-import type {
-  AgentTrackerPermissionState,
-  AgentTrackerStatus,
-} from '../../agent/agentTracker';
+import { UserCircle2 } from 'lucide-react';
 import type { AgentStatus } from '../../features/app/types';
-import type { DeliveryAgent, DeliverySession } from '../../types';
-import { formatDateTime } from '../utils/formatTime';
+import type { DeliveryAgent } from '../../types';
 
 export interface ProfilePageProps {
   deliveryAgent: DeliveryAgent | null;
-  deliverySession: DeliverySession | null;
   isAvailabilitySaving?: boolean;
   onAvailabilityChange?: (status: AgentStatus) => void | Promise<void>;
-  permissionState: AgentTrackerPermissionState;
-  trackerStatus: AgentTrackerStatus;
 }
 
 export const ProfilePage = ({
   deliveryAgent,
-  deliverySession,
   isAvailabilitySaving = false,
   onAvailabilityChange,
-  permissionState,
-  trackerStatus,
 }: ProfilePageProps) => (
   <section className="space-y-4">
     <div className="rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,#17110d,#0f0a08)] p-5 text-[#fff8f2] shadow-[0_22px_60px_rgba(9,6,5,0.24)]">
@@ -37,19 +26,19 @@ export const ProfilePage = ({
         {deliveryAgent?.name || 'Delivery partner'}
       </h2>
       <p className="mt-2 text-sm leading-6 text-[#cdbbaa]">
-        Keep this screen light and data-driven so the same agent profile summary can move into the Android app with minimal changes.
+        Keep this profile minimal and focused for active delivery operations.
       </p>
     </div>
 
     <div className="grid gap-3 sm:grid-cols-2">
       <article className="rounded-[26px] border border-white/10 bg-white/5 p-4">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-ink-muted">Phone</p>
-        <p className="mt-2 text-lg font-black text-ink">{deliveryAgent?.phone || 'Not added'}</p>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-ink-muted">Name</p>
+        <p className="mt-2 text-lg font-black text-ink">{deliveryAgent?.name || 'Not added'}</p>
       </article>
 
       <article className="rounded-[26px] border border-white/10 bg-white/5 p-4">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-ink-muted">Vehicle</p>
-        <p className="mt-2 text-lg font-black text-ink">{deliveryAgent?.vehicle_type || 'Not added'}</p>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-ink-muted">Phone</p>
+        <p className="mt-2 text-lg font-black text-ink">{deliveryAgent?.phone || 'Not added'}</p>
       </article>
 
       <article className="rounded-[26px] border border-white/10 bg-white/5 p-4">
@@ -85,36 +74,7 @@ export const ProfilePage = ({
           </div>
         )}
       </article>
-
-      <article className="rounded-[26px] border border-white/10 bg-white/5 p-4">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-ink-muted">GPS Permission</p>
-        <p className="mt-2 text-lg font-black capitalize text-ink">{permissionState}</p>
-      </article>
     </div>
-
-    <article className="rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.04))] p-5">
-      <div className="flex items-center gap-2 text-secondary">
-        <ShieldCheck size={16} />
-        <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-ink-muted">
-          Live Session
-        </p>
-      </div>
-
-      <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
-        <div>
-          <p className="text-[11px] font-bold uppercase tracking-wide text-ink-muted">Current Session</p>
-          <p className="mt-1 font-semibold capitalize text-ink">{deliverySession?.status || 'No active session'}</p>
-        </div>
-        <div>
-          <p className="text-[11px] font-bold uppercase tracking-wide text-ink-muted">Started At</p>
-          <p className="mt-1 font-semibold text-ink">{formatDateTime(deliverySession?.started_at, '--')}</p>
-        </div>
-        <div className="sm:col-span-2">
-          <p className="text-[11px] font-bold uppercase tracking-wide text-ink-muted">Tracker Status</p>
-          <p className="mt-1 font-semibold text-ink">{trackerStatus.message}</p>
-        </div>
-      </div>
-    </article>
   </section>
 );
 

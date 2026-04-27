@@ -1,6 +1,6 @@
 export {
   hydrateOrdersWithItems,
-  subscribeToAgentOrdersByStatus,
-  subscribeToCurrentDeliverySession,
+  subscribeToAgentOrders,
+  subscribeToAgentDeliverySessions,
   subscribeToDeliveryAgents,
 } from '../../delivery-agent/services/deliveryService';
