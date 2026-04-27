@@ -21,10 +21,10 @@ export const ForegroundNotificationToast = ({
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: 16 }}
         transition={{ duration: 0.28, ease: 'easeOut' }}
-        className="fixed inset-x-4 bottom-24 z-[95] mx-auto w-auto max-w-md rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(23,16,14,0.98),rgba(11,8,7,0.98))] p-4 text-[#fff8f2] shadow-[0_24px_70px_rgba(0,0,0,0.38)]"
+        className="coffee-surface fixed inset-x-4 bottom-24 z-[95] mx-auto w-auto max-w-md p-4 shadow-[0_24px_70px_rgba(0,0,0,0.22)]"
       >
         <div className="flex items-start gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white/8 text-secondary">
+          <div className="app-muted-panel flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-secondary">
             <BellRing size={18} />
           </div>
           <div className="min-w-0 flex-1">
@@ -34,7 +34,7 @@ export const ForegroundNotificationToast = ({
           <button
             type="button"
             onClick={onDismiss}
-            className="rounded-full border border-white/10 bg-white/5 p-2 text-ink-muted transition hover:bg-white/10"
+            className="coffee-icon-btn h-9 w-9 rounded-full p-0"
             aria-label="Dismiss notification"
           >
             <X size={14} />

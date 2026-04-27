@@ -13,6 +13,7 @@ import { CURRENCY_SYMBOL } from '../../features/app/lib/constants';
 import { HomeFooter } from '../../components/common/HomeFooter';
 import { BottomNavigation } from '../../components/common/BottomNavigation';
 import { RoleHeader } from '../../components/common/RoleHeader';
+import { ThemeToggleButton } from '../../components/common/ThemeToggleButton';
 import { ForegroundNotificationToast } from '../../components/ForegroundNotificationToast';
 import { NotificationPermissionBanner } from '../../components/NotificationPermissionBanner';
 import { AppShellLayout } from '../../components/ui/AppShellLayout';
@@ -246,6 +247,7 @@ export const CustomerAppShell = ({
           onProfileClick={profileManager.handleOpenProfile}
           rightSlot={(
             <>
+              <ThemeToggleButton />
               <button
                 type="button"
                 onClick={() => setIsNotificationHistoryOpen(true)}
@@ -259,7 +261,7 @@ export const CustomerAppShell = ({
                   </span>
                 )}
               </button>
-              <div className="hidden rounded-full border border-white/10 bg-white/5 px-3 py-2 text-[11px] font-medium text-ink-muted sm:block">
+              <div className="coffee-badge hidden px-3 py-2 font-medium sm:inline-flex">
                 {formatPhoneForDisplay(session.currentUserPhone)}
               </div>
             </>

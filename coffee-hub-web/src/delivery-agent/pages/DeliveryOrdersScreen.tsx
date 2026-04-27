@@ -134,14 +134,14 @@ const DeliveryOrderCard = memo(function DeliveryOrderCard({
             <span>{order.phone}</span>
           </a>
         ) : (
-          <div className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 text-sm font-semibold text-ink-muted">
+          <div className="coffee-badge min-h-10 shrink-0 gap-2 px-3 text-sm font-semibold">
             <Phone size={15} />
             <span>No phone</span>
           </div>
         )}
       </div>
 
-      <div className="mt-4 rounded-[22px] border border-white/8 bg-black/12 p-3">
+      <div className="app-muted-panel mt-4 rounded-[22px] p-3">
         <div className="flex items-start gap-2">
           <MapPin size={16} className="mt-0.5 shrink-0 text-secondary" />
           <div className="min-w-0">
@@ -160,7 +160,7 @@ const DeliveryOrderCard = memo(function DeliveryOrderCard({
         </div>
       </div>
 
-      <div className="mt-4 rounded-[22px] border border-white/8 bg-white/5 px-3 py-3">
+      <div className="app-muted-panel mt-4 rounded-[22px] px-3 py-3">
         <div className="flex items-center gap-2">
           <Package2 size={15} className="text-secondary" />
           <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-ink-muted">
@@ -288,7 +288,7 @@ export const DeliveryOrdersScreen = ({
   return (
     <section className="space-y-4">
       <div className="coffee-surface-soft rounded-[28px] p-3">
-        <div className="grid grid-cols-3 gap-2 rounded-[22px] border border-white/8 bg-black/10 p-1.5">
+        <div className="app-muted-panel grid grid-cols-3 gap-2 rounded-[22px] p-1.5">
           {(Object.keys(DELIVERY_TAB_META) as DeliveryOrdersTabId[]).map(tabId => {
             const tabMeta = DELIVERY_TAB_META[tabId];
             const isActive = tabId === activeTab;
@@ -305,7 +305,7 @@ export const DeliveryOrdersScreen = ({
                 {isActive && (
                   <motion.span
                     layoutId="delivery-orders-tab"
-                    className="absolute inset-0 rounded-[18px] border border-white/10 bg-[linear-gradient(135deg,rgba(111,78,55,0.42),rgba(47,31,23,0.92))] shadow-[0_14px_26px_rgba(0,0,0,0.22)]"
+                    className="absolute inset-0 rounded-[18px] border border-[var(--app-soft-panel-border)] bg-[var(--app-tab-active-background)] shadow-[0_14px_26px_rgba(0,0,0,0.16)]"
                   />
                 )}
                 <span className="relative z-10 text-[11px] font-semibold uppercase tracking-[0.14em]">

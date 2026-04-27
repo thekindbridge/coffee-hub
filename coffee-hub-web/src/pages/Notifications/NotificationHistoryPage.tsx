@@ -37,9 +37,9 @@ export const NotificationHistoryPage = ({
   }
 
   return (
-    <div className="fixed inset-0 z-[96] bg-black/70 backdrop-blur-sm">
-      <div className="mx-auto flex h-full max-w-screen-md flex-col bg-[#120d0b] px-4 py-5 sm:px-6">
-        <div className="flex items-center justify-between border-b border-white/8 pb-4">
+    <div className="app-modal-backdrop fixed inset-0 z-[96] backdrop-blur-sm">
+      <div className="coffee-surface mx-auto flex h-full max-w-screen-md flex-col px-4 py-5 sm:px-6">
+        <div className="flex items-center justify-between border-b border-[var(--app-surface-border)] pb-4">
           <div className="flex items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-[18px] bg-[linear-gradient(135deg,#8b6145,#4e3427)]">
               <Bell className="text-accent" size={18} />
@@ -61,7 +61,7 @@ export const NotificationHistoryPage = ({
 
         <div className="flex-1 overflow-y-auto py-4">
           {isLoading ? (
-            <div className="rounded-[22px] border border-white/8 bg-white/5 px-4 py-6 text-sm text-ink-muted">
+            <div className="coffee-surface-soft px-4 py-6 text-sm text-ink-muted">
               Loading notifications...
             </div>
           ) : error ? (
@@ -69,7 +69,7 @@ export const NotificationHistoryPage = ({
               {error}
             </div>
           ) : notifications.length === 0 ? (
-            <div className="rounded-[22px] border border-white/8 bg-white/5 px-4 py-6 text-sm text-ink-muted">
+            <div className="coffee-surface-soft px-4 py-6 text-sm text-ink-muted">
               No notifications yet.
             </div>
           ) : (
@@ -77,7 +77,7 @@ export const NotificationHistoryPage = ({
               {notifications.map(notification => (
                 <article
                   key={notification.id}
-                  className="rounded-[22px] border border-white/8 bg-white/5 px-4 py-4"
+                  className="coffee-surface-soft px-4 py-4"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">

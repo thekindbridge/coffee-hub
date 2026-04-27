@@ -13,6 +13,7 @@ import {
   type AuthUser,
 } from '../../services/auth/authService';
 import type { PendingPhoneVerification, RecaptchaMode } from '../../services/firebase/phoneAuthService';
+import { ThemeProvider } from '../../features/theme/ThemeProvider';
 
 const buildContextState = (
   user: AuthUser | null,
@@ -108,8 +109,10 @@ export const AppProviders = ({ children }: PropsWithChildren) => {
   );
 
   return (
-    <AuthContext.Provider value={contextValue}>
-      {children}
-    </AuthContext.Provider>
+    <ThemeProvider>
+      <AuthContext.Provider value={contextValue}>
+        {children}
+      </AuthContext.Provider>
+    </ThemeProvider>
   );
 };

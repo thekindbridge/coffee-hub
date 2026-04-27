@@ -3,6 +3,7 @@ import { Bell, User } from 'lucide-react';
 import { formatPhoneForDisplay } from '../../../shared/phone';
 import { ForegroundNotificationToast } from '../../components/ForegroundNotificationToast';
 import { NotificationPermissionBanner } from '../../components/NotificationPermissionBanner';
+import { ThemeToggleButton } from '../../components/common/ThemeToggleButton';
 import { RoleHeader } from '../../components/common/RoleHeader';
 import { AppShellLayout } from '../../components/ui/AppShellLayout';
 import { Loader } from '../../components/ui/Loader';
@@ -118,6 +119,7 @@ export const AdminAppShell = ({
           onProfileClick={profileManager.handleOpenProfile}
           rightSlot={(
             <>
+              <ThemeToggleButton />
               <button
                 type="button"
                 onClick={() => setIsNotificationHistoryOpen(true)}
@@ -131,7 +133,7 @@ export const AdminAppShell = ({
                   </span>
                 )}
               </button>
-              <div className="hidden rounded-full border border-white/10 bg-white/5 px-3 py-2 text-[11px] font-medium text-ink-muted sm:block">
+              <div className="coffee-badge hidden px-3 py-2 font-medium sm:inline-flex">
                 {formatPhoneForDisplay(session.currentUserPhone)}
               </div>
             </>

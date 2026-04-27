@@ -4,15 +4,15 @@
   --font-sans: var(--app-font-sans);
   --font-display: var(--app-font-display);
 
-  --color-background: #0f0b09;
-  --color-primary: #6f4e37;
-  --color-secondary: #c08a5d;
-  --color-accent: #f5e6d3;
-  --color-highlight: #ffb347;
-  --color-surface: #18120f;
-  --color-surface-strong: #231917;
-  --color-ink: #fff7ef;
-  --color-ink-muted: #ccb8a7;
+  --color-background: var(--app-color-background);
+  --color-primary: var(--app-color-primary);
+  --color-secondary: var(--app-color-secondary);
+  --color-accent: var(--app-color-accent);
+  --color-highlight: var(--app-color-highlight);
+  --color-surface: var(--app-color-surface);
+  --color-surface-strong: var(--app-color-surface-strong);
+  --color-ink: var(--app-color-ink);
+  --color-ink-muted: var(--app-color-ink-muted);
 }
 
 @layer base {
@@ -20,6 +20,90 @@
     color-scheme: dark;
     --app-font-sans: "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
     --app-font-display: "Segoe UI Variable Display", "Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+    --app-color-background: #0f0b09;
+    --app-color-primary: #6f4e37;
+    --app-color-secondary: #c08a5d;
+    --app-color-accent: #f5e6d3;
+    --app-color-highlight: #ffb347;
+    --app-color-surface: #18120f;
+    --app-color-surface-strong: #231917;
+    --app-color-ink: #fff7ef;
+    --app-color-ink-muted: #ccb8a7;
+    --app-body-background:
+      radial-gradient(circle at top, rgba(255, 179, 71, 0.12), transparent 24%),
+      radial-gradient(circle at bottom right, rgba(111, 78, 55, 0.24), transparent 30%),
+      linear-gradient(180deg, #120d0b 0%, #0f0b09 100%);
+    --app-shell-background:
+      radial-gradient(circle at top left, rgba(255, 179, 71, 0.08), transparent 22%),
+      radial-gradient(circle at bottom right, rgba(111, 78, 55, 0.24), transparent 32%),
+      linear-gradient(180deg, #120d0b 0%, #0f0b09 100%);
+    --app-surface-border: rgba(255, 255, 255, 0.08);
+    --app-surface-background: linear-gradient(180deg, rgba(29, 21, 18, 0.98), rgba(18, 13, 11, 0.98));
+    --app-surface-soft-background: linear-gradient(180deg, rgba(34, 24, 20, 0.92), rgba(21, 15, 13, 0.92));
+    --app-soft-panel-border: rgba(255, 255, 255, 0.1);
+    --app-soft-panel-background: rgba(255, 255, 255, 0.05);
+    --app-soft-panel-hover: rgba(255, 255, 255, 0.08);
+    --app-icon-hover-text: #fff7ef;
+    --app-input-background: rgba(26, 19, 16, 0.92);
+    --app-input-border: rgba(255, 255, 255, 0.1);
+    --app-inset-highlight: rgba(255, 255, 255, 0.03);
+    --app-tab-active-background: linear-gradient(135deg, rgba(111, 78, 55, 0.5), rgba(62, 39, 35, 0.9));
+    --app-nav-active-background: linear-gradient(180deg, rgba(192, 138, 93, 0.18), rgba(111, 78, 55, 0.28));
+    --app-header-shell-border: rgba(255, 255, 255, 0.06);
+    --app-header-shell-background: rgba(18, 13, 11, 0.78);
+    --app-header-card-border: rgba(255, 255, 255, 0.08);
+    --app-header-card-background: linear-gradient(180deg, rgba(31, 22, 19, 0.96), rgba(16, 11, 10, 0.96));
+    --app-bottom-nav-shell-background: rgba(15, 11, 9, 0.92);
+    --app-bottom-nav-card-background: rgba(18, 13, 11, 0.88);
+    --app-modal-backdrop: rgba(0, 0, 0, 0.7);
+    --app-muted-panel-border: rgba(255, 255, 255, 0.08);
+    --app-muted-panel-background: rgba(0, 0, 0, 0.12);
+    --app-selection-background: rgba(255, 179, 71, 0.35);
+    --app-selection-text: #2f1e12;
+  }
+
+  [data-theme='light'] {
+    color-scheme: light;
+    --app-color-background: #f4efe9;
+    --app-color-primary: #6f4e37;
+    --app-color-secondary: #9b6a43;
+    --app-color-accent: #2c1d15;
+    --app-color-highlight: #ffb347;
+    --app-color-surface: #ffffff;
+    --app-color-surface-strong: #f7f1ea;
+    --app-color-ink: #231710;
+    --app-color-ink-muted: #6d5a4e;
+    --app-body-background:
+      radial-gradient(circle at top, rgba(255, 179, 71, 0.16), transparent 24%),
+      radial-gradient(circle at bottom right, rgba(111, 78, 55, 0.12), transparent 28%),
+      linear-gradient(180deg, #fbf7f2 0%, #f4efe9 100%);
+    --app-shell-background:
+      radial-gradient(circle at top left, rgba(255, 179, 71, 0.12), transparent 24%),
+      radial-gradient(circle at bottom right, rgba(111, 78, 55, 0.12), transparent 30%),
+      linear-gradient(180deg, #fbf7f2 0%, #f4efe9 100%);
+    --app-surface-border: rgba(86, 62, 47, 0.1);
+    --app-surface-background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 243, 236, 0.98));
+    --app-surface-soft-background: linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(247, 241, 234, 0.95));
+    --app-soft-panel-border: rgba(86, 62, 47, 0.12);
+    --app-soft-panel-background: rgba(111, 78, 55, 0.06);
+    --app-soft-panel-hover: rgba(111, 78, 55, 0.1);
+    --app-icon-hover-text: #231710;
+    --app-input-background: rgba(255, 255, 255, 0.96);
+    --app-input-border: rgba(86, 62, 47, 0.14);
+    --app-inset-highlight: rgba(255, 255, 255, 0.72);
+    --app-tab-active-background: linear-gradient(135deg, rgba(111, 78, 55, 0.16), rgba(255, 255, 255, 0.96));
+    --app-nav-active-background: linear-gradient(180deg, rgba(111, 78, 55, 0.14), rgba(255, 255, 255, 0.96));
+    --app-header-shell-border: rgba(86, 62, 47, 0.1);
+    --app-header-shell-background: rgba(251, 247, 242, 0.86);
+    --app-header-card-border: rgba(86, 62, 47, 0.12);
+    --app-header-card-background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(247, 241, 234, 0.96));
+    --app-bottom-nav-shell-background: rgba(251, 247, 242, 0.92);
+    --app-bottom-nav-card-background: rgba(255, 255, 255, 0.92);
+    --app-modal-backdrop: rgba(35, 23, 16, 0.22);
+    --app-muted-panel-border: rgba(86, 62, 47, 0.1);
+    --app-muted-panel-background: rgba(111, 78, 55, 0.05);
+    --app-selection-background: rgba(111, 78, 55, 0.18);
+    --app-selection-text: #231710;
   }
 
   * {
@@ -28,7 +112,7 @@
   }
 
   html {
-    background: #120d0b;
+    background: var(--app-color-background);
     overscroll-behavior-y: none;
     text-size-adjust: 100%;
     -webkit-text-size-adjust: 100%;
@@ -40,10 +124,7 @@
     overflow-x: hidden;
     overscroll-behavior-y: none;
     touch-action: manipulation;
-    background-image:
-      radial-gradient(circle at top, rgba(255, 179, 71, 0.12), transparent 24%),
-      radial-gradient(circle at bottom right, rgba(111, 78, 55, 0.24), transparent 30%),
-      linear-gradient(180deg, #120d0b 0%, #0f0b09 100%);
+    background-image: var(--app-body-background);
     text-rendering: optimizeLegibility;
     font-synthesis-weight: none;
   }
@@ -71,29 +152,69 @@
 
 @layer components {
   .app-shell {
-    @apply min-h-screen text-ink selection:bg-highlight/35 selection:text-[#2f1e12];
+    @apply min-h-screen text-ink;
     min-height: 100dvh;
     overflow-x: hidden;
-    background-image:
-      radial-gradient(circle at top left, rgba(255, 179, 71, 0.08), transparent 22%),
-      radial-gradient(circle at bottom right, rgba(111, 78, 55, 0.24), transparent 32%),
-      linear-gradient(180deg, #120d0b 0%, #0f0b09 100%);
+    background-image: var(--app-shell-background);
+  }
+
+  .app-shell ::selection {
+    background: var(--app-selection-background);
+    color: var(--app-selection-text);
+  }
+
+  .app-header-shell {
+    border-bottom: 1px solid var(--app-header-shell-border);
+    background: var(--app-header-shell-background);
+  }
+
+  .app-header-card {
+    border: 1px solid var(--app-header-card-border);
+    background: var(--app-header-card-background);
+    box-shadow: 0 20px 44px rgba(0, 0, 0, 0.18);
+  }
+
+  .app-bottom-nav-shell {
+    border-top: 1px solid var(--app-header-shell-border);
+    background: var(--app-bottom-nav-shell-background);
+  }
+
+  .app-bottom-nav-card {
+    border: 1px solid var(--app-surface-border);
+    background: var(--app-bottom-nav-card-background);
+  }
+
+  .app-modal-backdrop {
+    background: var(--app-modal-backdrop);
+  }
+
+  .app-muted-panel {
+    border: 1px solid var(--app-muted-panel-border);
+    background: var(--app-muted-panel-background);
   }
 
   .coffee-surface {
-    @apply rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(29,21,18,0.98),rgba(18,13,11,0.98))] shadow-[0_18px_50px_rgba(0,0,0,0.28)] backdrop-blur-xl;
+    @apply rounded-[24px] shadow-[0_18px_50px_rgba(0,0,0,0.18)] backdrop-blur-xl;
+    border: 1px solid var(--app-surface-border);
+    background: var(--app-surface-background);
   }
 
   .coffee-surface-soft {
-    @apply rounded-[22px] border border-white/8 bg-[linear-gradient(180deg,rgba(34,24,20,0.92),rgba(21,15,13,0.92))] shadow-[0_12px_36px_rgba(0,0,0,0.22)];
+    @apply rounded-[22px] shadow-[0_12px_36px_rgba(0,0,0,0.14)];
+    border: 1px solid var(--app-surface-border);
+    background: var(--app-surface-soft-background);
   }
 
   .coffee-badge {
-    @apply inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/6 px-2.5 py-1 text-[11px] font-semibold tracking-[0.02em] text-ink-muted;
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold tracking-[0.02em] text-ink-muted;
+    border: 1px solid var(--app-soft-panel-border);
+    background: var(--app-soft-panel-background);
   }
 
   .coffee-chip {
-    @apply inline-flex min-h-10 items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3.5 text-[12px] font-semibold text-ink-muted transition-all duration-200;
+    @apply inline-flex min-h-10 items-center gap-2 rounded-full px-3.5 text-[12px] font-semibold text-ink-muted transition-all duration-200;
+    border: 1px solid var(--app-soft-panel-border);
+    background: var(--app-soft-panel-background);
   }
 
   .coffee-btn-primary {
@@ -108,8 +229,14 @@
   }
 
   .coffee-btn-secondary {
-    @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 text-[13px] font-semibold text-ink-muted transition-all duration-200 hover:bg-white/8 active:scale-[0.98];
+    @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl px-4 text-[13px] font-semibold text-ink-muted transition-all duration-200 active:scale-[0.98];
+    border: 1px solid var(--app-soft-panel-border);
+    background: var(--app-soft-panel-background);
     will-change: transform;
+  }
+
+  .coffee-btn-secondary:hover {
+    background: var(--app-soft-panel-hover);
   }
 
   .coffee-btn-accent {
@@ -120,18 +247,29 @@
   }
 
   .coffee-icon-btn {
-    @apply inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-ink-muted transition-all duration-200 hover:bg-white/8 hover:text-ink active:scale-[0.96];
+    @apply inline-flex h-11 w-11 items-center justify-center rounded-2xl text-ink-muted transition-all duration-200 active:scale-[0.96];
+    border: 1px solid var(--app-soft-panel-border);
+    background: var(--app-soft-panel-background);
     will-change: transform;
   }
 
+  .coffee-icon-btn:hover {
+    background: var(--app-soft-panel-hover);
+    color: var(--app-icon-hover-text);
+  }
+
   .coffee-input {
-    @apply min-h-12 w-full rounded-[20px] border border-white/10 bg-[#1a1310]/92 px-4 text-sm text-ink placeholder:text-ink-muted/70 focus:border-secondary/80 focus:outline-none;
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    @apply min-h-12 w-full rounded-[20px] px-4 text-sm text-ink placeholder:text-ink-muted/70 focus:border-secondary/80 focus:outline-none;
+    border: 1px solid var(--app-input-border);
+    background: var(--app-input-background);
+    box-shadow: inset 0 1px 0 var(--app-inset-highlight);
   }
 
   .coffee-textarea {
-    @apply min-h-[112px] w-full rounded-[22px] border border-white/10 bg-[#1a1310]/92 px-4 py-3.5 text-sm text-ink placeholder:text-ink-muted/70 focus:border-secondary/80 focus:outline-none;
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    @apply min-h-[112px] w-full rounded-[22px] px-4 py-3.5 text-sm text-ink placeholder:text-ink-muted/70 focus:border-secondary/80 focus:outline-none;
+    border: 1px solid var(--app-input-border);
+    background: var(--app-input-background);
+    box-shadow: inset 0 1px 0 var(--app-inset-highlight);
   }
 
   .coffee-tab {
@@ -140,7 +278,7 @@
 
   .coffee-tab-active {
     @apply border-secondary/40 text-accent;
-    background: linear-gradient(135deg, rgba(111, 78, 55, 0.5), rgba(62, 39, 35, 0.9));
+    background: var(--app-tab-active-background);
     box-shadow: 0 12px 24px rgba(62, 39, 35, 0.22);
   }
 
@@ -150,7 +288,7 @@
 
   .coffee-nav-pill-active {
     @apply text-accent;
-    background: linear-gradient(180deg, rgba(192, 138, 93, 0.18), rgba(111, 78, 55, 0.28));
+    background: var(--app-nav-active-background);
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
   }
 

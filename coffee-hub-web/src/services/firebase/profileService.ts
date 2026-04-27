@@ -19,7 +19,7 @@ import {
   formatPhoneWithPrefix,
   mapProfileDocToProfile,
 } from '../../features/app/lib/firestoreMappers';
-import { toAppServiceError } from '../platform/serviceError';
+import { AppServiceError, toAppServiceError } from '../platform/serviceError';
 import { db } from './index';
 
 export const subscribeToUserProfile = (
@@ -287,4 +287,65 @@ export const saveDeliveryAgentAvailability = async ({
       'network',
     );
   }
-}
+};
+
+export const saveDeliveryAgentProfileDetails = async ({
+  agentId,
+  currentUserId,
+  name,
+  phone,
+}: {
+  agentId: string;
+  currentUserId: string;
+  name: string;
+  phone: string;
+}) => {
+  try {
+    const normalizedAgentId = formatPhoneWithPrefix(agentId);
+    const trimmedName = name.trim();
+    const normalizedPhone = formatPhoneWithPrefix(phone);
+
+    if (!trimmedName) {
+      throw new AppServiceError('Enter a name before saving.', {
+        code: 'validation',
+      });
+    }
+
+    await Promise.all([
+      setDoc(
+        doc(db, 'agents', normalizedAgentId),
+        {
+          name: trimmedName,
+          phone: normalizedPhone,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      ),
+      currentUserId
+        ? setDoc(
+          doc(db, 'users', currentUserId),
+          {
+            name: trimmedName,
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true },
+        )
+        : Promise.resolve(),
+    ]);
+  } catch (error) {
+    if (error instanceof AppServiceError) {
+      throw error;
+    }
+
+    const errorMessage = error instanceof Error ? error.message.trim() : '';
+    if (errorMessage === 'Enter a valid mobile number.') {
+      throw toAppServiceError(error, errorMessage, 'validation');
+    }
+
+    throw toAppServiceError(
+      error,
+      'Unable to save delivery profile right now.',
+      'network',
+    );
+  }
+};
