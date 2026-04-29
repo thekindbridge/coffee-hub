@@ -2,6 +2,7 @@ import { onAuthStateChanged, signOut, type User as FirebaseUser } from 'firebase
 import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { formatPhoneForDisplay, normalizePhoneNumber, safeNormalizePhoneNumber } from '../../../shared/phone';
 import type { UserRole } from '../../features/app/types';
+import { reserveOtpRequest, OtpControlError } from '../api/otpControlService';
 import { syncUserProfileRequest } from '../api/userService';
 import { auth, db } from '../firebase';
 import {
@@ -12,6 +13,7 @@ import {
   clearPendingPhoneVerification,
   requestPhoneVerification,
   resolvePhoneVerification,
+  shouldUseVisibleRecaptcha,
   type PendingPhoneVerification,
   type RecaptchaMode,
 } from '../firebase/phoneAuthService';
@@ -36,6 +38,54 @@ type AuthUserOverrides = {
 
 const buildDisplayName = (phone: string) =>
   formatPhoneForDisplay(phone) || 'COFFEE-HUB User';
+
+type OtpControlGrant = {
+  allowVisibleRetry: boolean;
+  expiresAt: number;
+  phone: string;
+};
+
+const OTP_CONTROL_GRANT_TTL_MS = 2 * 60 * 1000;
+
+let otpControlGrant: OtpControlGrant | null = null;
+
+const clearOtpControlGrant = () => {
+  otpControlGrant = null;
+};
+
+const canReuseOtpControlGrant = (
+  phone: string,
+  recaptchaMode: RecaptchaMode,
+) =>
+  Boolean(
+    recaptchaMode === 'visible' &&
+    otpControlGrant &&
+    otpControlGrant.phone === phone &&
+    otpControlGrant.allowVisibleRetry &&
+    otpControlGrant.expiresAt > Date.now(),
+  );
+
+const reserveOtpControlGrant = async (
+  phone: string,
+  recaptchaMode: RecaptchaMode,
+) => {
+  if (canReuseOtpControlGrant(phone, recaptchaMode)) {
+    otpControlGrant = otpControlGrant
+      ? {
+        ...otpControlGrant,
+        allowVisibleRetry: false,
+      }
+      : null;
+    return;
+  }
+
+  await reserveOtpRequest(phone);
+  otpControlGrant = {
+    allowVisibleRetry: true,
+    expiresAt: Date.now() + OTP_CONTROL_GRANT_TTL_MS,
+    phone,
+  };
+};
 
 const syncAuthenticatedUserIdentity = async ({
   uid,
@@ -105,9 +155,7 @@ const resolveAuthenticatedUser = (
       const idToken = await firebaseUser.getIdToken(true);
       const response = await syncUserProfileRequest(
         {
-          name:
-            firebaseUser.displayName?.trim() ||
-            buildDisplayName(authPhone),
+          name: firebaseUser.displayName?.trim() || '',
           phone: authPhone || safeNormalizePhoneNumber(firebaseUser.phoneNumber || ''),
         },
         idToken,
@@ -221,12 +269,28 @@ export const requestOtp = async (
   }
 
   try {
+    await reserveOtpControlGrant(normalizedPhone, recaptchaMode);
     return await requestPhoneVerification(normalizedPhone, {
       containerId: PHONE_AUTH_RECAPTCHA_CONTAINER_ID,
       recaptchaMode,
     });
   } catch (error) {
-    throw toAppServiceError(error, 'Unable to send the OTP right now.', 'network');
+    if (
+      recaptchaMode === 'invisible' &&
+      shouldUseVisibleRecaptcha(error)
+    ) {
+      throw toAppServiceError(error, 'Unable to send the OTP right now.', 'network');
+    }
+
+    clearOtpControlGrant();
+
+    throw toAppServiceError(
+      error,
+      error instanceof OtpControlError
+        ? error.message
+        : 'Unable to send the OTP right now.',
+      error instanceof OtpControlError ? 'validation' : 'network',
+    );
   }
 };
 
@@ -242,6 +306,7 @@ export const verifyOtp = async (otpCode: string): Promise<AuthUser> => {
 
 export const cancelOtp = () => {
   clearPendingPhoneVerification();
+  clearOtpControlGrant();
 };
 
 export const getCurrentUserIdToken = async (forceRefresh = false) => {
@@ -257,5 +322,6 @@ export const getCurrentUserIdToken = async (forceRefresh = false) => {
 
 export const logoutCurrentUser = async () => {
   clearPendingPhoneVerification();
+  clearOtpControlGrant();
   await signOut(auth);
 };

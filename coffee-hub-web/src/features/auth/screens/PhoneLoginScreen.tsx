@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { ArrowRight, Coffee, LockKeyhole, RotateCcw, Smartphone } from 'lucide-react';
 import { motion } from 'motion/react';
 import {
@@ -33,6 +33,7 @@ export const PhoneLoginScreen = () => {
   const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
   const [error, setError] = useState('');
   const [infoMessage, setInfoMessage] = useState('');
+  const lastOtpRequestAtRef = useRef(0);
 
   const activePhoneNumber = useMemo(
     () => pendingPhoneNumber || safeNormalizePhoneNumber(phoneNumber),
@@ -45,6 +46,13 @@ export const PhoneLoginScreen = () => {
   };
 
   const handleSendOtp = async () => {
+    const now = Date.now();
+    if (now - lastOtpRequestAtRef.current < 1000) {
+      return;
+    }
+
+    lastOtpRequestAtRef.current = now;
+
     let normalizedPhone = '';
 
     try {
@@ -105,6 +113,7 @@ export const PhoneLoginScreen = () => {
     cancelOtp();
     setOtpCode('');
     setRecaptchaMode('invisible');
+    lastOtpRequestAtRef.current = 0;
     resetMessages();
   };
 

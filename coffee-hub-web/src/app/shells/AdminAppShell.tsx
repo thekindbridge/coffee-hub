@@ -3,7 +3,6 @@ import { Bell, User } from 'lucide-react';
 import { formatPhoneForDisplay } from '../../../shared/phone';
 import { ForegroundNotificationToast } from '../../components/ForegroundNotificationToast';
 import { NotificationPermissionBanner } from '../../components/NotificationPermissionBanner';
-import { ThemeToggleButton } from '../../components/common/ThemeToggleButton';
 import { RoleHeader } from '../../components/common/RoleHeader';
 import { AppShellLayout } from '../../components/ui/AppShellLayout';
 import { Loader } from '../../components/ui/Loader';
@@ -119,7 +118,6 @@ export const AdminAppShell = ({
           onProfileClick={profileManager.handleOpenProfile}
           rightSlot={(
             <>
-              <ThemeToggleButton />
               <button
                 type="button"
                 onClick={() => setIsNotificationHistoryOpen(true)}

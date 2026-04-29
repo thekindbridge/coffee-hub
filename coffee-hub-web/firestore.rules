@@ -960,10 +960,12 @@ service cloud.firestore {
         'uid',
         'phone',
         'email',
+        'address',
         'notificationPermission',
         'notificationSettings',
         'addresses',
         'addressEntries',
+        'profileReminderDisabled',
         'role',
         'adminLocation',
         'vehicleType',
@@ -1015,10 +1017,12 @@ service cloud.firestore {
         isOptionalString(data.name, 120) &&
         isOptionalString(data.phone, 30) &&
         isOptionalUserEmail(data.email) &&
+        isOptionalString(data.address, 500) &&
         isOptionalString(data.notificationPermission, 20) &&
         isValidNotificationSettings(data.notificationSettings) &&
         isValidAddresses(data.addresses) &&
         isValidAddressEntries(data.addressEntries) &&
+        isOptionalBoolean(data.profileReminderDisabled) &&
         isValidUserRole(data.role) &&
         isOptionalString(data.adminLocation, 120) &&
         isOptionalString(data.vehicleType, 80) &&
@@ -1055,6 +1059,7 @@ service cloud.firestore {
         'currentOrderId',
         'name',
         'phone',
+        'userId',
         'vehicle',
         'currentLocation',
         'lastLocation',
@@ -1069,6 +1074,7 @@ service cloud.firestore {
         isOptionalString(data.currentOrderId, 120) &&
         isOptionalString(data.name, 120) &&
         isOptionalString(data.phone, 30) &&
+        isOptionalString(data.userId, 120) &&
         isOptionalString(data.vehicle, 120) &&
         isValidLocation(data.currentLocation) &&
         isValidLocation(data.lastLocation) &&
@@ -1204,7 +1210,10 @@ service cloud.firestore {
         'body',
         'createdAt',
         'updatedAt',
+        'eventId',
+        'isRead',
         'read',
+        'type',
         'url',
         'tag',
         'orderId',
@@ -1222,7 +1231,10 @@ service cloud.firestore {
         isValidNotificationRole(data.role) &&
         isNonEmptyString(data.title, 160) &&
         isOptionalString(data.body, 1000) &&
+        isOptionalString(data.eventId, 120) &&
+        isOptionalBoolean(data.isRead) &&
         data.read is bool &&
+        isOptionalString(data.type, 120) &&
         isOptionalString(data.url, 512) &&
         isOptionalString(data.tag, 160) &&
         isOptionalString(data.orderId, 120) &&
@@ -1315,14 +1327,21 @@ service cloud.firestore {
         request.resource.data.title == resource.data.title &&
         request.resource.data.body == resource.data.body &&
         request.resource.data.createdAt == resource.data.createdAt &&
+        request.resource.data.eventId == resource.data.eventId &&
+        request.resource.data.type == resource.data.type &&
         request.resource.data.url == resource.data.url &&
         request.resource.data.tag == resource.data.tag &&
         request.resource.data.orderId == resource.data.orderId &&
         request.resource.data.status == resource.data.status &&
+        request.resource.data.isRead is bool &&
         request.resource.data.read is bool &&
         isOptionalTimestamp(request.resource.data.updatedAt) &&
         isValidNotificationDocument(request.resource.data);
       allow delete: if false;
+    }
+
+    match /otp_control/{phone} {
+      allow read, write: if false;
     }
 
     match /agent_locations/{orderId} {

@@ -37,6 +37,10 @@ import {
   formatShopTimingRange,
   isShopOpen,
 } from '../../../../shared/shopTiming';
+import {
+  getPrimaryProfileAddress,
+  isMeaningfulProfileName,
+} from '../../app/lib/firestoreMappers';
 
 type UsePaymentFlowParams = {
   currentUserId: string;
@@ -133,6 +137,10 @@ export const usePaymentFlow = ({
   const [currentTime, setCurrentTime] = useState(() => Date.now());
   const hasCheckoutAddressSelectionRef = useRef(false);
   const isPlacingOrderRef = useRef(false);
+  const autofillName = isMeaningfulProfileName(profileSaved.name, profileSaved.phone)
+    ? profileSaved.name.trim()
+    : '';
+  const autofillAddress = getPrimaryProfileAddress(profileSaved);
 
   // Derived address options from saved profile
   const savedAddressOptions = useMemo<SavedAddressOption[]>(
@@ -212,13 +220,14 @@ export const usePaymentFlow = ({
 
   // Pre-fill name/phone from saved profile
   useEffect(() => {
-    if (!profileSaved.name && !profileSaved.phone) return;
+    if (!autofillName && !profileSaved.phone && !autofillAddress) return;
     setCustomerDetails(prev => ({
       ...prev,
-      name: prev.name || profileSaved.name,
+      address: prev.address || autofillAddress,
+      name: prev.name || autofillName,
       phone: prev.phone || profileSaved.phone,
     }));
-  }, [profileSaved.name, profileSaved.phone]);
+  }, [autofillAddress, autofillName, profileSaved.phone]);
 
   // Reset to cart step when cart empties
   useEffect(() => {

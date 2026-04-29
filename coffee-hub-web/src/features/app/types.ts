@@ -25,11 +25,13 @@ export type CustomerProfile = {
   phone: string;
   email: string;
   role: UserRole;
+  address: string;
   addresses: string[];
   adminLocation: string;
   vehicleType: AgentVehicleType;
   status: AgentStatus;
   notificationSettings: NotificationSettings;
+  profileReminderDisabled: boolean;
   createdAt?: string;
   updatedAt?: string;
 };

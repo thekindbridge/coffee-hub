@@ -230,6 +230,7 @@ export const EMPTY_PROFILE: CustomerProfile = {
   phone: '',
   email: '',
   role: 'customer',
+  address: '',
   addresses: ['', '', ''],
   adminLocation: '',
   vehicleType: '',
@@ -238,6 +239,7 @@ export const EMPTY_PROFILE: CustomerProfile = {
     orderUpdates: true,
     offers: false,
   },
+  profileReminderDisabled: false,
 };
 
 export const EMPTY_STAFF_PROFILE: StaffProfile = {
@@ -246,6 +248,7 @@ export const EMPTY_STAFF_PROFILE: StaffProfile = {
   name: '',
   phone: '',
   email: '',
+  address: '',
   addresses: ['', '', ''],
   adminLocation: '',
   vehicleType: '',
@@ -254,6 +257,7 @@ export const EMPTY_STAFF_PROFILE: StaffProfile = {
     orderUpdates: true,
     offers: false,
   },
+  profileReminderDisabled: false,
 };
 
 export const ensureProfileAddresses = (addresses: string[] = []) => {
@@ -262,6 +266,35 @@ export const ensureProfileAddresses = (addresses: string[] = []) => {
     normalized.push('');
   }
   return normalized.slice(0, 3);
+};
+
+export const getPrimaryProfileAddress = (
+  profile: Pick<CustomerProfile, 'address' | 'addresses'>,
+) => {
+  const explicitAddress = `${profile.address || ''}`.trim();
+  if (explicitAddress) {
+    return explicitAddress;
+  }
+
+  return `${ensureProfileAddresses(profile.addresses)[0] || ''}`.trim();
+};
+
+export const isMeaningfulProfileName = (
+  name: string,
+  phone: string,
+) => {
+  const trimmedName = name.trim();
+  if (!trimmedName) {
+    return false;
+  }
+
+  const normalizedPlaceholder = buildProfileNamePlaceholder(phone);
+  return trimmedName !== normalizedPlaceholder;
+};
+
+const buildProfileNamePlaceholder = (phone: string) => {
+  const formattedPhone = formatPhoneForDisplay(phone).trim();
+  return formattedPhone || 'COFFEE-HUB User';
 };
 
 export const normalizeNotificationSettings = (
@@ -297,6 +330,16 @@ export const mapProfileDocToProfile = (
   const addressRecord = data.addresses && typeof data.addresses === 'object'
     ? (data.addresses as Record<string, unknown>)
     : {};
+  const topLevelAddress = typeof data.address === 'string' ? data.address : '';
+  const addresses = ensureProfileAddresses([
+    (addressRecord.address1 as string) || '',
+    (addressRecord.address2 as string) || '',
+    (addressRecord.address3 as string) || '',
+  ]);
+
+  if (topLevelAddress.trim() && !addresses[0].trim()) {
+    addresses[0] = topLevelAddress.trim();
+  }
 
   return {
     uid: (data.uid as string) || '',
@@ -304,15 +347,13 @@ export const mapProfileDocToProfile = (
     phone: safeNormalizePhoneNumber((data.phone as string) || ''),
     email: (data.email as string) || '',
     role: normalizeUserRole(data.role),
-    addresses: ensureProfileAddresses([
-      (addressRecord.address1 as string) || '',
-      (addressRecord.address2 as string) || '',
-      (addressRecord.address3 as string) || '',
-    ]),
+    address: topLevelAddress.trim() || addresses[0].trim(),
+    addresses,
     adminLocation: (data.adminLocation as string) || '',
     vehicleType: normalizeVehicleType(data.vehicleType),
     status: normalizeProfileAgentStatus(data.status),
     notificationSettings: normalizeNotificationSettings(data.notificationSettings),
+    profileReminderDisabled: data.profileReminderDisabled === true,
   };
 };
 
@@ -351,8 +392,16 @@ export const formatPhoneWithPrefix = (phone: string) => {
 
 export const buildProfileDraft = (profile: CustomerProfile) => ({
   ...profile,
+  address: getPrimaryProfileAddress(profile),
+  name: isMeaningfulProfileName(profile.name, profile.phone) ? profile.name : '',
   phone: formatPhoneForDisplay(profile.phone),
-  addresses: ensureProfileAddresses(profile.addresses),
+  addresses: (() => {
+    const nextAddresses = ensureProfileAddresses(profile.addresses);
+    if (!nextAddresses[0].trim() && profile.address.trim()) {
+      nextAddresses[0] = profile.address.trim();
+    }
+    return nextAddresses;
+  })(),
 });
 
 export const buildStaffProfileDraft = (profile: StaffProfile): StaffProfile => ({

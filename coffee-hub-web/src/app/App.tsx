@@ -6,11 +6,13 @@ import { useOffers } from '../features/offers/hooks/useOffers';
 import { useRealtimeAppData } from '../features/app/hooks/useRealtimeAppData';
 import { useNetworkStatus } from '../features/app/hooks/useNetworkStatus';
 import { useOrderOperations } from '../features/orders/hooks/useOrderOperations';
+import { useProfileCompletionReminder } from '../features/app/hooks/useProfileCompletionReminder';
 import { useProfileManager } from '../features/app/hooks/useProfileManager';
 import { useAccessManager } from '../features/app/hooks/useAccessManager';
 import { usePushNotifications } from '../features/app/hooks/usePushNotifications';
 import { useShopTimingManager } from '../features/app/hooks/useShopTimingManager';
 import { useInstallPrompt } from '../features/customer/hooks/useInstallPrompt';
+import { ProfileCompletionPrompt } from '../components/common/ProfileCompletionPrompt';
 import { Loader } from '../components/ui/Loader';
 import { NetworkStatusBanner } from '../components/common/NetworkStatusBanner';
 import { lazyNamed } from '../utils/lazyNamed';
@@ -19,6 +21,11 @@ import { storageAdapter } from '../services/platform/storageAdapter';
 
 const NOTIFICATION_PERMISSION_REQUESTED_KEY = 'notification_permission_requested';
 const COFFEE_HUB_APP_HOST = 'coffee-hub-inkollu.vercel.app';
+
+const getNotificationPermissionRequestedKey = (currentUserId: string) =>
+  currentUserId
+    ? `${NOTIFICATION_PERMISSION_REQUESTED_KEY}:${currentUserId}`
+    : NOTIFICATION_PERMISSION_REQUESTED_KEY;
 
 const normalizeNativeAppUrl = (rawUrl: string) => {
   const trimmedUrl = rawUrl.trim();
@@ -115,13 +122,15 @@ export default function App() {
       return;
     }
 
-    if (storageAdapter.read(NOTIFICATION_PERMISSION_REQUESTED_KEY) === 'true') {
+    const permissionRequestKey = getNotificationPermissionRequestedKey(session.currentUserId);
+    if (storageAdapter.read(permissionRequestKey) === 'true') {
       return;
     }
 
-    storageAdapter.write(NOTIFICATION_PERMISSION_REQUESTED_KEY, 'true');
+    storageAdapter.write(permissionRequestKey, 'true');
     void pushNotifications.requestPermission();
   }, [
+    session.currentUserId,
     pushNotifications,
     pushNotifications.isSupported,
     pushNotifications.permissionState,
@@ -169,6 +178,15 @@ export default function App() {
     canManageRoles: session.canManageRoles,
   });
 
+  const profileCompletionReminder = useProfileCompletionReminder({
+    currentUserId: session.currentUserId,
+    isAuthReady: session.isAuthReady,
+    isLoggedIn: session.isLoggedIn,
+    isProfileOpen: profileManager.isProfileOpen,
+    isCustomer: session.role === 'customer',
+    profileSaved: session.profileSaved,
+  });
+
   const shopTimingManager = useShopTimingManager({
     isAdmin: session.canAccessAdminPanel,
     isDrawerOpen: profileManager.isProfileOpen,
@@ -194,6 +212,19 @@ export default function App() {
   return (
     <>
       <NetworkStatusBanner isOffline={networkStatus.isOffline} />
+      <ProfileCompletionPrompt
+        error={profileCompletionReminder.error}
+        isOpen={profileCompletionReminder.isVisible}
+        isSavingPreference={profileCompletionReminder.isSavingPreference}
+        onCompleteProfile={() => {
+          profileCompletionReminder.dismissForSession();
+          profileManager.handleOpenProfile();
+        }}
+        onDisableReminder={() => {
+          void profileCompletionReminder.disableReminder();
+        }}
+        onRemindLater={profileCompletionReminder.remindLater}
+      />
       <AppRouter
         accessManager={accessManager}
         installPrompt={installPrompt}

@@ -2,7 +2,6 @@ import { Suspense, useMemo, useState } from 'react';
 import { Bell, ClipboardList, LayoutDashboard, UserCircle2 } from 'lucide-react';
 import { ForegroundNotificationToast } from '../../components/ForegroundNotificationToast';
 import { NotificationPermissionBanner } from '../../components/NotificationPermissionBanner';
-import { ThemeToggleButton } from '../../components/common/ThemeToggleButton';
 import { AppShellLayout } from '../../components/ui/AppShellLayout';
 import { Loader } from '../../components/ui/Loader';
 import { DeliveryNavbar } from '../../delivery-agent/components/DeliveryNavbar';
@@ -112,7 +111,6 @@ export const AgentAppShell = ({
                 </div>
 
                 <div className="flex items-center gap-1.5">
-                  <ThemeToggleButton />
                   <button
                     type="button"
                     onClick={() => setIsNotificationHistoryOpen(true)}

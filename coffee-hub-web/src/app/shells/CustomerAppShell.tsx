@@ -13,7 +13,6 @@ import { CURRENCY_SYMBOL } from '../../features/app/lib/constants';
 import { HomeFooter } from '../../components/common/HomeFooter';
 import { BottomNavigation } from '../../components/common/BottomNavigation';
 import { RoleHeader } from '../../components/common/RoleHeader';
-import { ThemeToggleButton } from '../../components/common/ThemeToggleButton';
 import { ForegroundNotificationToast } from '../../components/ForegroundNotificationToast';
 import { NotificationPermissionBanner } from '../../components/NotificationPermissionBanner';
 import { AppShellLayout } from '../../components/ui/AppShellLayout';
@@ -247,7 +246,6 @@ export const CustomerAppShell = ({
           onProfileClick={profileManager.handleOpenProfile}
           rightSlot={(
             <>
-              <ThemeToggleButton />
               <button
                 type="button"
                 onClick={() => setIsNotificationHistoryOpen(true)}

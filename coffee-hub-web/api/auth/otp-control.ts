@@ -1,9 +1,9 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
-import { syncUserProfileResponse } from '../../src/services/api/server/userService.js';
+import { reserveOtpRequestResponse } from '../../src/services/api/server/otpControlService.js';
 import {
-  isFirebaseUnavailable,
   jsonResponse,
+  isFirebaseUnavailable,
   methodNotAllowedResponse,
   sendApiResponse,
   toErrorResponse,
@@ -14,15 +14,15 @@ export default async function handler(request: VercelRequest, response: VercelRe
     switch (request.method) {
       case 'POST':
         if (isFirebaseUnavailable()) {
-          console.warn('User profile fallback used: Firebase unavailable');
-          return sendApiResponse(response, jsonResponse(200, {
-            fallback: true,
-            profile: null,
-            success: false,
-          }));
+          return sendApiResponse(
+            response,
+            jsonResponse(503, {
+              error: 'Unable to send the OTP right now. Please try again.',
+            }),
+          );
         }
 
-        return sendApiResponse(response, await syncUserProfileResponse(request));
+        return sendApiResponse(response, await reserveOtpRequestResponse(request));
       default:
         return sendApiResponse(response, methodNotAllowedResponse(['POST']));
     }
@@ -31,8 +31,8 @@ export default async function handler(request: VercelRequest, response: VercelRe
       response,
       toErrorResponse(
         error,
-        'Unhandled user sync error',
-        'Unable to sync your profile right now.',
+        'Unhandled OTP control error',
+        'Unable to send the OTP right now. Please try again.',
       ),
     );
   }

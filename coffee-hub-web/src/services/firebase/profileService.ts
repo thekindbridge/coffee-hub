@@ -17,6 +17,7 @@ import {
   EMPTY_PROFILE,
   ensureProfileAddresses,
   formatPhoneWithPrefix,
+  getPrimaryProfileAddress,
   mapProfileDocToProfile,
 } from '../../features/app/lib/firestoreMappers';
 import { AppServiceError, toAppServiceError } from '../platform/serviceError';
@@ -59,7 +60,13 @@ export const saveUserProfile = async ({
     const normalizedPhone = formatPhoneWithPrefix(currentUserPhone);
     const trimmedAddresses = ensureProfileAddresses(profileDraft.addresses)
       .map(address => address.trim());
+    const primaryAddress = getPrimaryProfileAddress(profileDraft);
+    if (primaryAddress) {
+      trimmedAddresses[0] = primaryAddress;
+    }
+
     const userPayload: Record<string, unknown> = {
+      address: trimmedAddresses[0] || '',
       addresses: {
         address1: trimmedAddresses[0] || '',
         address2: trimmedAddresses[1] || '',
@@ -70,6 +77,7 @@ export const saveUserProfile = async ({
       name: profileDraft.name.trim(),
       notificationSettings: profileDraft.notificationSettings,
       phone: normalizedPhone,
+      profileReminderDisabled: profileDraft.profileReminderDisabled === true,
       updatedAt: serverTimestamp(),
     };
 
@@ -108,6 +116,7 @@ export const saveUserProfile = async ({
       phone: normalizedPhone,
       status: agentStatus,
       updatedAt: serverTimestamp(),
+      userId: currentUserId,
       vehicle: profileDraft.vehicleType,
     };
 
@@ -157,6 +166,7 @@ export const saveUserNotificationSettings = async ({
         notificationSettings: settings,
         phone: normalizedPhone,
         updatedAt: serverTimestamp(),
+        userId: currentUserId,
       },
       { merge: true },
     );
@@ -164,6 +174,31 @@ export const saveUserNotificationSettings = async ({
     throw toAppServiceError(
       error,
       'Unable to save notification settings right now.',
+      'network',
+    );
+  }
+};
+
+export const saveUserProfileReminderPreference = async ({
+  currentUserId,
+  disabled,
+}: {
+  currentUserId: string;
+  disabled: boolean;
+}) => {
+  try {
+    await setDoc(
+      doc(db, 'users', currentUserId),
+      {
+        profileReminderDisabled: disabled,
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    );
+  } catch (error) {
+    throw toAppServiceError(
+      error,
+      'Unable to update your reminder preference right now.',
       'network',
     );
   }
@@ -272,6 +307,7 @@ export const saveDeliveryAgentAvailability = async ({
       phone: normalizedPhone,
       status: agentStatus,
       updatedAt: serverTimestamp(),
+      userId: currentUserId,
       vehicle: profileDraft.vehicleType,
     };
 

@@ -1,3 +1,4 @@
+import { App as CapacitorApp } from '@capacitor/app';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { UserRole } from '../types';
 import {
@@ -281,6 +282,27 @@ export const usePushNotifications = ({
     permissionState,
     resolvedNotificationRole,
   ]);
+
+  useEffect(() => {
+    if (!isNativeAndroid || !isLoggedIn || permissionState !== 'granted') {
+      return;
+    }
+
+    let isDisposed = false;
+    const resumeListener = CapacitorApp.addListener('resume', () => {
+      void requestPlatformNotificationPermission().catch(error => {
+        console.error('Failed to refresh native push token after resume', error);
+        if (!isDisposed) {
+          setSyncError('Unable to refresh notifications right now.');
+        }
+      });
+    });
+
+    return () => {
+      isDisposed = true;
+      void resumeListener.then(listener => listener.remove());
+    };
+  }, [isLoggedIn, isNativeAndroid, permissionState]);
 
   useEffect(() => {
     if (!isAuthReady || !isLoggedIn || !currentUserId || !isSupported) {

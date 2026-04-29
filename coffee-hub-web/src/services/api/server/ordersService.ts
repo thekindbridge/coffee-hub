@@ -279,13 +279,7 @@ const logStatusTransition = ({
   from: OrderStatusCode;
   to: OrderStatusCode;
   userRole: string;
-}) => {
-  console.log('STATUS TRANSITION:', {
-    from,
-    to,
-    userRole,
-  });
-};
+}) => ({ from, to, userRole });
 
 const sendLifecycleNotificationsForStatusTransition = async ({
   adminDb,

@@ -31,6 +31,7 @@ type NotificationRecipient = {
 type PushMessageContent = {
   title: string;
   body: string;
+  eventId?: string;
   type: string;
   url?: string;
   tag?: string;
@@ -103,14 +104,10 @@ const normalizeUrl = (value: string) => (value.startsWith('/') ? value : `/${val
 
 const buildRecipientFromUserSnapshot = (
   snapshot: QueryDocumentSnapshot,
-): NotificationRecipient | null => {
+): NotificationRecipient => {
   const data = snapshot.data() as Record<string, unknown>;
   const fcmToken = typeof data.fcmToken === 'string' ? data.fcmToken.trim() : '';
   const pushToken = typeof data.pushToken === 'string' ? data.pushToken.trim() : '';
-
-  if (!fcmToken && !pushToken) {
-    return null;
-  }
 
   return {
     ...(fcmToken ? { fcmToken } : {}),
@@ -124,15 +121,12 @@ const buildRecipientFromUserSnapshot = (
 const buildRecipientFromAgentSnapshot = (
   snapshot: QueryDocumentSnapshot,
   userDocId = '',
-): NotificationRecipient | null => {
+): NotificationRecipient => {
   const data = snapshot.data() as Record<string, unknown>;
   const fcmToken = typeof data.fcmToken === 'string' ? data.fcmToken.trim() : '';
-  if (!fcmToken) {
-    return null;
-  }
 
   return {
-    fcmToken,
+    ...(fcmToken ? { fcmToken } : {}),
     role: 'delivery_agent',
     settings: normalizeNotificationSettings(data.notificationSettings),
     agentDocId: snapshot.id,
@@ -169,6 +163,7 @@ const buildPushDataPayload = (
 ) => ({
   body: content.body,
   channelId: getRoleChannelId(role),
+  eventId: resolveNotificationEventId(content),
   ...(content.orderId ? { orderId: content.orderId } : {}),
   preferenceKey: content.preferenceKey,
   recipientRole: role,
@@ -333,6 +328,7 @@ export const syncNotificationRegistration = async (
         notificationSettings: existingAgentSettings,
         phone: normalizedPhone,
         updatedAt: FieldValue.serverTimestamp(),
+        userId,
       },
       { merge: true },
     );
@@ -366,16 +362,19 @@ export const getAgentRecipient = async (
   }
 
   const agentData = snapshot.data() as Record<string, unknown>;
+  const agentUserId = typeof agentData.userId === 'string'
+    ? agentData.userId.trim()
+    : '';
   const agentPhone = safeNormalizePhoneNumber(
     `${agentData.phone || snapshot.id}`.trim(),
   );
-  const userSnapshot = agentPhone
+  const userSnapshot = !agentUserId && agentPhone
     ? await findUserSnapshotByPhone(adminDb, agentPhone)
     : null;
 
   return buildRecipientFromAgentSnapshot(
     snapshot as QueryDocumentSnapshot,
-    userSnapshot?.id || '',
+    agentUserId || userSnapshot?.id || '',
   );
 };
 
@@ -431,22 +430,36 @@ const buildStableHash = (value: string) => {
   return Math.abs(hash || value.length || 1).toString(36);
 };
 
+const normalizeEventId = (value: string) =>
+  value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 80);
+
+const resolveNotificationEventId = (content: PushMessageContent) => {
+  const explicitEventId = normalizeEventId(content.eventId || '');
+  if (explicitEventId) {
+    return explicitEventId;
+  }
+
+  return `evt_${buildStableHash([
+    content.type,
+    content.orderId || '',
+    content.status || '',
+    content.tag || '',
+    content.body,
+  ].join('|'))}`;
+};
+
 const buildNotificationHistoryId = (
   recipient: NotificationRecipient,
   content: PushMessageContent,
 ) => {
   const recipientSeed = recipient.userDocId || recipient.agentDocId || recipient.role;
   const normalizedRecipientSeed = recipientSeed.replace(/[^a-z0-9_-]/gi, '_').slice(0, 48) || 'recipient';
-  const contentSeed = [
-    recipientSeed,
-    content.type,
-    content.orderId || '',
-    content.status || '',
-    content.tag || '',
-    content.body,
-  ].join('|');
-
-  return `notification_${normalizedRecipientSeed}_${buildStableHash(contentSeed)}`;
+  return `notification_${normalizedRecipientSeed}_${resolveNotificationEventId(content)}`;
 };
 
 const writeNotificationHistoryEntry = async (
@@ -455,32 +468,42 @@ const writeNotificationHistoryEntry = async (
   content: PushMessageContent,
 ) => {
   if (!recipient.userDocId) {
-    return;
+    return true;
   }
 
   const historyRef = adminDb
     .collection(NOTIFICATIONS_COLLECTION)
     .doc(buildNotificationHistoryId(recipient, content));
-  const existingSnapshot = await historyRef.get();
-  if (existingSnapshot.exists) {
-    return;
-  }
+  try {
+    await historyRef.create({
+      body: content.body,
+      createdAt: FieldValue.serverTimestamp(),
+      eventId: resolveNotificationEventId(content),
+      isRead: false,
+      orderId: content.orderId || '',
+      read: false,
+      role: recipient.role,
+      status: content.status || '',
+      tag: content.tag || '',
+      title: content.title,
+      type: content.type,
+      updatedAt: FieldValue.serverTimestamp(),
+      url: normalizeUrl(content.url || '/'),
+      userId: recipient.userDocId,
+    });
 
-  await historyRef.set({
-    body: content.body,
-    createdAt: FieldValue.serverTimestamp(),
-    isRead: false,
-    orderId: content.orderId || '',
-    read: false,
-    role: recipient.role,
-    status: content.status || '',
-    tag: content.tag || '',
-    title: content.title,
-    type: content.type,
-    updatedAt: FieldValue.serverTimestamp(),
-    url: normalizeUrl(content.url || '/'),
-    userId: recipient.userDocId,
-  });
+    return true;
+  } catch (error) {
+    const errorCode = typeof error === 'object' && error && 'code' in error
+      ? `${(error as { code?: unknown }).code || ''}`.trim().toLowerCase()
+      : '';
+
+    if (errorCode === '6' || errorCode === 'already-exists') {
+      return false;
+    }
+
+    throw error;
+  }
 };
 
 const sendExpoPushNotifications = async (
@@ -651,22 +674,22 @@ export const sendPushNotification = async (
       }, new Map<string, NotificationRecipient>())
       .values(),
   );
-  const eligibleTargets = uniqueRecipients.flatMap(buildNotificationTargets);
-
-  if (eligibleTargets.length === 0) {
-    return { attempted: 0, delivered: 0 };
-  }
+  const dispatchableRecipients = (
+    await Promise.all(
+      uniqueRecipients.map(async recipient => ({
+        recipient,
+        shouldSend: await writeNotificationHistoryEntry(adminDb, recipient, content),
+      })),
+    )
+  )
+    .filter(result => result.shouldSend)
+    .map(result => result.recipient);
+  const eligibleTargets = dispatchableRecipients.flatMap(buildNotificationTargets);
 
   const fcmTargets = eligibleTargets.filter(target => target.tokenType === 'fcm');
   const expoTargets = eligibleTargets.filter(target => target.tokenType === 'expo');
 
   let delivered = 0;
-
-  await Promise.all(
-    uniqueRecipients.map(recipient =>
-      writeNotificationHistoryEntry(adminDb, recipient, content),
-    ),
-  );
 
   if (fcmTargets.length > 0) {
     const fcmResponse = await sendFcmTargets(adminDb, fcmTargets, content);
@@ -708,6 +731,7 @@ export const buildCustomerOrderNotification = ({
       return {
         title: 'Coffee Hub \u2615',
         body: `Order placed successfully. We are confirming ${orderNumber} now.`,
+        eventId: `customer_order_placed_${orderId}`,
         orderId,
         preferenceKey: 'orderUpdates',
         status: normalizedStatus,
@@ -719,6 +743,7 @@ export const buildCustomerOrderNotification = ({
       return {
         title: 'Coffee Hub \u2615',
         body: `Your order ${orderNumber} has been accepted and is being prepared`,
+        eventId: `customer_order_preparing_${orderId}`,
         orderId,
         preferenceKey: 'orderUpdates',
         status: normalizedStatus,
@@ -730,6 +755,7 @@ export const buildCustomerOrderNotification = ({
       return {
         title: 'Coffee Hub \u2615',
         body: `Your order ${orderNumber} is on the way`,
+        eventId: `customer_order_out_for_delivery_${orderId}`,
         orderId,
         preferenceKey: 'orderUpdates',
         status: normalizedStatus,
@@ -741,6 +767,7 @@ export const buildCustomerOrderNotification = ({
       return {
         title: 'Coffee Hub \u2615',
         body: `Your order ${orderNumber} was delivered successfully`,
+        eventId: `customer_order_delivered_${orderId}`,
         orderId,
         preferenceKey: 'orderUpdates',
         status: normalizedStatus,
@@ -754,6 +781,7 @@ export const buildCustomerOrderNotification = ({
         body: rejectionReason
           ? `Your order ${orderNumber} was rejected. Reason: ${rejectionReason}`
           : `Your order ${orderNumber} was rejected`,
+        eventId: `customer_order_rejected_${orderId}`,
         orderId,
         preferenceKey: 'orderUpdates',
         status: normalizedStatus,
@@ -765,6 +793,7 @@ export const buildCustomerOrderNotification = ({
       return {
         title: 'Coffee Hub \u2615',
         body: `Order ${orderNumber} cancelled`,
+        eventId: `customer_order_cancelled_${orderId}`,
         orderId,
         preferenceKey: 'orderUpdates',
         status: normalizedStatus,
@@ -776,6 +805,7 @@ export const buildCustomerOrderNotification = ({
       return {
         title: 'Coffee Hub \u2615',
         body: `Order ${orderNumber} updated`,
+        eventId: `customer_order_updated_${orderId}_${String(normalizedStatus).toLowerCase()}`,
         orderId,
         preferenceKey: 'orderUpdates',
         status: normalizedStatus,
@@ -789,6 +819,8 @@ export const buildCustomerOrderNotification = ({
 export const buildAdminNewOrderNotification = (orderId: string): PushMessageContent => ({
   title: 'New Order Received',
   body: `A new order has been placed. Order #${orderId}`,
+  eventId: `admin_new_order_${orderId}`,
+  orderId,
   preferenceKey: 'orderUpdates',
   tag: `admin-order-${orderId}`,
   type: 'admin_new_order',
@@ -798,6 +830,8 @@ export const buildAdminNewOrderNotification = (orderId: string): PushMessageCont
 export const buildAdminPaymentNotification = (orderId: string): PushMessageContent => ({
   title: 'Payment Received',
   body: `Payment completed for order #${orderId}`,
+  eventId: `admin_payment_received_${orderId}`,
+  orderId,
   preferenceKey: 'orderUpdates',
   tag: `admin-payment-${orderId}`,
   type: 'admin_payment_received',
@@ -807,6 +841,8 @@ export const buildAdminPaymentNotification = (orderId: string): PushMessageConte
 export const buildAdminOrderCancelledNotification = (orderId: string): PushMessageContent => ({
   title: 'Order Cancelled',
   body: `Order #${orderId} was cancelled by the customer.`,
+  eventId: `admin_order_cancelled_${orderId}`,
+  orderId,
   preferenceKey: 'orderUpdates',
   tag: `admin-order-cancelled-${orderId}`,
   type: 'admin_order_cancelled',
@@ -816,6 +852,8 @@ export const buildAdminOrderCancelledNotification = (orderId: string): PushMessa
 export const buildAdminDeliveryAssignedNotification = (orderId: string): PushMessageContent => ({
   title: 'Delivery Assigned',
   body: `A delivery partner was assigned to order #${orderId}.`,
+  eventId: `admin_delivery_assigned_${orderId}`,
+  orderId,
   preferenceKey: 'orderUpdates',
   tag: `admin-delivery-assigned-${orderId}`,
   type: 'admin_delivery_assigned',
@@ -825,6 +863,8 @@ export const buildAdminDeliveryAssignedNotification = (orderId: string): PushMes
 export const buildAdminOrderCompletedNotification = (orderId: string): PushMessageContent => ({
   title: 'Order Completed',
   body: `Order #${orderId} was delivered successfully.`,
+  eventId: `admin_order_completed_${orderId}`,
+  orderId,
   preferenceKey: 'orderUpdates',
   tag: `admin-order-completed-${orderId}`,
   type: 'admin_order_completed',
@@ -834,6 +874,8 @@ export const buildAdminOrderCompletedNotification = (orderId: string): PushMessa
 export const buildAgentAssignmentNotification = (orderId: string): PushMessageContent => ({
   title: 'New Order Assigned',
   body: `A new order was assigned to you. Order #${orderId}`,
+  eventId: `agent_order_assigned_${orderId}`,
+  orderId,
   preferenceKey: 'orderUpdates',
   tag: `agent-order-${orderId}`,
   type: 'agent_order_assigned',
@@ -843,6 +885,8 @@ export const buildAgentAssignmentNotification = (orderId: string): PushMessageCo
 export const buildAgentOrderCancelledNotification = (orderId: string): PushMessageContent => ({
   title: 'Delivery Cancelled',
   body: `Assigned order #${orderId} has been cancelled.`,
+  eventId: `agent_order_cancelled_${orderId}`,
+  orderId,
   preferenceKey: 'orderUpdates',
   tag: `agent-order-cancelled-${orderId}`,
   type: 'agent_order_cancelled',

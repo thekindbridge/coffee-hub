@@ -6,6 +6,8 @@ import type {
 import {
   buildProfileDraft,
   EMPTY_PROFILE,
+  getPrimaryProfileAddress,
+  isMeaningfulProfileName,
 } from '../lib/firestoreMappers';
 import type { DeliveryAgent } from '../../../types';
 import {
@@ -89,22 +91,38 @@ export const useProfileManager = ({
       return;
     }
 
+    if (!currentUserPhone.trim()) {
+      setProfileError('Phone is required before saving your profile.');
+      return;
+    }
+
+    if (!isMeaningfulProfileName(profileDraft.name, currentUserPhone)) {
+      setProfileError('Name is required before saving your profile.');
+      return;
+    }
+
     setIsProfileSaving(true);
     setProfileError('');
 
     try {
+      const primaryAddress = getPrimaryProfileAddress(profileDraft);
       await saveUserProfile({
         currentUserId,
         currentUserPhone,
         deliveryAgents,
         profileDraft: {
           ...profileDraft,
+          address: primaryAddress,
           uid: currentUserId,
           phone: currentUserPhone,
           role: profileSaved.role,
         },
       });
 
+      setProfileDraft(previousDraft => ({
+        ...previousDraft,
+        address: primaryAddress,
+      }));
       setIsProfileSavedToastVisible(true);
     } catch (error) {
       console.error('Failed to save profile', error);

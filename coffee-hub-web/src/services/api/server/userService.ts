@@ -46,6 +46,9 @@ const mapUserProfileResponse = (
 
   return {
     adminLocation: typeof data.adminLocation === 'string' ? data.adminLocation : '',
+    address: typeof data.address === 'string'
+      ? data.address
+      : (typeof addresses.address1 === 'string' ? addresses.address1 : ''),
     addresses: [
       typeof addresses.address1 === 'string' ? addresses.address1 : '',
       typeof addresses.address2 === 'string' ? addresses.address2 : '',
@@ -58,6 +61,7 @@ const mapUserProfileResponse = (
         ? data.notificationSettings
         : DEFAULT_NOTIFICATION_SETTINGS,
     phone: typeof data.phone === 'string' ? safeNormalizePhoneNumber(data.phone) : '',
+    profileReminderDisabled: data.profileReminderDisabled === true,
     role: normalizeUserRole(data.role),
     status: typeof data.status === 'string' && data.status.toLowerCase() === 'offline'
       ? 'Offline'
@@ -95,6 +99,9 @@ export const syncUserProfileResponse = async (
     : true;
 
   const baseProfile = {
+    address: typeof existingData.address === 'string'
+      ? existingData.address
+      : '',
     uid: requestUser.uid,
     email: typeof existingData.email === 'string' ? existingData.email : '',
     isActive,
@@ -104,6 +111,7 @@ export const syncUserProfileResponse = async (
         ? existingData.notificationSettings
         : DEFAULT_NOTIFICATION_SETTINGS,
     phone: authPhone,
+    profileReminderDisabled: existingData.profileReminderDisabled === true,
     role: resolvedRole,
     updatedAt: FieldValue.serverTimestamp(),
   };

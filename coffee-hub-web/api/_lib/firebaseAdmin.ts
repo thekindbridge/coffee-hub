@@ -68,7 +68,6 @@ const getAdminApp = () => {
     const existingApp = getApps()[0];
     if (existingApp) {
       cachedAdminApp = existingApp;
-      console.log('Firebase Admin initialized');
       return cachedAdminApp;
     }
 
@@ -91,7 +90,6 @@ const getAdminApp = () => {
         privateKey,
       }),
     });
-    console.log('Firebase Admin initialized');
 
     return cachedAdminApp;
   } catch (error) {

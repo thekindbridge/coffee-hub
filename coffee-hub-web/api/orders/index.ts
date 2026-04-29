@@ -16,8 +16,6 @@ import {
 } from '../../src/services/api/server/routeUtils.js';
 
 export default async function handler(request: VercelRequest, response: VercelResponse) {
-  console.log('API start: /api/orders', request.method || 'UNKNOWN');
-
   try {
     switch (request.method) {
       case 'GET':

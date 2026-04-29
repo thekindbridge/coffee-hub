@@ -17,13 +17,9 @@ const DEFAULT_SHOP_TIMING = {
 };
 
 export default async function handler(request: VercelRequest, response: VercelResponse) {
-  console.log('API start: /api/shop/timing', request.method || 'UNKNOWN');
-
   try {
     switch (request.method) {
       case 'GET':
-        console.log('Fetching shop timing...');
-
         if (isFirebaseUnavailable()) {
           console.warn('Shop timing fallback used: Firebase unavailable');
           return sendApiResponse(response, jsonResponse(200, DEFAULT_SHOP_TIMING));
