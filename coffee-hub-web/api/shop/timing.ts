@@ -12,6 +12,7 @@ import {
 
 const DEFAULT_SHOP_TIMING = {
   closeTime: '22:00',
+  deliveryCharge: 0,
   isOpen: true,
   openTime: '09:00',
 };
@@ -43,6 +44,10 @@ export default async function handler(request: VercelRequest, response: VercelRe
 
           return sendApiResponse(response, jsonResponse(200, {
             closeTime: typeof data?.closeTime === 'string' ? data.closeTime : DEFAULT_SHOP_TIMING.closeTime,
+            deliveryCharge:
+              typeof data?.deliveryCharge === 'number' && Number.isFinite(data.deliveryCharge) && data.deliveryCharge >= 0
+                ? Number(data.deliveryCharge.toFixed(2))
+                : DEFAULT_SHOP_TIMING.deliveryCharge,
             isOpen: true,
             openTime: typeof data?.openTime === 'string' ? data.openTime : DEFAULT_SHOP_TIMING.openTime,
           }));

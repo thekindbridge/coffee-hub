@@ -26,6 +26,7 @@ const mapShopTimingRecord = (value?: Record<string, unknown>): ShopTiming => {
   const shopTiming = sanitizeShopTiming({
     openTime: value?.openTime,
     closeTime: value?.closeTime,
+    deliveryCharge: value?.deliveryCharge,
     updatedAt: mapTimestampToIsoString(value?.updatedAt),
   });
 

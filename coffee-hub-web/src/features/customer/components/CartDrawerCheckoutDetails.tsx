@@ -103,7 +103,7 @@ export const CartDrawerCheckoutDetails = ({
       </div>
       <div className="mt-4 space-y-2 border-t border-white/10 pt-4 text-sm">
         <div className="flex justify-between text-ink-muted">
-          <span>Subtotal</span>
+          <span>Items Total</span>
           <span>{CURRENCY_SYMBOL}{cartTotal}</span>
         </div>
         {discountAmount > 0 && (
@@ -117,7 +117,7 @@ export const CartDrawerCheckoutDetails = ({
           <span>{CURRENCY_SYMBOL}{deliveryFee}</span>
         </div>
         <div className="flex justify-between pt-2 text-base font-semibold">
-          <span>Total Amount</span>
+          <span>Final Total</span>
           <span className="text-highlight">{CURRENCY_SYMBOL}{payableCartTotal}</span>
         </div>
       </div>

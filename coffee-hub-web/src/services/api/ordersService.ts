@@ -1,6 +1,7 @@
 import type {
   CheckoutOrderDraft,
   CreateOrderResponse,
+  DeleteOrdersResponse,
   DeliveryLocation,
   OrderStatusCode,
   UpdateOrderStatusResponse,
@@ -58,3 +59,10 @@ export const updateDeliveryTrackingRequest = (
   },
   idToken: string,
 ) => putApi<{ success: true }>('/api/orders?action=update-delivery-tracking', params, idToken);
+
+export const deleteSelectedOrdersRequest = (
+  params: {
+    orderDocIds: string[];
+  },
+  idToken: string,
+) => putApi<DeleteOrdersResponse>('/api/orders?action=delete-selected', params, idToken);

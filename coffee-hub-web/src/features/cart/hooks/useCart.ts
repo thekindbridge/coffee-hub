@@ -2,13 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import type { CartItem, MenuItem, Offer } from '../../../types';
 import { calculateDiscount } from '../../../utils/calculateDiscount';
-import {
-  CURRENCY_SYMBOL,
-  STANDARD_DELIVERY_FEE,
-} from '../../app/lib/constants';
+import { CURRENCY_SYMBOL } from '../../app/lib/constants';
+import { getSafeDeliveryCharge } from '../../../../shared/shopTiming';
 
 export type UseCartParams = {
   findActiveOfferByCode: (code: string) => Promise<Offer | null>;
+  deliveryCharge: number;
 };
 
 export type CartState = {
@@ -39,7 +38,10 @@ export type CartState = {
   handleRemoveCoupon: () => void;
 };
 
-export const useCart = ({ findActiveOfferByCode }: UseCartParams): CartState => {
+export const useCart = ({
+  findActiveOfferByCode,
+  deliveryCharge,
+}: UseCartParams): CartState => {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [couponInput, setCouponInput] = useState('');
   const [appliedCouponCode, setAppliedCouponCode] = useState('');
@@ -73,7 +75,14 @@ export const useCart = ({ findActiveOfferByCode }: UseCartParams): CartState => 
     return calculateDiscount(cartTotal, appliedOffer);
   }, [appliedOffer, cartTotal]);
 
-  const deliveryFee = useMemo(() => (hasCartItems ? STANDARD_DELIVERY_FEE : 0), [hasCartItems]);
+  const normalizedDeliveryCharge = useMemo(
+    () => getSafeDeliveryCharge(deliveryCharge),
+    [deliveryCharge],
+  );
+  const deliveryFee = useMemo(
+    () => (hasCartItems ? normalizedDeliveryCharge : 0),
+    [hasCartItems, normalizedDeliveryCharge],
+  );
   const payableCartTotal = useMemo(
     () => Number((finalTotal + deliveryFee).toFixed(2)),
     [deliveryFee, finalTotal],

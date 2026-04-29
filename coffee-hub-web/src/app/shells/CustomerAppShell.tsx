@@ -332,11 +332,15 @@ export const CustomerAppShell = ({
                 shopTimingDraft={shopTimingManager.shopTimingDraft}
                 shopTimingError={shopTimingManager.shopTimingError}
                 shopTimingSuccess={shopTimingManager.shopTimingSuccess}
+                deliveryChargeDraft={shopTimingManager.deliveryChargeDraft}
+                deliveryChargeError={shopTimingManager.deliveryChargeError}
+                deliveryChargeSuccess={shopTimingManager.deliveryChargeSuccess}
                 pendingRoleAction={accessManager.pendingRoleAction}
                 pendingRolePhone={accessManager.pendingRolePhone}
                 pendingRoleValue={accessManager.pendingRoleValue}
                 userRoleEntries={session.userRoleEntries}
                 isShopTimingSaving={shopTimingManager.isShopTimingSaving}
+                isDeliveryChargeSaving={shopTimingManager.isDeliveryChargeSaving}
                 onAssignUserRole={(phone, role) => {
                   if (accessManager.roleChangeError) {
                     accessManager.setRoleChangeError('');
@@ -371,7 +375,9 @@ export const CustomerAppShell = ({
                 onProfileAddressExpandedChange={profileManager.setIsProfileAddressExpanded}
                 onProfileDraftChange={profileManager.setProfileDraft}
                 onSave={() => void profileManager.handleSaveProfile()}
+                onSaveDeliveryCharge={() => void shopTimingManager.handleSaveDeliveryCharge()}
                 onSaveShopTiming={() => void shopTimingManager.handleSaveShopTiming()}
+                onDeliveryChargeDraftChange={shopTimingManager.handleDeliveryChargeDraftChange}
                 onShopTimingDraftChange={shopTimingManager.handleShopTimingDraftChange}
               />
             </Suspense>

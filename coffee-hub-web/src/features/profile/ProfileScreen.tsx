@@ -45,6 +45,10 @@ type ProfileScreenProps = {
   shopTimingError: string;
   shopTimingSuccess: string;
   isShopTimingSaving: boolean;
+  deliveryChargeDraft: string;
+  deliveryChargeError: string;
+  deliveryChargeSuccess: string;
+  isDeliveryChargeSaving: boolean;
   userRoleEntries: AccessEntry[];
   roleChangeError: string;
   roleChangeSuccess: string;
@@ -60,6 +64,8 @@ type ProfileScreenProps = {
   onProfileAddressExpandedChange: (isExpanded: boolean) => void;
   onShopTimingDraftChange: (draft: ShopTimingDraft) => void;
   onSaveShopTiming: () => void;
+  onDeliveryChargeDraftChange: (value: string) => void;
+  onSaveDeliveryCharge: () => void;
   onAssignUserRole: (phone: string, role: ManagedUserRole) => void;
   onRemoveUserRole: (entry: AccessEntry) => void;
 };
@@ -91,6 +97,10 @@ export const ProfileScreen = ({
   shopTimingError,
   shopTimingSuccess,
   isShopTimingSaving,
+  deliveryChargeDraft,
+  deliveryChargeError,
+  deliveryChargeSuccess,
+  isDeliveryChargeSaving,
   userRoleEntries,
   roleChangeError,
   roleChangeSuccess,
@@ -106,6 +116,8 @@ export const ProfileScreen = ({
   onProfileAddressExpandedChange,
   onShopTimingDraftChange,
   onSaveShopTiming,
+  onDeliveryChargeDraftChange,
+  onSaveDeliveryCharge,
   onAssignUserRole,
   onRemoveUserRole,
 }: ProfileScreenProps) => {
@@ -371,6 +383,10 @@ export const ProfileScreen = ({
                   shopTimingError={shopTimingError}
                   shopTimingSuccess={shopTimingSuccess}
                   isShopTimingSaving={isShopTimingSaving}
+                  deliveryChargeDraft={deliveryChargeDraft}
+                  deliveryChargeError={deliveryChargeError}
+                  deliveryChargeSuccess={deliveryChargeSuccess}
+                  isDeliveryChargeSaving={isDeliveryChargeSaving}
                   userRoleEntries={userRoleEntries}
                   roleChangeError={roleChangeError}
                   roleChangeSuccess={roleChangeSuccess}
@@ -379,6 +395,8 @@ export const ProfileScreen = ({
                   pendingRoleValue={pendingRoleValue}
                   onShopTimingDraftChange={onShopTimingDraftChange}
                   onSaveShopTiming={onSaveShopTiming}
+                  onDeliveryChargeDraftChange={onDeliveryChargeDraftChange}
+                  onSaveDeliveryCharge={onSaveDeliveryCharge}
                   onAssignUserRole={onAssignUserRole}
                   onRemoveUserRole={onRemoveUserRole}
                 />

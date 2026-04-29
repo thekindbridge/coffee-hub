@@ -3,6 +3,7 @@ import {
   assignAgentToOrderRequest,
   cancelOrderRequest,
   completeDeliveryRequest,
+  deleteSelectedOrdersRequest,
   updateOrderStatusRequest,
 } from '../../../services/api/ordersService';
 import {
@@ -17,6 +18,7 @@ import {
   type AgentTrackerStatus,
 } from '../../../agent/agentTracker';
 import {
+  isAdminDeletableOrderStatus,
   isCustomerCancellableOrderStatus,
   normalizeOrderStatusCode,
 } from '../../../../shared/orderStatus';
@@ -337,9 +339,58 @@ export const useOrderOperations = ({
     }
   };
 
+  const deleteSelectedOrders = async (orderDocIds: string[]) => {
+    const normalizedOrderDocIds = Array.from(
+      new Set(orderDocIds.map(orderDocId => orderDocId.trim()).filter(Boolean)),
+    );
+
+    if (normalizedOrderDocIds.length === 0) {
+      throw new Error('Select at least one order to delete.');
+    }
+
+    const selectedOrders = normalizedOrderDocIds.map(orderDocId => (
+      adminOrders.find(order => order.doc_id === orderDocId) || null
+    ));
+
+    if (selectedOrders.some(order => !order)) {
+      throw new Error('Some selected orders could not be found. Refresh and try again.');
+    }
+
+    const invalidOrders = selectedOrders
+      .filter((order): order is Order => Boolean(order))
+      .filter(order => !isAdminDeletableOrderStatus(order.status_code));
+
+    if (invalidOrders.length > 0) {
+      throw new Error('Only delivered or rejected orders can be deleted.');
+    }
+
+    const idToken = await getCurrentUserIdToken(true);
+    if (!idToken) {
+      throw new Error('Please sign in again before deleting orders.');
+    }
+
+    const response = await deleteSelectedOrdersRequest(
+      { orderDocIds: normalizedOrderDocIds },
+      idToken,
+    );
+
+    const deletedDocIdSet = new Set(response.deletedOrderDocIds);
+    setAdminOrders(prev => prev.filter(order => !deletedDocIdSet.has(order.doc_id)));
+    setUserOrders(prev => prev.filter(order => !deletedDocIdSet.has(order.doc_id)));
+    setNewOrderDocIds(prev => prev.filter(orderDocId => !deletedDocIdSet.has(orderDocId)));
+    setOrderStatus(prev => (
+      prev && deletedDocIdSet.has(prev.doc_id)
+        ? null
+        : prev
+    ));
+
+    return response;
+  };
+
   return {
     assignAgentToOrder,
     cancelOrder,
+    deleteSelectedOrders,
     handleStartDelivery,
     handleEndDelivery,
     updateOrderStatus,

@@ -125,3 +125,8 @@ export const requiresRejectionReason = (value: OrderStatusCode | string) =>
 
 export const isCustomerCancellableOrderStatus = (value: OrderStatusCode | string) =>
   normalizeStatus(value) === 'WAITING';
+
+export const isAdminDeletableOrderStatus = (value: OrderStatusCode | string) => {
+  const normalizedStatus = normalizeStatus(value);
+  return normalizedStatus === 'DELIVERED' || normalizedStatus === 'REJECTED';
+};

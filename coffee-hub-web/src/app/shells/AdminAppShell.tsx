@@ -64,6 +64,10 @@ export const AdminAppShell = ({
     shopTimingError: shopTimingManager.shopTimingError,
     shopTimingSuccess: shopTimingManager.shopTimingSuccess,
     isShopTimingSaving: shopTimingManager.isShopTimingSaving,
+    deliveryChargeDraft: shopTimingManager.deliveryChargeDraft,
+    deliveryChargeError: shopTimingManager.deliveryChargeError,
+    deliveryChargeSuccess: shopTimingManager.deliveryChargeSuccess,
+    isDeliveryChargeSaving: shopTimingManager.isDeliveryChargeSaving,
     userRoleEntries: session.userRoleEntries,
     roleChangeError: accessManager.roleChangeError,
     roleChangeSuccess: accessManager.roleChangeSuccess,
@@ -89,6 +93,8 @@ export const AdminAppShell = ({
     onProfileAddressExpandedChange: profileManager.setIsProfileAddressExpanded,
     onShopTimingDraftChange: shopTimingManager.handleShopTimingDraftChange,
     onSaveShopTiming: () => void shopTimingManager.handleSaveShopTiming(),
+    onDeliveryChargeDraftChange: shopTimingManager.handleDeliveryChargeDraftChange,
+    onSaveDeliveryCharge: () => void shopTimingManager.handleSaveDeliveryCharge(),
     onAssignUserRole: (phone, role) => {
       if (accessManager.roleChangeError) {
         accessManager.setRoleChangeError('');
@@ -200,6 +206,9 @@ export const AdminAppShell = ({
           onDeleteOffer={offersState.deleteOffer}
           onToggleOfferStatus={offersState.toggleOfferStatus}
           onUpdateOffer={offersState.updateOffer}
+          onDeleteSelectedOrders={async orderDocIds => {
+            await orderOperations.deleteSelectedOrders(orderDocIds);
+          }}
           onUpdateStatus={async params => {
             await orderOperations.updateOrderStatus(params);
           }}

@@ -12,7 +12,6 @@ export const ORDER_STATUSES: Order['status'][] = [
 ];
 
 export const CURRENCY_SYMBOL = '\u20B9';
-export const STANDARD_DELIVERY_FEE = 50;
 export const AUTH_BACKGROUND_IMAGE =
   'url(https://res.cloudinary.com/ddfhaqeme/image/upload/v1772713816/5f272fcd-02a1-4f33-b91c-9ff009e08610_z4faz2.jpg)';
 export const DEFAULT_TRACKER_STATUS: AgentTrackerStatus = {

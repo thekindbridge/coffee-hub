@@ -34,6 +34,7 @@ import {
 } from '../../../../api/_lib/orderPricing.js';
 import {
   getOrderStatusFirestoreValue,
+  isAdminDeletableOrderStatus,
   isCustomerCancellableOrderStatus,
   isTerminalOrderStatus,
   isValidOrderStatusTransition,
@@ -58,6 +59,7 @@ type OrderMutationAction =
   | 'assign-agent'
   | 'cancel'
   | 'complete-delivery'
+  | 'delete-selected'
   | 'update-delivery-tracking'
   | 'update-status';
 
@@ -68,14 +70,28 @@ type DeliveryLocationPayload = {
 };
 
 const ORDER_COUNTER_START = 1001;
+const IN_QUERY_LIMIT = 10;
+const MAX_DELETE_SELECTION_COUNT = 50;
 const MAX_CANCELLATION_REASON_LENGTH = 160;
+const WRITE_BATCH_LIMIT = 450;
 const ORDER_MUTATION_ACTIONS = new Set<OrderMutationAction>([
   'assign-agent',
   'cancel',
   'complete-delivery',
+  'delete-selected',
   'update-delivery-tracking',
   'update-status',
 ]);
+
+const chunkValues = <T,>(values: T[], size: number) => {
+  const chunks: T[][] = [];
+
+  for (let index = 0; index < values.length; index += size) {
+    chunks.push(values.slice(index, index + size));
+  }
+
+  return chunks;
+};
 
 const normalizeStatusFilter = (value: string) =>
   value.trim().toLowerCase().replace(/_/g, ' ');
@@ -601,6 +617,37 @@ const parseDeliveryTrackingBody = (body: unknown) => {
   };
 };
 
+const parseDeleteSelectedOrdersBody = (body: unknown) => {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    throw new ApiError(400, 'Request payload is invalid.');
+  }
+
+  const payload = body as Record<string, unknown>;
+  const rawOrderDocIds = Array.isArray(payload.orderDocIds)
+    ? payload.orderDocIds
+    : [];
+  const orderDocIds = Array.from(
+    new Set(
+      rawOrderDocIds
+        .map(orderDocId => typeof orderDocId === 'string' ? orderDocId.trim() : '')
+        .filter(Boolean),
+    ),
+  );
+
+  if (orderDocIds.length === 0) {
+    throw new ApiError(400, 'Select at least one order to delete.');
+  }
+
+  if (orderDocIds.length > MAX_DELETE_SELECTION_COUNT) {
+    throw new ApiError(
+      400,
+      `You can delete up to ${MAX_DELETE_SELECTION_COUNT} orders at a time.`,
+    );
+  }
+
+  return { orderDocIds };
+};
+
 const getAssignedAgentValues = (order: StoredOrderRecord) => [
   order.assignedAgentId,
   order.deliveryAgentId,
@@ -629,6 +676,45 @@ const resolveLegacyPostAction = (request: VercelRequest): OrderMutationAction | 
   }
 
   throw new ApiError(400, 'Unsupported orders action.');
+};
+
+const listDocsByOrderIds = async (
+  adminDb: Firestore,
+  collectionName: string,
+  orderIds: string[],
+) => {
+  if (orderIds.length === 0) {
+    return [] as QueryDocumentSnapshot[];
+  }
+
+  const snapshots = await Promise.all(
+    chunkValues(orderIds, IN_QUERY_LIMIT).map(orderIdChunk => (
+      adminDb
+        .collection(collectionName)
+        .where('orderId', 'in', orderIdChunk)
+        .get()
+    )),
+  );
+
+  return snapshots.flatMap(snapshot => snapshot.docs);
+};
+
+const deleteDocumentReferences = async (
+  adminDb: Firestore,
+  refs: DocumentReference[],
+) => {
+  const uniqueRefs = Array.from(
+    refs.reduce((accumulator, ref) => {
+      accumulator.set(ref.path, ref);
+      return accumulator;
+    }, new Map<string, DocumentReference>()).values(),
+  );
+
+  for (const refsChunk of chunkValues(uniqueRefs, WRITE_BATCH_LIMIT)) {
+    const batch = adminDb.batch();
+    refsChunk.forEach(ref => batch.delete(ref));
+    await batch.commit();
+  }
 };
 
 const updateOrderStatusResponse = async (
@@ -1349,6 +1435,70 @@ const updateDeliveryTrackingResponse = async (
   return jsonResponse(200, { success: true });
 };
 
+const deleteSelectedOrdersResponse = async (
+  request: VercelRequest,
+): Promise<ApiServiceResponse> => {
+  await requireAdminRequest(request);
+  const { orderDocIds } = parseDeleteSelectedOrdersBody(request.body);
+  const adminDb = getServerDb();
+  const orderRefs = orderDocIds.map(orderDocId => adminDb.collection('orders').doc(orderDocId));
+  const orderSnapshots = await adminDb.getAll(...orderRefs);
+
+  const missingOrderDocIds = orderSnapshots
+    .filter(snapshot => !snapshot.exists)
+    .map(snapshot => snapshot.id);
+  if (missingOrderDocIds.length > 0) {
+    throw new ApiError(
+      404,
+      `Some selected orders could not be found: ${missingOrderDocIds.join(', ')}.`,
+    );
+  }
+
+  const ordersToDelete = orderSnapshots.map(snapshot => {
+    const order = snapshot.data() as StoredOrderRecord;
+    const orderStatus = resolveCurrentOrderStatus(order);
+
+    if (!isAdminDeletableOrderStatus(orderStatus)) {
+      const orderLabel = `${order.orderId || snapshot.id}`.trim().toUpperCase();
+      throw new ApiError(
+        409,
+        `Only delivered or rejected orders can be deleted. ${orderLabel} is still active.`,
+      );
+    }
+
+    return {
+      orderDocId: snapshot.id,
+      orderId: `${order.orderId || snapshot.id}`.trim().toUpperCase(),
+      ref: snapshot.ref,
+    };
+  });
+
+  const relatedOrderIds = ordersToDelete.map(order => order.orderId);
+  const [notificationDocs, notificationJobDocs, orderItemDocs] = await Promise.all([
+    listDocsByOrderIds(adminDb, 'notifications', relatedOrderIds),
+    listDocsByOrderIds(adminDb, 'notification_jobs', relatedOrderIds),
+    listDocsByOrderIds(adminDb, 'order_items', relatedOrderIds),
+  ]);
+
+  const refsToDelete: DocumentReference[] = [
+    ...ordersToDelete.map(order => order.ref),
+    ...ordersToDelete.map(order => adminDb.collection('delivery_sessions').doc(order.orderDocId)),
+    ...ordersToDelete.map(order => adminDb.collection('agent_locations').doc(order.orderDocId)),
+    ...notificationDocs.map(snapshot => snapshot.ref),
+    ...notificationJobDocs.map(snapshot => snapshot.ref),
+    ...orderItemDocs.map(snapshot => snapshot.ref),
+  ];
+
+  await deleteDocumentReferences(adminDb, refsToDelete);
+
+  return jsonResponse(200, {
+    deletedCount: ordersToDelete.length,
+    deletedOrderDocIds: ordersToDelete.map(order => order.orderDocId),
+    deletedOrderIds: ordersToDelete.map(order => order.orderId),
+    success: true,
+  });
+};
+
 export const getOrdersResponse = async (
   request: VercelRequest,
 ): Promise<ApiServiceResponse> => {
@@ -1516,6 +1666,8 @@ export const updateOrderMutationResponse = async (
       return cancelOrderResponse(request);
     case 'complete-delivery':
       return completeDeliveryResponse(request);
+    case 'delete-selected':
+      return deleteSelectedOrdersResponse(request);
     case 'update-delivery-tracking':
       return updateDeliveryTrackingResponse(request);
     case 'update-status':

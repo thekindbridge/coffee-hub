@@ -1,6 +1,7 @@
 export type ShopTiming = {
   openTime: string;
   closeTime: string;
+  deliveryCharge: number;
   updatedAt?: string;
 };
 
@@ -9,6 +10,7 @@ export const SHOP_TIMEZONE = 'Asia/Kolkata';
 export const EMPTY_SHOP_TIMING: ShopTiming = {
   openTime: '',
   closeTime: '',
+  deliveryCharge: 0,
 };
 
 const DAY_MINUTES = 24 * 60;
@@ -30,6 +32,26 @@ const currentTimeFormatter = new Intl.DateTimeFormat('en-IN', {
 });
 
 const padTimePart = (value: number) => String(value).padStart(2, '0');
+
+export const parseDeliveryCharge = (value: unknown) => {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) && value >= 0
+      ? Number(value.toFixed(2))
+      : null;
+  }
+
+  if (typeof value !== 'string' || !value.trim()) {
+    return null;
+  }
+
+  const numericValue = Number(value.trim());
+  return Number.isFinite(numericValue) && numericValue >= 0
+    ? Number(numericValue.toFixed(2))
+    : null;
+};
+
+export const getSafeDeliveryCharge = (value: unknown) =>
+  parseDeliveryCharge(value) ?? 0;
 
 const normalizeTimeString = (value: unknown) => {
   if (typeof value !== 'string') {
@@ -89,6 +111,7 @@ export const validateShopTiming = (openTime: string, closeTime: string) => {
 export const sanitizeShopTiming = (value?: {
   openTime?: unknown;
   closeTime?: unknown;
+  deliveryCharge?: unknown;
   updatedAt?: unknown;
 }): ShopTiming | null => {
   const openTime = normalizeTimeString(value?.openTime);
@@ -101,8 +124,19 @@ export const sanitizeShopTiming = (value?: {
   return {
     openTime,
     closeTime,
+    deliveryCharge: getSafeDeliveryCharge(value?.deliveryCharge),
     updatedAt: typeof value?.updatedAt === 'string' ? value.updatedAt : undefined,
   };
+};
+
+export const validateDeliveryCharge = (value: string) => {
+  if (!value.trim()) {
+    return 'Delivery charge is required.';
+  }
+
+  return parseDeliveryCharge(value) === null
+    ? 'Delivery charge must be a valid non-negative amount.'
+    : '';
 };
 
 export const getCurrentTimeInMinutes = (currentDate: Date = new Date()) => {

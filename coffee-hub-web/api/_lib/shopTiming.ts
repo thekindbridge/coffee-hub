@@ -12,6 +12,7 @@ const SHOP_SETTINGS_DOC_ID = 'shop';
 const DEFAULT_SHOP_TIMING: ShopTiming = {
   openTime: '09:00',
   closeTime: '22:00',
+  deliveryCharge: 0,
   updatedAt: '',
 };
 
@@ -38,6 +39,7 @@ export const loadShopTiming = async (db: Firestore): Promise<ShopTiming> => {
   const shopTiming = sanitizeShopTiming({
     openTime: data.openTime,
     closeTime: data.closeTime,
+    deliveryCharge: data.deliveryCharge,
     updatedAt: mapTimestampToIsoString(data.updatedAt),
   });
 

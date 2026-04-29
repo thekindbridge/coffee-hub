@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
-import { Clock3 } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Clock3, Truck } from 'lucide-react';
 import { formatPhoneForDisplay } from '../../../../shared/phone';
 import type { UserRole } from '../../../../shared/userRole';
 import type { AccessEntry, ManagedUserRole, ShopTimingDraft } from '../../app/types';
+import { CURRENCY_SYMBOL } from '../../app/lib/constants';
 import { formatShopTimingRange, type ShopTiming } from '../../../../shared/shopTiming';
 
 type StaffProfileAdminControlsProps = {
@@ -14,6 +15,10 @@ type StaffProfileAdminControlsProps = {
   shopTimingError: string;
   shopTimingSuccess: string;
   isShopTimingSaving: boolean;
+  deliveryChargeDraft: string;
+  deliveryChargeError: string;
+  deliveryChargeSuccess: string;
+  isDeliveryChargeSaving: boolean;
   userRoleEntries: AccessEntry[];
   roleChangeError: string;
   roleChangeSuccess: string;
@@ -22,6 +27,8 @@ type StaffProfileAdminControlsProps = {
   pendingRoleValue: ManagedUserRole | '';
   onShopTimingDraftChange: (draft: ShopTimingDraft) => void;
   onSaveShopTiming: () => void;
+  onDeliveryChargeDraftChange: (value: string) => void;
+  onSaveDeliveryCharge: () => void;
   onAssignUserRole: (phone: string, role: ManagedUserRole) => void;
   onRemoveUserRole: (entry: AccessEntry) => void;
 };
@@ -40,6 +47,10 @@ export const StaffProfileAdminControls = ({
   shopTimingError,
   shopTimingSuccess,
   isShopTimingSaving,
+  deliveryChargeDraft,
+  deliveryChargeError,
+  deliveryChargeSuccess,
+  isDeliveryChargeSaving,
   userRoleEntries,
   roleChangeError,
   roleChangeSuccess,
@@ -48,6 +59,8 @@ export const StaffProfileAdminControls = ({
   pendingRoleValue,
   onShopTimingDraftChange,
   onSaveShopTiming,
+  onDeliveryChargeDraftChange,
+  onSaveDeliveryCharge,
   onAssignUserRole,
   onRemoveUserRole,
 }: StaffProfileAdminControlsProps) => {
@@ -63,11 +76,12 @@ export const StaffProfileAdminControls = ({
     setSelectedRole('admin');
   }, [pendingRoleAction, roleChangeSuccess]);
 
-  if (!canAccessAdminPanel) {
-    return null;
-  }
+  const canManageRoleAssignments = useMemo(
+    () => canAccessAdminPanel && role === 'owner',
+    [canAccessAdminPanel, role],
+  );
 
-  if (role !== 'owner') {
+  if (!canAccessAdminPanel) {
     return null;
   }
 
@@ -77,18 +91,24 @@ export const StaffProfileAdminControls = ({
     <>
       <div className="coffee-surface-soft rounded-[26px] p-4">
         <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-ink-muted">
-          Shop Timing
+          Shop Settings
         </p>
-        <h3 className="mt-1 text-lg font-semibold text-accent">Ordering Window</h3>
+        <h3 className="mt-1 text-lg font-semibold text-accent">Ordering Window and Delivery Fee</h3>
+
         <div className="mt-3 rounded-[20px] border border-white/10 bg-white/5 px-4 py-3 text-sm text-ink-muted">
           <div className="flex items-center gap-2 font-semibold text-accent">
             <Clock3 size={15} className="text-secondary" />
             Current timing: {currentShopTimingLabel}
           </div>
+          <div className="mt-2 flex items-center gap-2 font-semibold text-accent">
+            <Truck size={15} className="text-secondary" />
+            Current delivery fee: {CURRENCY_SYMBOL}{shopTiming.deliveryCharge}
+          </div>
           <p className="mt-2 text-xs leading-5 text-ink-muted">
-            Use HH:MM values in 24-hour format. Orders are accepted from the opening time until the closing time starts.
+            Use HH:MM values in 24-hour format. Delivery fee changes apply to new checkouts only.
           </p>
         </div>
+
         <div className="mt-4 grid grid-cols-2 gap-3">
           <div>
             <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-muted">
@@ -121,6 +141,7 @@ export const StaffProfileAdminControls = ({
             />
           </div>
         </div>
+
         {shopTimingError && (
           <div className="mt-3 rounded-[18px] border border-primary/25 bg-primary/10 px-3 py-2 text-xs font-semibold text-primary">
             {shopTimingError}
@@ -131,6 +152,7 @@ export const StaffProfileAdminControls = ({
             {shopTimingSuccess}
           </div>
         )}
+
         <button
           onClick={onSaveShopTiming}
           disabled={isShopTimingSaving}
@@ -138,9 +160,50 @@ export const StaffProfileAdminControls = ({
         >
           {isShopTimingSaving ? 'Saving timing...' : 'Save Timing'}
         </button>
+
+        <div className="mt-5 rounded-[22px] border border-white/10 bg-white/5 p-4">
+          <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-muted">
+            Delivery Charge
+          </label>
+          <div className="relative">
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm font-semibold text-ink-muted">
+              {CURRENCY_SYMBOL}
+            </span>
+            <input
+              type="number"
+              min={0}
+              step="0.01"
+              inputMode="decimal"
+              className="coffee-input pl-10"
+              value={deliveryChargeDraft}
+              onChange={event => onDeliveryChargeDraftChange(event.target.value)}
+              placeholder="0"
+            />
+          </div>
+
+          {deliveryChargeError && (
+            <div className="mt-3 rounded-[18px] border border-primary/25 bg-primary/10 px-3 py-2 text-xs font-semibold text-primary">
+              {deliveryChargeError}
+            </div>
+          )}
+          {deliveryChargeSuccess && (
+            <div className="mt-3 rounded-[18px] border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-300">
+              {deliveryChargeSuccess}
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={onSaveDeliveryCharge}
+            disabled={isDeliveryChargeSaving}
+            className="coffee-btn-primary mt-4 w-full justify-center disabled:opacity-70"
+          >
+            {isDeliveryChargeSaving ? 'Saving delivery fee...' : 'Save Delivery Fee'}
+          </button>
+        </div>
       </div>
 
-      {isOwner && (
+      {canManageRoleAssignments && (
         <div className="coffee-surface-soft rounded-[26px] p-4">
           <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-ink-muted">
             Owner Controls

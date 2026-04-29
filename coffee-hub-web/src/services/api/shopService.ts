@@ -10,3 +10,10 @@ export const updateShopTimingRequest = (
   },
   idToken: string,
 ) => putApi<UpdateShopTimingResponse>('/api/shop/timing', params, idToken);
+
+export const updateDeliveryChargeRequest = (
+  params: {
+    deliveryCharge: number;
+  },
+  idToken: string,
+) => putApi<UpdateShopTimingResponse>('/api/shop/timing', params, idToken);

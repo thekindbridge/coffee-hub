@@ -51,6 +51,12 @@ service cloud.firestore {
         get(/databases/$(database)/documents/user_roles/$(requestPhone())).data.role == 'admin';
     }
 
+    function hasAdminRoleClaim() {
+      return isAuthenticated() &&
+        request.auth.token.role is string &&
+        request.auth.token.role == 'admin';
+    }
+
     function isAdmin() {
       return isOwnerRole() || isAssignedAdminRole();
     }
@@ -1278,7 +1284,20 @@ service cloud.firestore {
         (isAdmin() && isValidAdminOrderUpdate()) ||
         isValidCustomerOrderUpdate() ||
         (isDeliveryAgent() && isValidAgentOrderUpdate());
-      allow delete: if false;
+      allow delete: if
+        (isAdmin() || hasAdminRoleClaim()) &&
+        (
+          isDeliveredOrderStatus(
+            resource.data.status,
+            resource.data.orderStatus,
+            resource.data.status_code,
+          ) ||
+          isRejectedOrderStatus(
+            resource.data.status,
+            resource.data.orderStatus,
+            resource.data.status_code,
+          )
+        );
     }
 
     // users: people manage their own profile fields, while role assignments live in user_roles

@@ -11,6 +11,7 @@ export type AdminDashboardPageProps = {
   onAssignAgent: (orderDocId: string, agentId: string) => Promise<void>;
   onCreateOffer: (offerInput: OfferInput) => Promise<void>;
   onDeleteOffer: (offerId: string) => Promise<void>;
+  onDeleteSelectedOrders: (orderDocIds: string[]) => Promise<void>;
   onToggleOfferStatus: (offerId: string, isActive: boolean) => Promise<void>;
   onUpdateOffer: (offerId: string, offerInput: OfferInput) => Promise<void>;
   onUpdateStatus: (params: {

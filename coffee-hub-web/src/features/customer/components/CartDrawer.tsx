@@ -297,7 +297,7 @@ export const CartDrawer = ({
 
                     <div className="coffee-surface-soft space-y-2 rounded-[24px] p-4">
                       <div className="flex justify-between text-sm text-ink-muted">
-                        <span>Subtotal</span>
+                        <span>Items Total</span>
                         <span>{CURRENCY_SYMBOL}{cartTotal}</span>
                       </div>
                       {discountAmount > 0 && (

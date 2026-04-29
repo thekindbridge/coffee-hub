@@ -1,6 +1,7 @@
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import {
   getOrderStatusCustomerCopy,
+  isAdminDeletableOrderStatus,
   normalizeOrderStatusCode,
   type OrderStatusCode,
 } from '../../../../shared/orderStatus';
@@ -23,6 +24,7 @@ interface AdminOrdersProps {
     rejectionReason?: string;
   }) => Promise<void>;
   onAssignAgent: (orderDocId: string, agentId: string) => Promise<void>;
+  onDeleteSelectedOrders: (orderDocIds: string[]) => Promise<void>;
 }
 
 const STATUS_BADGE_CLASS: Record<Order['status'], string> = {
@@ -65,12 +67,16 @@ const formatAgentStatusLabel = (status: DeliveryAgent['status'] | 'available' | 
   `${status.charAt(0).toUpperCase()}${status.slice(1)}`
 );
 
+const getDeleteSuccessMessage = (deletedCount: number) =>
+  deletedCount === 1 ? 'Order deleted successfully' : 'Orders deleted successfully';
+
 export default function AdminOrders({
   orders,
   newOrderDocIds,
   deliveryAgents,
   onUpdateStatus,
   onAssignAgent,
+  onDeleteSelectedOrders,
 }: AdminOrdersProps) {
   const [expandedOrderId, setExpandedOrderId] = useState('');
   const [assigningOrderDocId, setAssigningOrderDocId] = useState('');
@@ -80,6 +86,9 @@ export default function AdminOrders({
   const [actionError, setActionError] = useState('');
   const [rejectError, setRejectError] = useState('');
   const [selectedAgentByOrderDocId, setSelectedAgentByOrderDocId] = useState<Record<string, string>>({});
+  const [selectedOrderDocIds, setSelectedOrderDocIds] = useState<string[]>([]);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [isDeletingSelectedOrders, setIsDeletingSelectedOrders] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const pendingOrderActionRef = useRef('');
 
@@ -92,6 +101,25 @@ export default function AdminOrders({
     () => [...orders].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()),
     [orders],
   );
+
+  const deletableOrders = useMemo(
+    () => sortedOrders.filter(order => isAdminDeletableOrderStatus(order.status_code)),
+    [sortedOrders],
+  );
+
+  const selectedOrderDocIdSet = useMemo(
+    () => new Set(selectedOrderDocIds),
+    [selectedOrderDocIds],
+  );
+
+  const selectedDeletableOrders = useMemo(
+    () => deletableOrders.filter(order => selectedOrderDocIdSet.has(order.doc_id)),
+    [deletableOrders, selectedOrderDocIdSet],
+  );
+
+  const areAllDeletableOrdersSelected =
+    deletableOrders.length > 0 &&
+    selectedDeletableOrders.length === deletableOrders.length;
 
   useEffect(() => {
     if (!toastMessage) {
@@ -107,10 +135,37 @@ export default function AdminOrders({
     };
   }, [toastMessage]);
 
+  useEffect(() => {
+    const deletableOrderDocIdSet = new Set(deletableOrders.map(order => order.doc_id));
+    setSelectedOrderDocIds(previousSelection => previousSelection.filter(orderDocId => (
+      deletableOrderDocIdSet.has(orderDocId)
+    )));
+  }, [deletableOrders]);
+
   const closeRejectModal = () => {
     setRejectingOrder(null);
     setRejectionReasonDraft('');
     setRejectError('');
+  };
+
+  const closeDeleteConfirmModal = () => {
+    setIsDeleteConfirmOpen(false);
+  };
+
+  const toggleOrderSelection = (orderDocId: string) => {
+    setSelectedOrderDocIds(previousSelection => (
+      previousSelection.includes(orderDocId)
+        ? previousSelection.filter(selectedId => selectedId !== orderDocId)
+        : [...previousSelection, orderDocId]
+    ));
+  };
+
+  const toggleSelectAllDeletableOrders = () => {
+    setSelectedOrderDocIds(
+      areAllDeletableOrdersSelected
+        ? []
+        : deletableOrders.map(order => order.doc_id),
+    );
   };
 
   const runStatusAction = async (
@@ -165,7 +220,7 @@ export default function AdminOrders({
       await runStatusAction(rejectingOrder, 'REJECTED', nextReason);
       closeRejectModal();
     } catch {
-      // Error already surfaced in the modal / alert area.
+      // Error already surfaced in the modal area.
     }
   };
 
@@ -195,7 +250,6 @@ export default function AdminOrders({
 
     try {
       await onAssignAgent(order.doc_id, selectedAgent.id);
-
       setToastMessage('Delivery agent assigned');
       setExpandedOrderId('');
     } catch (error) {
@@ -208,10 +262,41 @@ export default function AdminOrders({
     }
   };
 
+  const handleDeleteSelectedOrders = async () => {
+    if (selectedDeletableOrders.length === 0) {
+      setActionError('Select at least one delivered or rejected order to delete.');
+      return;
+    }
+
+    setActionError('');
+    setIsDeletingSelectedOrders(true);
+
+    try {
+      const selectedOrderDocIdSnapshot = new Set(selectedOrderDocIds);
+
+      await onDeleteSelectedOrders(selectedDeletableOrders.map(order => order.doc_id));
+
+      setSelectedOrderDocIds([]);
+      setToastMessage(getDeleteSuccessMessage(selectedDeletableOrders.length));
+      setIsDeleteConfirmOpen(false);
+
+      if (expandedOrderId && selectedOrderDocIdSnapshot.has(expandedOrderId)) {
+        setExpandedOrderId('');
+      }
+    } catch (error) {
+      const message = error instanceof Error
+        ? error.message
+        : 'Unable to delete the selected orders right now.';
+      setActionError(message);
+    } finally {
+      setIsDeletingSelectedOrders(false);
+    }
+  };
+
   if (sortedOrders.length === 0) {
     return (
       <div className="coffee-surface-soft rounded-[24px] p-6 text-center text-sm text-ink-muted">
-        Nothing here yet ☕
+        No orders are available right now.
       </div>
     );
   }
@@ -219,9 +304,45 @@ export default function AdminOrders({
   return (
     <>
       <section className="space-y-4">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-secondary">Orders queue</p>
-          <h2 className="mt-1 text-[1.45rem] font-semibold text-accent">Manage live orders</h2>
+        <div className="space-y-3">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-secondary">Orders queue</p>
+            <h2 className="mt-1 text-[1.45rem] font-semibold text-accent">Manage live orders</h2>
+          </div>
+
+          <div className="coffee-surface-soft rounded-[24px] p-4">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="space-y-2">
+                <label className="inline-flex items-center gap-3 text-sm font-semibold text-accent">
+                  <input
+                    type="checkbox"
+                    checked={areAllDeletableOrdersSelected}
+                    onChange={toggleSelectAllDeletableOrders}
+                    disabled={deletableOrders.length === 0 || isDeletingSelectedOrders}
+                    className="h-4 w-4 rounded border-white/20 bg-transparent accent-[var(--app-color-secondary)]"
+                  />
+                  Select All
+                </label>
+                <p className="text-xs leading-5 text-ink-muted">
+                  Only delivered and rejected orders can be deleted. Active orders stay locked for safety.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="coffee-badge px-3 py-2 text-xs font-semibold">
+                  {selectedDeletableOrders.length} selected
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsDeleteConfirmOpen(true)}
+                  disabled={selectedDeletableOrders.length === 0 || isDeletingSelectedOrders}
+                  className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-rose-300/25 bg-rose-500/10 px-4 text-sm font-semibold text-rose-200 transition hover:bg-rose-500/16 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isDeletingSelectedOrders ? 'Deleting...' : 'Delete Selected'}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
 
         {actionError && (
@@ -239,6 +360,8 @@ export default function AdminOrders({
         {sortedOrders.map(order => {
           const canManageAgentAssignment = order.status_code === 'PREPARING';
           const isExpanded = expandedOrderId === order.doc_id;
+          const isDeletableOrder = isAdminDeletableOrderStatus(order.status_code);
+          const isOrderSelected = selectedOrderDocIdSet.has(order.doc_id);
           const hasAssignedAgent = Boolean(
             order.delivery_agent_id ||
             order.delivery_agent_name ||
@@ -265,9 +388,23 @@ export default function AdminOrders({
               }`}
             >
               <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-ink-muted">Order ID</p>
-                  <p className="mt-1 text-lg font-semibold text-accent">#{order.id}</p>
+                <div className="flex items-start gap-3">
+                  <input
+                    type="checkbox"
+                    checked={isOrderSelected}
+                    onChange={() => toggleOrderSelection(order.doc_id)}
+                    disabled={!isDeletableOrder || isDeletingSelectedOrders}
+                    className="mt-1 h-4 w-4 rounded border-white/20 bg-transparent accent-[var(--app-color-secondary)] disabled:opacity-50"
+                  />
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-ink-muted">Order ID</p>
+                    <p className="mt-1 text-lg font-semibold text-accent">#{order.id}</p>
+                    {!isDeletableOrder && (
+                      <p className="mt-1 text-xs text-ink-muted">
+                        Deletion unlocks only after delivery or rejection.
+                      </p>
+                    )}
+                  </div>
                 </div>
                 <span className={`inline-flex rounded-full px-3 py-1 text-[11px] font-semibold ${STATUS_BADGE_CLASS[order.status]}`}>
                   {order.status}
@@ -395,7 +532,7 @@ export default function AdminOrders({
                           <option value="">Select agent</option>
                           {availableAgents.map(agent => (
                             <option key={agent.id} value={agent.id}>
-                              {agent.name} · {formatAgentStatusLabel(getAgentStatus(agent))} · {resolveAgentDistance(agent, order)}
+                              {agent.name} - {formatAgentStatusLabel(getAgentStatus(agent))} - {resolveAgentDistance(agent, order)}
                             </option>
                           ))}
                         </select>
@@ -553,6 +690,57 @@ export default function AdminOrders({
                 className="inline-flex min-h-11 flex-1 items-center justify-center rounded-full bg-rose-500 px-4 text-sm font-semibold text-white transition hover:bg-rose-600 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {submittingOrderDocId === rejectingOrder.doc_id ? 'Rejecting...' : 'Confirm Reject'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isDeleteConfirmOpen && (
+        <div className="fixed inset-0 z-[120] flex items-end justify-center bg-black/60 px-4 py-6 sm:items-center sm:px-6">
+          <div className="w-full max-w-lg rounded-[28px] border border-white/10 bg-[#16100c] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.32)]">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-secondary">Delete Orders</p>
+            <h3 className="mt-2 text-[1.35rem] font-semibold text-accent">
+              Delete {selectedDeletableOrders.length} selected order{selectedDeletableOrders.length === 1 ? '' : 's'}
+            </h3>
+            <p className="mt-2 text-sm leading-6 text-ink-muted">
+              Are you sure you want to permanently delete selected orders? This action cannot be undone.
+            </p>
+
+            <div className="mt-4 rounded-[20px] border border-white/8 bg-white/5 px-4 py-3 text-sm text-ink-muted">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-secondary">Selected Orders</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {selectedDeletableOrders.slice(0, 5).map(order => (
+                  <span key={order.doc_id} className="coffee-badge px-3 py-1.5 text-xs font-semibold">
+                    #{order.id}
+                  </span>
+                ))}
+                {selectedDeletableOrders.length > 5 && (
+                  <span className="coffee-badge px-3 py-1.5 text-xs font-semibold">
+                    +{selectedDeletableOrders.length - 5} more
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="mt-5 flex gap-3">
+              <button
+                type="button"
+                onClick={closeDeleteConfirmModal}
+                disabled={isDeletingSelectedOrders}
+                className="coffee-btn-secondary flex-1 justify-center"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  void handleDeleteSelectedOrders();
+                }}
+                disabled={isDeletingSelectedOrders}
+                className="inline-flex min-h-11 flex-1 items-center justify-center rounded-full bg-rose-500 px-4 text-sm font-semibold text-white transition hover:bg-rose-600 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isDeletingSelectedOrders ? 'Deleting...' : 'Delete Permanently'}
               </button>
             </div>
           </div>

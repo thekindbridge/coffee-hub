@@ -28,7 +28,10 @@ export const useCheckoutFlow = ({
   onBrowseMenu,
   onOrderPlaced,
 }: UseCheckoutFlowParams) => {
-  const cart = useCart({ findActiveOfferByCode });
+  const cart = useCart({
+    deliveryCharge: shopTiming.deliveryCharge,
+    findActiveOfferByCode,
+  });
 
   const orderFlow = usePaymentFlow({
     currentUserId,
@@ -36,6 +39,7 @@ export const useCheckoutFlow = ({
     shopTiming,
     cart: cart.cart,
     cartTotal: cart.cartTotal,
+    deliveryFee: cart.deliveryFee,
     hasCartItems: cart.hasCartItems,
     appliedCouponCode: cart.appliedCouponCode,
     appliedOffer: cart.appliedOffer,

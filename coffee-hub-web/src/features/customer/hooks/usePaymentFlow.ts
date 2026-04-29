@@ -21,9 +21,6 @@ import type {
   Order,
   ShopTiming,
 } from '../../../types';
-import {
-  STANDARD_DELIVERY_FEE,
-} from '../../app/lib/constants';
 import type {
   CheckoutStep,
   CustomerProfile,
@@ -48,6 +45,7 @@ type UsePaymentFlowParams = {
   shopTiming: ShopTiming;
   cart: CartItem[];
   cartTotal: number;
+  deliveryFee: number;
   hasCartItems: boolean;
   appliedCouponCode: string;
   appliedOffer: Offer | null;
@@ -105,6 +103,7 @@ export const usePaymentFlow = ({
   shopTiming,
   cart,
   cartTotal,
+  deliveryFee,
   hasCartItems,
   appliedCouponCode,
   appliedOffer,
@@ -349,7 +348,7 @@ export const usePaymentFlow = ({
     if (cart.length === 0) { setCheckoutError('Your cart is empty.'); return null; }
     if (!currentUserId) { setCheckoutError('Please sign in with your mobile number to place an order.'); return null; }
 
-    const deliveryFeeValue = hasCartItems ? STANDARD_DELIVERY_FEE : 0;
+    const deliveryFeeValue = hasCartItems ? Number(deliveryFee.toFixed(2)) : 0;
     let discountValue = 0;
     let discountedSubtotal = cartTotal;
     let couponCodeValue = '';

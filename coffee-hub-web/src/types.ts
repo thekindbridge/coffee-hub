@@ -187,6 +187,13 @@ export interface UpdateOrderStatusResponse {
   order: Order;
 }
 
+export interface DeleteOrdersResponse {
+  deletedCount: number;
+  deletedOrderDocIds: string[];
+  deletedOrderIds: string[];
+  success: true;
+}
+
 export interface GetShopTimingResponse extends ShopTiming {}
 
 export interface UpdateShopTimingResponse {

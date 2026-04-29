@@ -1,8 +1,7 @@
 import type { Firestore } from 'firebase-admin/firestore';
 
 import { ApiError } from './errors.js';
-
-export const DELIVERY_CHARGE = 50;
+import { loadShopTiming } from './shopTiming.js';
 
 type DiscountType = 'percentage' | 'flat';
 
@@ -256,12 +255,16 @@ export const recalculatePricing = async (
     couponCode = orderDraft.couponCode;
   }
 
+  const deliveryFee = loadShopTiming
+    ? (await loadShopTiming(db)).deliveryCharge
+    : 0;
+
   return {
     items: validatedItems,
     subtotal,
     discount,
-    deliveryFee: DELIVERY_CHARGE,
-    finalTotal: Number((subtotal - discount + DELIVERY_CHARGE).toFixed(2)),
+    deliveryFee,
+    finalTotal: Number((subtotal - discount + deliveryFee).toFixed(2)),
     couponCode,
   };
 };
