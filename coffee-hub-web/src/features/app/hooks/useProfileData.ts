@@ -1,9 +1,14 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { CustomerProfile } from '../types';
 import { getCurrentUserIdToken } from '../../../services/auth/authService';
 import { syncUserProfileRequest } from '../../../services/api/userService';
 import { subscribeToUserProfile } from '../../../services/firebase/profileService';
-import { EMPTY_PROFILE } from '../lib/firestoreMappers';
+import { storageAdapter } from '../../../services/platform/storageAdapter';
+import {
+  EMPTY_PROFILE,
+  ensureProfileAddresses,
+  normalizeNotificationSettings,
+} from '../lib/firestoreMappers';
 import type { UserRole } from '../types';
 
 export type ProfileData = {
@@ -12,6 +17,11 @@ export type ProfileData = {
   profileSaved: CustomerProfile;
   profileSyncError: string;
 };
+
+const PROFILE_CACHE_KEY_PREFIX = 'coffee_hub_profile_cache';
+
+const getProfileCacheKey = (currentUserId: string) =>
+  `${PROFILE_CACHE_KEY_PREFIX}:${currentUserId}`;
 
 export const useProfileData = ({
   currentUserId,
@@ -40,6 +50,39 @@ export const useProfileData = ({
     phone: currentUserPhone,
     role: currentUserRole,
   }), [currentUserId, currentUserName, currentUserPhone, currentUserRole]);
+  const profileCacheKey = currentUserId ? getProfileCacheKey(currentUserId) : '';
+
+  const mergeProfileWithFallback = useCallback((profile: Partial<CustomerProfile>): CustomerProfile => {
+    const addresses = ensureProfileAddresses(
+      Array.isArray(profile.addresses)
+        ? profile.addresses.map(address => `${address || ''}`)
+        : fallbackProfile.addresses,
+    );
+    const nextAddress = `${profile.address || ''}`.trim();
+
+    if (nextAddress && !addresses[0].trim()) {
+      addresses[0] = nextAddress;
+    }
+
+    return {
+      ...fallbackProfile,
+      ...profile,
+      uid: profile.uid || currentUserId,
+      name: profile.name || currentUserName,
+      phone: profile.phone || currentUserPhone,
+      role: currentUserRole,
+      address: nextAddress || addresses[0].trim(),
+      addresses,
+      notificationSettings: normalizeNotificationSettings(profile.notificationSettings),
+      profileReminderDisabled: profile.profileReminderDisabled === true,
+    };
+  }, [
+    currentUserId,
+    currentUserName,
+    currentUserPhone,
+    currentUserRole,
+    fallbackProfile,
+  ]);
 
   useEffect(() => {
     if (!isAuthReady) {
@@ -51,8 +94,31 @@ export const useProfileData = ({
       setHasProfileSnapshot(false);
       setIsSyncingProfile(false);
       setProfileSyncError('');
+      return;
     }
-  }, [currentUserId, isAuthReady, isLoggedIn]);
+
+    const cachedProfile = storageAdapter.read(profileCacheKey);
+    if (!cachedProfile) {
+      setProfileSaved(fallbackProfile);
+      return;
+    }
+
+    try {
+      const parsedProfile = JSON.parse(cachedProfile) as Partial<CustomerProfile>;
+      setProfileSaved(mergeProfileWithFallback(parsedProfile));
+    } catch (error) {
+      console.warn('Ignoring invalid cached profile payload.', error);
+      storageAdapter.remove(profileCacheKey);
+      setProfileSaved(fallbackProfile);
+    }
+  }, [
+    currentUserId,
+    fallbackProfile,
+    isAuthReady,
+    isLoggedIn,
+    mergeProfileWithFallback,
+    profileCacheKey,
+  ]);
 
   useEffect(() => {
     if (!isAuthReady || !isLoggedIn || !currentUserId) {
@@ -64,19 +130,16 @@ export const useProfileData = ({
     return subscribeToUserProfile(
       currentUserId,
       profile => {
-        setProfileSaved({
-          ...fallbackProfile,
-          ...profile,
-          uid: profile.uid || currentUserId,
-          name: profile.name || currentUserName,
-          phone: profile.phone || currentUserPhone,
-          role: currentUserRole,
-        });
+        const nextProfile = mergeProfileWithFallback(profile);
+        setProfileSaved(nextProfile);
         setHasProfileSnapshot(true);
+        storageAdapter.write(profileCacheKey, JSON.stringify(nextProfile));
       },
       error => {
         console.error('Failed to load user profile', error);
-        setProfileSaved(fallbackProfile);
+        setProfileSaved(previousProfile =>
+          previousProfile.uid ? previousProfile : fallbackProfile,
+        );
         setHasProfileSnapshot(true);
         setProfileSyncError('Unable to load your profile. Some role features may be limited.');
       },
@@ -89,6 +152,8 @@ export const useProfileData = ({
     fallbackProfile,
     isAuthReady,
     isLoggedIn,
+    mergeProfileWithFallback,
+    profileCacheKey,
   ]);
 
   useEffect(() => {
@@ -119,14 +184,9 @@ export const useProfileData = ({
           return;
         }
 
-        setProfileSaved({
-          ...fallbackProfile,
-          ...response.profile,
-          uid: response.profile.uid || currentUserId,
-          name: response.profile.name || currentUserName,
-          phone: response.profile.phone || currentUserPhone,
-          role: currentUserRole,
-        });
+        const nextProfile = mergeProfileWithFallback(response.profile);
+        setProfileSaved(nextProfile);
+        storageAdapter.write(profileCacheKey, JSON.stringify(nextProfile));
       } catch (error) {
         console.error('Failed to sync Firebase user profile', error);
         if (!isCancelled) {
@@ -149,9 +209,10 @@ export const useProfileData = ({
     currentUserName,
     currentUserPhone,
     currentUserRole,
-    fallbackProfile,
     isAuthReady,
     isLoggedIn,
+    mergeProfileWithFallback,
+    profileCacheKey,
   ]);
 
   return {

@@ -1,3 +1,4 @@
+import { Capacitor } from '@capacitor/core';
 import {
   getDesktopNotificationPermissionState,
   requestDesktopNotificationPermission,
@@ -22,10 +23,25 @@ export interface NotificationAdapter {
   show(payload: NotificationPayload): void;
 }
 
+const isNativeAndroidRuntime = () =>
+  Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
+
 export const notificationAdapter: NotificationAdapter = {
-  getPermissionState: getDesktopNotificationPermissionState,
-  requestPermission: requestDesktopNotificationPermission,
+  getPermissionState: () => (
+    isNativeAndroidRuntime()
+      ? 'unsupported'
+      : getDesktopNotificationPermissionState()
+  ),
+  requestPermission: () => (
+    isNativeAndroidRuntime()
+      ? Promise.resolve('unsupported')
+      : requestDesktopNotificationPermission()
+  ),
   show: payload => {
+    if (isNativeAndroidRuntime()) {
+      return;
+    }
+
     showDesktopNotification(payload);
   },
 };

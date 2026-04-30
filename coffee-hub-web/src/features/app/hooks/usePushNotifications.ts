@@ -112,13 +112,13 @@ export const usePushNotifications = ({
     const detectSupport = async () => {
       try {
         if (isNativeAndroid) {
-          const nativePermission = await checkNotificationPermission();
           if (!isMounted) {
             return;
           }
 
-          setIsSupported(true);
-          setPermissionState(toFirebasePermissionState(nativePermission));
+          setIsSupported(false);
+          setPermissionState('unsupported');
+          setSyncError('');
           return;
         }
 
@@ -420,7 +420,7 @@ export const usePushNotifications = ({
   ]);
 
   const requestPermission = async () => {
-    if (!isSupported) {
+    if (isNativeAndroid || !isSupported) {
       setPermissionState('unsupported');
       return;
     }

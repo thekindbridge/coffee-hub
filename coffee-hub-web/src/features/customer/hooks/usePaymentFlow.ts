@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
+import { Capacitor } from '@capacitor/core';
 import { createOrderRequest } from '../../../services/api/ordersService';
 import { getCurrentUserIdToken } from '../../../services/auth/authService';
 import { saveUserDeliveryLocation } from '../../../services/firebase/profileService';
@@ -151,6 +152,7 @@ export const usePaymentFlow = ({
   const [currentTime, setCurrentTime] = useState(() => Date.now());
   const hasCheckoutAddressSelectionRef = useRef(false);
   const isPlacingOrderRef = useRef(false);
+  const isNativeRuntime = Capacitor.isNativePlatform();
   const autofillName = isMeaningfulProfileName(profileSaved.name, profileSaved.phone)
     ? profileSaved.name.trim()
     : '';
@@ -273,12 +275,18 @@ export const usePaymentFlow = ({
       const captureResult = await captureCurrentLocation({
         enableHighAccuracy: true,
         enableLocationFallback: true,
-        maxAttempts: 1,
-        maximumAgeMs: 0,
-        timeoutMs: 5000,
+        maxAttempts: isNativeRuntime ? 2 : 1,
+        maximumAgeMs: isNativeRuntime ? 10000 : 0,
+        timeoutMs: isNativeRuntime ? 15000 : 5000,
       });
 
       if (!captureResult.location) {
+        console.warn('Unable to capture customer location.', {
+          errorCode: captureResult.errorCode,
+          isNativeRuntime,
+          locationSettingsTarget: captureResult.locationSettingsTarget,
+          message: captureResult.message,
+        });
         setCustomerLocationError(captureResult.message);
         setCanOpenLocationSettings(captureResult.canOpenLocationSettings);
         setLocationSettingsTarget(captureResult.locationSettingsTarget);
@@ -309,6 +317,7 @@ export const usePaymentFlow = ({
       }
       return captureResult.location;
     } catch (error) {
+      console.error('Unexpected customer location capture failure.', error);
       const message = getAppServiceErrorMessage(
         error,
         LOCATION_FAILED_MESSAGE,

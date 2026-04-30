@@ -104,14 +104,14 @@ export const MenuItemCard = memo(function MenuItemCard({
       )}
     </div>
 
-    <div className="flex min-h-[188px] flex-1 flex-col gap-2 p-3">
+    <div className="flex flex-1 flex-col justify-between gap-3 p-3">
       <div>
-        <h3 className="line-clamp-2 min-h-[2.45rem] font-display text-[13px] font-semibold leading-[1.35] tracking-[0.01em] text-accent">
+        <h3 className="line-clamp-2 min-h-[2.2rem] font-display text-[13px] font-semibold leading-[1.35] tracking-[0.01em] text-accent">
           {item.name}
         </h3>
       </div>
 
-      <div className="mt-auto flex min-h-[88px] flex-col justify-end space-y-2.5">
+      <div className="mt-auto flex flex-col gap-2.5">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 text-[15px] font-semibold text-[#fffaf6]">
             <Coffee size={14} className="text-secondary" />

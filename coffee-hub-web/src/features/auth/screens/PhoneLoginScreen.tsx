@@ -18,6 +18,8 @@ import { AuthShell } from '../../customer/components/AuthShell';
 import { SteamEffect } from '../../customer/components/SteamEffect';
 import { useAuth } from '../hooks/useAuth';
 
+const sanitizePhoneInput = (value: string) => value.replace(/\D/g, '').slice(-10);
+
 export const PhoneLoginScreen = () => {
   const {
     pendingPhoneNumber,
@@ -161,14 +163,16 @@ export const PhoneLoginScreen = () => {
                     <input
                       type="tel"
                       inputMode="numeric"
+                      pattern="[0-9]*"
                       autoComplete="tel"
                       autoFocus
                       className="coffee-input pl-16"
                       value={stripPhoneCountryCode(phoneNumber)}
                       onChange={event => {
-                        setPhoneNumber(event.target.value);
+                        setPhoneNumber(sanitizePhoneInput(event.target.value));
                         resetMessages();
                       }}
+                      maxLength={10}
                       placeholder="9876543210"
                       disabled={isSendingOtp}
                     />
@@ -203,6 +207,7 @@ export const PhoneLoginScreen = () => {
                         setOtpCode(event.target.value.replace(/\D/g, '').slice(0, 6));
                         resetMessages();
                       }}
+                      maxLength={6}
                       placeholder="123456"
                       disabled={isVerifyingOtp}
                     />

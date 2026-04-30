@@ -12,6 +12,7 @@ import {
 import { formatPhoneForDisplay } from '../../../shared/phone';
 import { NotificationSettingsPanel } from '../../components/NotificationSettingsPanel';
 import type { NotificationPermissionState } from '../../services/platform/notificationAdapter';
+import { isNativeAndroidNotificationRuntime } from '../../services/platform/notificationService';
 import { StaffProfileAdminControls } from '../staff/components/StaffProfileAdminControls';
 import { ensureProfileAddresses } from '../app/lib/firestoreMappers';
 import type {
@@ -122,6 +123,7 @@ export const ProfileScreen = ({
   onRemoveUserRole,
 }: ProfileScreenProps) => {
   const nameLabel = isDeliveryAgent ? 'Agent Name' : 'Name';
+  const showNotificationSettings = !isNativeAndroidNotificationRuntime();
 
   return (
     <AnimatePresence>
@@ -401,14 +403,16 @@ export const ProfileScreen = ({
                   onRemoveUserRole={onRemoveUserRole}
                 />
 
-                <NotificationSettingsPanel
-                  settings={profileDraft.notificationSettings}
-                  permissionState={notificationPermissionState}
-                  isSyncing={isNotificationSyncing}
-                  syncError={notificationSyncError}
-                  onEnablePush={onEnablePushNotifications}
-                  onSettingsChange={onNotificationSettingsChange}
-                />
+                {showNotificationSettings && (
+                  <NotificationSettingsPanel
+                    settings={profileDraft.notificationSettings}
+                    permissionState={notificationPermissionState}
+                    isSyncing={isNotificationSyncing}
+                    syncError={notificationSyncError}
+                    onEnablePush={onEnablePushNotifications}
+                    onSettingsChange={onNotificationSettingsChange}
+                  />
+                )}
 
                 {(profileError || profileSyncError) && (
                   <div className="rounded-[22px] border border-primary/25 bg-primary/10 px-4 py-3 text-sm font-semibold text-primary">
