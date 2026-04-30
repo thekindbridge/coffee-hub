@@ -10,8 +10,6 @@ type MenuItemCardProps = {
   isShopOpen: boolean;
   shopAvailabilityMessage: string;
   onAdd: (item: MenuItem, delta: number) => void;
-  onOpenCart?: () => void;
-  onRemoveItem?: (itemId: string) => void;
 };
 export const MenuItemCard = memo(function MenuItemCard({
   item,
@@ -19,8 +17,6 @@ export const MenuItemCard = memo(function MenuItemCard({
   isShopOpen,
   shopAvailabilityMessage,
   onAdd,
-  onOpenCart,
-  onRemoveItem,
 }: MenuItemCardProps) {
   const [isImageLoaded, setIsImageLoaded] = useState(false);
   const [hasImageError, setHasImageError] = useState(false);
@@ -51,10 +47,6 @@ export const MenuItemCard = memo(function MenuItemCard({
     onAdd(item, -1);
   }, [item, onAdd]);
 
-  const handleRemoveItem = useCallback(() => {
-    onRemoveItem?.(item.id);
-  }, [item.id, onRemoveItem]);
-
   return (
   <motion.article
     whileHover={isShopOpen ? { y: -3, scale: 1.01 } : undefined}
@@ -62,7 +54,7 @@ export const MenuItemCard = memo(function MenuItemCard({
     className={`coffee-surface group flex h-full flex-col overflow-hidden rounded-[22px] ${
       isShopOpen ? '' : 'border-[#f4c16e]/12'
     }`}
-    style={{ containIntrinsicSize: '260px', contentVisibility: 'auto' }}
+    style={{ containIntrinsicSize: '348px', contentVisibility: 'auto' }}
   >
     <div className="relative aspect-[4/3] overflow-hidden">
       {!isImageLoaded && !hasImageError && optimizedImageUrl && (
@@ -112,25 +104,19 @@ export const MenuItemCard = memo(function MenuItemCard({
       )}
     </div>
 
-    <div className="flex flex-1 flex-col gap-2 p-3">
+    <div className="flex min-h-[188px] flex-1 flex-col gap-2 p-3">
       <div>
         <h3 className="line-clamp-2 min-h-[2.45rem] font-display text-[13px] font-semibold leading-[1.35] tracking-[0.01em] text-accent">
           {item.name}
         </h3>
       </div>
 
-      <div className="mt-auto space-y-2.5">
+      <div className="mt-auto flex min-h-[88px] flex-col justify-end space-y-2.5">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 text-[15px] font-semibold text-[#fffaf6]">
             <Coffee size={14} className="text-secondary" />
             <span>{CURRENCY_SYMBOL}{item.price}</span>
           </div>
-
-          {cartQuantity > 0 && (
-            <span className="rounded-full border border-emerald-400/35 bg-emerald-400/15 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.13em] text-emerald-200">
-              Cart Ready
-            </span>
-          )}
         </div>
 
         {cartQuantity > 0 ? (
@@ -149,23 +135,6 @@ export const MenuItemCard = memo(function MenuItemCard({
                 className="coffee-icon-btn h-8 w-8 rounded-full border-none bg-primary text-white hover:text-white disabled:cursor-not-allowed disabled:bg-white/8 disabled:text-white/45"
               >
                 <Plus size={15} />
-              </button>
-            </div>
-
-            <div className="flex items-center justify-between gap-2">
-              <button
-                type="button"
-                onClick={onOpenCart}
-                className="flex-1 rounded-full border border-white/12 bg-white/5 px-2 py-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-accent hover:bg-white/10"
-              >
-                View Bag
-              </button>
-              <button
-                type="button"
-                onClick={handleRemoveItem}
-                className="flex-1 rounded-full border border-rose-300/25 bg-rose-500/10 px-2 py-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-rose-100 hover:bg-rose-500/20"
-              >
-                Cancel
               </button>
             </div>
 

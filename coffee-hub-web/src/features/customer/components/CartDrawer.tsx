@@ -23,6 +23,7 @@ import type {
 } from '../../app/types';
 import { CartDrawerCheckoutDetails } from './CartDrawerCheckoutDetails';
 import type { LocationSettingsTarget } from '../../../services/platform/locationAdapter';
+import type { CheckoutLocationDialog } from '../hooks/usePaymentFlow';
 
 const getOptimizedCartImageUrl = (imageUrl: string) => {
   const trimmedImageUrl = imageUrl.trim();
@@ -63,6 +64,7 @@ type CartDrawerProps = {
   canOpenLocationSettings: boolean;
   locationSettingsTarget: LocationSettingsTarget | null;
   isPlacingOrder: boolean;
+  hasDeliveryLocation: boolean;
   couponInput: string;
   setCouponInput: Dispatch<SetStateAction<string>>;
   appliedCouponCode: string;
@@ -71,6 +73,7 @@ type CartDrawerProps = {
   isApplyingCoupon: boolean;
   isCouponAppliedPulseVisible: boolean;
   checkoutPrimaryActionLabel: string;
+  locationDialog: CheckoutLocationDialog | null;
   orderStatus: Order | null;
   hasCheckoutAddressSelectionRef: MutableRefObject<boolean>;
   onClose: () => void;
@@ -80,6 +83,8 @@ type CartDrawerProps = {
   onApplyCoupon: () => void;
   onRemoveCoupon: () => void;
   onCaptureLocation: () => void;
+  onCloseLocationDialog: () => void;
+  onLocationDialogAction: () => void;
   onOpenLocationSettings: () => void;
   onPlaceOrder: () => void;
   onTrackOrder: () => void;
@@ -115,6 +120,7 @@ export const CartDrawer = ({
   canOpenLocationSettings,
   locationSettingsTarget,
   isPlacingOrder,
+  hasDeliveryLocation,
   couponInput,
   setCouponInput,
   appliedCouponCode,
@@ -123,6 +129,7 @@ export const CartDrawer = ({
   isApplyingCoupon,
   isCouponAppliedPulseVisible,
   checkoutPrimaryActionLabel,
+  locationDialog,
   orderStatus,
   hasCheckoutAddressSelectionRef,
   onClose,
@@ -132,6 +139,8 @@ export const CartDrawer = ({
   onApplyCoupon,
   onRemoveCoupon,
   onCaptureLocation,
+  onCloseLocationDialog,
+  onLocationDialogAction,
   onOpenLocationSettings,
   onPlaceOrder,
   onTrackOrder,
@@ -349,8 +358,11 @@ export const CartDrawer = ({
                 customerLocationError={customerLocationError}
                 canOpenLocationSettings={canOpenLocationSettings}
                 locationSettingsTarget={locationSettingsTarget}
+                locationDialog={locationDialog}
                 hasCheckoutAddressSelectionRef={hasCheckoutAddressSelectionRef}
                 onCaptureLocation={onCaptureLocation}
+                onCloseLocationDialog={onCloseLocationDialog}
+                onLocationDialogAction={onLocationDialogAction}
                 onOpenLocationSettings={onOpenLocationSettings}
               />
             )}
@@ -409,12 +421,17 @@ export const CartDrawer = ({
                   </button>
                   <button
                     onClick={onPlaceOrder}
-                    disabled={isPlacingOrder || !hasCartItems || !isShopOpen}
+                    disabled={isPlacingOrder || !hasCartItems || !isShopOpen || !hasDeliveryLocation}
                     className="coffee-btn-primary flex-grow justify-center disabled:opacity-70"
                   >
                     {checkoutPrimaryActionLabel}
                   </button>
                 </div>
+              )}
+              {checkoutStep === 'details' && !hasDeliveryLocation && (
+                <p className="mt-3 text-center text-xs font-semibold text-[#f4c16e]">
+                  Give your location to enable order placement.
+                </p>
               )}
             </div>
           )}

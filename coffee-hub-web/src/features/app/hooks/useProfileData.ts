@@ -103,7 +103,7 @@ export const useProfileData = ({
       setProfileSyncError('');
 
       try {
-        const idToken = await getCurrentUserIdToken(true);
+        const idToken = await getCurrentUserIdToken();
         if (!idToken) {
           throw new Error('Missing authentication token.');
         }

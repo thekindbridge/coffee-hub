@@ -61,8 +61,17 @@ const PhoneLoginScreen = lazyNamed(
 export default function App() {
   const session = useRealtimeAppData();
   const [orderStatus, setOrderStatus] = useState<Order | null>(null);
+  const [hasAuthSplashElapsed, setHasAuthSplashElapsed] = useState(false);
   const installPrompt = useInstallPrompt();
   const networkStatus = useNetworkStatus();
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      setHasAuthSplashElapsed(true);
+    }, 1000);
+
+    return () => window.clearTimeout(timeoutId);
+  }, []);
 
   useEffect(() => {
     if (!Capacitor.isNativePlatform() || typeof window === 'undefined') {
@@ -181,6 +190,7 @@ export default function App() {
   const profileCompletionReminder = useProfileCompletionReminder({
     currentUserId: session.currentUserId,
     isAuthReady: session.isAuthReady,
+    isProfileReady: session.isProfileReady,
     isLoggedIn: session.isLoggedIn,
     isProfileOpen: profileManager.isProfileOpen,
     isCustomer: session.role === 'customer',
@@ -193,7 +203,7 @@ export default function App() {
     shopTiming: session.shopTiming,
   });
 
-  if (!session.isAuthReady) {
+  if (!session.isAuthResolved && !hasAuthSplashElapsed) {
     return (
       <Suspense fallback={<Loader fullScreen label="Loading your session..." />}>
         <AuthLoadingPage />

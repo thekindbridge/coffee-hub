@@ -2,11 +2,14 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import { createOrderRequest } from '../../../services/api/ordersService';
 import { getCurrentUserIdToken } from '../../../services/auth/authService';
+import { saveUserDeliveryLocation } from '../../../services/firebase/profileService';
 import {
   type LocationSettingsTarget,
 } from '../../../services/platform/locationAdapter';
 import {
   captureCurrentLocation,
+  LOCATION_FAILED_MESSAGE,
+  LOCATION_REQUIRED_MESSAGE,
   openLocationSettings,
 } from '../../../services/platform/locationService';
 import { navigationAdapter } from '../../../services/platform/navigationAdapter';
@@ -58,6 +61,13 @@ type UsePaymentFlowParams = {
   onOrderPlaced: (order: Order) => void;
 };
 
+export type CheckoutLocationDialog = {
+  action: 'retry' | 'settings';
+  actionLabel: string;
+  message: string;
+  title: string;
+};
+
 export type PaymentFlowState = {
   isCartOpen: boolean;
   setIsCartOpen: Dispatch<SetStateAction<boolean>>;
@@ -76,8 +86,10 @@ export type PaymentFlowState = {
   canOpenLocationSettings: boolean;
   locationSettingsTarget: LocationSettingsTarget | null;
   isPlacingOrder: boolean;
+  hasDeliveryLocation: boolean;
   draftOrderId: string;
   setDraftOrderId: Dispatch<SetStateAction<string>>;
+  locationDialog: CheckoutLocationDialog | null;
   savedAddressOptions: SavedAddressOption[];
   isShopOpen: boolean;
   shopTimingRangeLabel: string;
@@ -86,8 +98,10 @@ export type PaymentFlowState = {
   checkoutAddressSummary: string;
   checkoutPrimaryActionLabel: string;
   hasCheckoutAddressSelectionRef: MutableRefObject<boolean>;
+  handleCloseLocationDialog: () => void;
   handleBrowseMenu: () => void;
   handleCaptureCustomerLocation: () => Promise<void>;
+  handleLocationDialogAction: () => Promise<void>;
   handleOpenLocationSettings: () => Promise<void>;
   handlePlaceOrder: () => Promise<void>;
 };
@@ -132,6 +146,7 @@ export const usePaymentFlow = ({
   const [locationSettingsTarget, setLocationSettingsTarget] =
     useState<LocationSettingsTarget | null>(null);
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
+  const [locationDialog, setLocationDialog] = useState<CheckoutLocationDialog | null>(null);
   const [draftOrderId, setDraftOrderId] = useState('');
   const [currentTime, setCurrentTime] = useState(() => Date.now());
   const hasCheckoutAddressSelectionRef = useRef(false);
@@ -182,12 +197,15 @@ export const usePaymentFlow = ({
   const shopStatusMessage = isShopOpenNow
     ? `Now accepting orders until ${formatShopTime(shopTiming.closeTime)}.`
     : buildCheckoutClosedMessage(shopTiming.openTime);
+  const hasDeliveryLocation = Boolean(customerDetails.location);
 
   const checkoutPrimaryActionLabel = isPlacingOrder
     ? 'Placing order...'
-    : isShopOpenNow
-      ? 'Place order'
-      : buildShopAvailabilityMessage(shopTiming.openTime);
+    : !isShopOpenNow
+      ? buildShopAvailabilityMessage(shopTiming.openTime)
+      : hasDeliveryLocation
+        ? 'Place order'
+        : 'Give location to continue';
 
   // Auto-select saved address on first load
   useEffect(() => {
@@ -249,20 +267,30 @@ export const usePaymentFlow = ({
     setCustomerLocationError('');
     setCanOpenLocationSettings(false);
     setLocationSettingsTarget(null);
+    setLocationDialog(null);
     setCheckoutError('');
     try {
       const captureResult = await captureCurrentLocation({
         enableHighAccuracy: true,
         enableLocationFallback: true,
-        maxAttempts: 2,
+        maxAttempts: 1,
         maximumAgeMs: 0,
-        timeoutMs: 18000,
+        timeoutMs: 5000,
       });
 
       if (!captureResult.location) {
         setCustomerLocationError(captureResult.message);
         setCanOpenLocationSettings(captureResult.canOpenLocationSettings);
         setLocationSettingsTarget(captureResult.locationSettingsTarget);
+        setLocationDialog({
+          action: captureResult.canOpenLocationSettings ? 'settings' : 'retry',
+          actionLabel: captureResult.canOpenLocationSettings ? 'Enable Location' : 'Try Again',
+          message: captureResult.message,
+          title:
+            captureResult.errorCode === 'permission_denied'
+              ? 'Location required'
+              : 'Unable to get location',
+        });
         return null;
       }
 
@@ -270,15 +298,30 @@ export const usePaymentFlow = ({
       setCustomerLocationError('');
       setCanOpenLocationSettings(false);
       setLocationSettingsTarget(null);
+      setLocationDialog(null);
+      if (currentUserId) {
+        void saveUserDeliveryLocation({
+          currentUserId,
+          location: captureResult.location,
+        }).catch(error => {
+          console.error('Failed to save customer delivery location', error);
+        });
+      }
       return captureResult.location;
     } catch (error) {
       const message = getAppServiceErrorMessage(
         error,
-        'Unable to fetch location. Try again.',
+        LOCATION_FAILED_MESSAGE,
       );
       setCustomerLocationError(message);
       setCanOpenLocationSettings(false);
       setLocationSettingsTarget(null);
+      setLocationDialog({
+        action: 'retry',
+        actionLabel: 'Try Again',
+        message,
+        title: 'Unable to get location',
+      });
       return null;
     } finally {
       setIsLocatingCustomer(false);
@@ -292,13 +335,36 @@ export const usePaymentFlow = ({
   const handleOpenLocationSettings = async () => {
     const target = locationSettingsTarget ?? 'app';
     const didOpenSettings = await openLocationSettings(target);
+    if (didOpenSettings) {
+      setLocationDialog(null);
+      return;
+    }
+
     if (!didOpenSettings) {
       setCustomerLocationError(
         target === 'location'
-          ? 'Turn on GPS to continue.'
-          : 'Please enable location in app settings.',
+          ? LOCATION_FAILED_MESSAGE
+          : LOCATION_REQUIRED_MESSAGE,
       );
     }
+  };
+
+  const handleCloseLocationDialog = () => {
+    setLocationDialog(null);
+  };
+
+  const handleLocationDialogAction = async () => {
+    if (!locationDialog) {
+      return;
+    }
+
+    if (locationDialog.action === 'settings') {
+      await handleOpenLocationSettings();
+      return;
+    }
+
+    setLocationDialog(null);
+    await captureLocation();
   };
 
   const handleBrowseMenu = () => {
@@ -309,6 +375,7 @@ export const usePaymentFlow = ({
     setCustomerLocationError('');
     setCanOpenLocationSettings(false);
     setLocationSettingsTarget(null);
+    setLocationDialog(null);
     setDraftOrderId('');
     navigationAdapter.scrollToSectionOrTop('menu-section');
   };
@@ -325,13 +392,14 @@ export const usePaymentFlow = ({
     setCustomerLocationError('');
     setCanOpenLocationSettings(false);
     setLocationSettingsTarget(null);
+    setLocationDialog(null);
   };
 
   const buildDraft = async (): Promise<{ order: CheckoutOrderDraft } | null> => {
     const name = customerDetails.name.trim();
     const phone = customerDetails.phone.trim();
     const address = customerDetails.address.trim();
-    let customerLocation = customerDetails.location;
+    const customerLocation = customerDetails.location;
 
     if (!name || !phone || !address) {
       setCheckoutError('Please fill in your name, phone number, and delivery address.');
@@ -339,10 +407,15 @@ export const usePaymentFlow = ({
     }
 
     if (!customerLocation) {
-      const captured = await captureLocation();
-      if (captured) {
-        customerLocation = captured;
-      }
+      setCustomerLocationError(LOCATION_REQUIRED_MESSAGE);
+      setCheckoutError('Location is required for delivery.');
+      setLocationDialog({
+        action: canOpenLocationSettings ? 'settings' : 'retry',
+        actionLabel: canOpenLocationSettings ? 'Enable Location' : 'Give Location',
+        message: LOCATION_REQUIRED_MESSAGE,
+        title: 'Location required',
+      });
+      return null;
     }
 
     if (cart.length === 0) { setCheckoutError('Your cart is empty.'); return null; }
@@ -469,8 +542,10 @@ export const usePaymentFlow = ({
     canOpenLocationSettings,
     locationSettingsTarget,
     isPlacingOrder,
+    hasDeliveryLocation,
     draftOrderId,
     setDraftOrderId,
+    locationDialog,
     savedAddressOptions,
     isShopOpen: isShopOpenNow,
     shopTimingRangeLabel,
@@ -479,8 +554,10 @@ export const usePaymentFlow = ({
     checkoutAddressSummary,
     checkoutPrimaryActionLabel,
     hasCheckoutAddressSelectionRef,
+    handleCloseLocationDialog,
     handleBrowseMenu,
     handleCaptureCustomerLocation,
+    handleLocationDialogAction,
     handleOpenLocationSettings,
     handlePlaceOrder,
   };

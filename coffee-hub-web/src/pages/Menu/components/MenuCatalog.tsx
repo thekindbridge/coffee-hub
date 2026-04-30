@@ -13,8 +13,6 @@ type MenuCatalogProps = {
   isShopOpen: boolean;
   menuError: string;
   onAddToCart: (item: MenuItem, delta: number) => void;
-  onOpenCart: () => void;
-  onRemoveFromCart: (itemId: string) => void;
   onRetryMenu: () => void;
   shopAvailabilityMessage: string;
 };
@@ -26,8 +24,6 @@ export const MenuCatalog = memo(function MenuCatalog({
   isShopOpen,
   menuError,
   onAddToCart,
-  onOpenCart,
-  onRemoveFromCart,
   onRetryMenu,
   shopAvailabilityMessage,
 }: MenuCatalogProps) {
@@ -91,8 +87,6 @@ export const MenuCatalog = memo(function MenuCatalog({
               cartQuantity={cartQuantityById.get(item.id) || 0}
               isShopOpen={isShopOpen}
               onAdd={onAddToCart}
-              onOpenCart={onOpenCart}
-              onRemoveItem={onRemoveFromCart}
               shopAvailabilityMessage={shopAvailabilityMessage}
             />
           ))}

@@ -4,7 +4,7 @@ import {
   serverTimestamp,
   setDoc,
 } from 'firebase/firestore';
-import type { DeliveryAgent } from '../../types';
+import type { DeliveryAgent, DeliveryLocation } from '../../types';
 import type {
   CustomerProfile,
   NotificationSettings,
@@ -199,6 +199,36 @@ export const saveUserProfileReminderPreference = async ({
     throw toAppServiceError(
       error,
       'Unable to update your reminder preference right now.',
+      'network',
+    );
+  }
+};
+
+export const saveUserDeliveryLocation = async ({
+  currentUserId,
+  location,
+}: {
+  currentUserId: string;
+  location: DeliveryLocation;
+}) => {
+  try {
+    await setDoc(
+      doc(db, 'users', currentUserId),
+      {
+        location: {
+          accuracy: typeof location.accuracy === 'number' ? location.accuracy : null,
+          lat: location.lat,
+          lng: location.lng,
+          updatedAt: serverTimestamp(),
+        },
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    );
+  } catch (error) {
+    throw toAppServiceError(
+      error,
+      'Unable to save your delivery location right now.',
       'network',
     );
   }

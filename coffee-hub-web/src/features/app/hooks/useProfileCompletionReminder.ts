@@ -19,6 +19,7 @@ const getSnoozeStorageKey = (currentUserId: string) =>
 export const useProfileCompletionReminder = ({
   currentUserId,
   isAuthReady,
+  isProfileReady,
   isLoggedIn,
   isProfileOpen,
   isCustomer,
@@ -26,6 +27,7 @@ export const useProfileCompletionReminder = ({
 }: {
   currentUserId: string;
   isAuthReady: boolean;
+  isProfileReady: boolean;
   isLoggedIn: boolean;
   isProfileOpen: boolean;
   isCustomer: boolean;
@@ -41,10 +43,9 @@ export const useProfileCompletionReminder = ({
       profileSaved.name,
       profileSaved.phone,
     );
-    const hasPhone = profileSaved.phone.trim().length > 0;
     const hasAddress = getPrimaryProfileAddress(profileSaved).length > 0;
 
-    return !hasMeaningfulName || !hasPhone || !hasAddress;
+    return !hasMeaningfulName || !hasAddress;
   }, [profileSaved]);
 
   useEffect(() => {
@@ -56,6 +57,7 @@ export const useProfileCompletionReminder = ({
   useEffect(() => {
     if (
       !isAuthReady ||
+      !isProfileReady ||
       !isLoggedIn ||
       !isCustomer ||
       !currentUserId ||
@@ -79,6 +81,7 @@ export const useProfileCompletionReminder = ({
     isCustomer,
     isDismissedInSession,
     isLoggedIn,
+    isProfileReady,
     isProfileIncomplete,
     isProfileOpen,
     profileSaved.profileReminderDisabled,

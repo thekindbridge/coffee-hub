@@ -5,6 +5,7 @@ import { CURRENCY_SYMBOL } from '../../app/lib/constants';
 import type { CartItem, CheckoutCustomerDetails } from '../../../types';
 import type { SavedAddressOption, SelectedAddressIndex } from '../../app/types';
 import type { LocationSettingsTarget } from '../../../services/platform/locationAdapter';
+import type { CheckoutLocationDialog } from '../hooks/usePaymentFlow';
 
 type CartDrawerCheckoutDetailsProps = {
   cart: CartItem[];
@@ -30,8 +31,11 @@ type CartDrawerCheckoutDetailsProps = {
   customerLocationError: string;
   canOpenLocationSettings: boolean;
   locationSettingsTarget: LocationSettingsTarget | null;
+  locationDialog: CheckoutLocationDialog | null;
   hasCheckoutAddressSelectionRef: MutableRefObject<boolean>;
   onCaptureLocation: () => void;
+  onCloseLocationDialog: () => void;
+  onLocationDialogAction: () => void;
   onOpenLocationSettings: () => void;
 };
 
@@ -59,21 +63,25 @@ export const CartDrawerCheckoutDetails = ({
   customerLocationError,
   canOpenLocationSettings,
   locationSettingsTarget,
+  locationDialog,
   hasCheckoutAddressSelectionRef,
   onCaptureLocation,
+  onCloseLocationDialog,
+  onLocationDialogAction,
   onOpenLocationSettings,
 }: CartDrawerCheckoutDetailsProps) => {
   const locationButtonLabel = isLocatingCustomer
-    ? 'Fetching...'
+    ? 'Getting...'
     : customerDetails.location
       ? 'Refresh Location'
-      : 'Fetch Location';
+      : 'Give Location';
 
   const locationSettingsLabel = locationSettingsTarget === 'location'
     ? 'Open Location Settings'
     : 'Enable Location';
 
   return (
+    <>
     <div className="space-y-5">
     {!isShopOpen && (
       <div className="rounded-3xl border border-[#f4c16e]/24 bg-[linear-gradient(135deg,rgba(244,193,110,0.12),rgba(65,43,26,0.74))] px-4 py-3 text-sm text-[#fff0d5]">
@@ -287,10 +295,10 @@ export const CartDrawerCheckoutDetails = ({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <label className="block text-[11px] font-semibold uppercase tracking-[0.22em] text-ink-muted">
-            Live Delivery Location
+            Delivery Location
           </label>
           <p className="mt-2 max-w-88 text-xs leading-5 text-ink-muted">
-            GPS helps the delivery team and admin find you faster. If the lock fails, keep your delivery address ready and retry from here.
+            Location is required for delivery. Share your live GPS once so the store and rider can find you faster.
           </p>
         </div>
         <button
@@ -323,45 +331,30 @@ export const CartDrawerCheckoutDetails = ({
               </span>
             </div>
             <p className="mt-1 text-xs leading-5 text-ink-muted">
-              Keep GPS on and wait a few seconds. The app will retry once automatically before showing an action button.
+              Keep GPS on for a few seconds while we lock your live location.
             </p>
           </>
         ) : (
           <>
             <p className="font-semibold text-accent">Location not added yet.</p>
             <p className="mt-1 text-xs leading-5 text-ink-muted">
-              Tap Fetch Location to use GPS. If that fails, continue with your delivery address and retry when ready.
+              Tap Give Location before placing your order. This is mandatory for delivery tracking.
             </p>
           </>
         )}
       </div>
       {customerLocationError && (
         <div className="mt-3 rounded-[18px] border border-primary/25 bg-primary/10 px-3 py-3">
-          <p className="text-xs font-semibold text-primary">
-            {customerLocationError}
-          </p>
-          <p className="mt-2 text-xs leading-5 text-[#f5ddbb]">
-            You can retry now, or continue checkout with your delivery address.
-          </p>
-          <div className="mt-3 flex flex-wrap gap-2">
+          <p className="text-xs font-semibold text-primary">{customerLocationError}</p>
+          {canOpenLocationSettings && (
             <button
               type="button"
-              onClick={onCaptureLocation}
-              disabled={isLocatingCustomer}
-              className="coffee-btn-secondary min-h-10 px-3 text-[11px] uppercase tracking-[0.14em] disabled:opacity-60"
+              onClick={onOpenLocationSettings}
+              className="mt-3 coffee-btn-secondary min-h-10 px-3 text-[11px] uppercase tracking-[0.14em]"
             >
-              {isLocatingCustomer ? 'Fetching...' : 'Retry'}
+              {locationSettingsLabel}
             </button>
-            {canOpenLocationSettings && (
-              <button
-                type="button"
-                onClick={onOpenLocationSettings}
-                className="coffee-btn-secondary min-h-10 px-3 text-[11px] uppercase tracking-[0.14em]"
-              >
-                {locationSettingsLabel}
-              </button>
-            )}
-          </div>
+          )}
         </div>
       )}
     </div>
@@ -387,5 +380,59 @@ export const CartDrawerCheckoutDetails = ({
       </div>
     )}
   </div>
+    <AnimatePresence>
+      {locationDialog && (
+        <>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[90] bg-black/70 backdrop-blur-sm"
+            onClick={onCloseLocationDialog}
+          />
+          <motion.div
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 24 }}
+            transition={{ duration: 0.2, ease: 'easeOut' }}
+            className="fixed inset-x-4 bottom-6 z-[95] mx-auto w-full max-w-md rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(23,16,14,0.98),rgba(11,8,7,0.98))] p-5 shadow-[0_22px_60px_rgba(0,0,0,0.42)]"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="checkout-location-dialog-title"
+          >
+            <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-secondary">
+              Delivery Location
+            </p>
+            <h3
+              id="checkout-location-dialog-title"
+              className="mt-2 text-[1.35rem] font-semibold text-accent"
+            >
+              {locationDialog.title}
+            </h3>
+            <p className="mt-2 text-sm leading-6 text-ink-muted">
+              {locationDialog.message}
+            </p>
+            <div className="mt-5 flex gap-3">
+              <button
+                type="button"
+                onClick={onCloseLocationDialog}
+                className="coffee-btn-secondary flex-1 justify-center"
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={onLocationDialogAction}
+                disabled={isLocatingCustomer}
+                className="coffee-btn-primary flex-1 justify-center disabled:opacity-70"
+              >
+                {isLocatingCustomer ? 'Getting...' : locationDialog.actionLabel}
+              </button>
+            </div>
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
+    </>
   );
 };

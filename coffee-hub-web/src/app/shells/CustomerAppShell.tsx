@@ -149,8 +149,6 @@ export const CustomerAppShell = ({
               menuError={session.menuError}
               onAddToCart={customerExperience.checkout.handleAddToCart}
               onCategoryChange={customerExperience.handleCategoryChange}
-              onOpenCart={customerExperience.handleOpenCartFromMenu}
-              onRemoveFromCart={customerExperience.checkout.handleRemoveFromCart}
               onRetryMenu={session.retryMenu}
               onSearchChange={customerExperience.handleSearchChange}
               searchQuery={customerExperience.searchQuery}
@@ -292,15 +290,13 @@ export const CustomerAppShell = ({
             <button
               onClick={() => customerExperience.checkout.setIsCartOpen(true)}
               className="fixed bottom-24 left-4 right-4 z-40 mx-auto flex max-w-screen-md items-center justify-between rounded-[24px] border border-white/10 bg-[linear-gradient(135deg,rgba(111,78,55,0.96),rgba(62,39,35,0.96))] px-4 py-3 text-white shadow-[0_22px_40px_rgba(40,22,16,0.45)] active:scale-[0.98] sm:left-6 sm:right-6"
+              aria-label={`View bag for ${CURRENCY_SYMBOL}${customerExperience.checkout.payableCartTotal}`}
             >
               <div className="flex items-center gap-3">
                 <div className="rounded-full bg-white/18 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em]">
                   {customerExperience.checkout.cartCount} item{customerExperience.checkout.cartCount === 1 ? '' : 's'}
                 </div>
-                <div className="text-left">
-                  <p className="text-[11px] uppercase tracking-[0.2em] text-white/70">Cart ready</p>
-                  <p className="text-sm font-semibold text-accent">View bag</p>
-                </div>
+                <p className="text-sm font-semibold text-accent">View Bag</p>
               </div>
               <div className="flex items-center gap-2 text-[15px] font-semibold">
                 <span>{CURRENCY_SYMBOL}{customerExperience.checkout.payableCartTotal}</span>
@@ -404,6 +400,7 @@ export const CustomerAppShell = ({
                 deliveryFee={customerExperience.checkout.deliveryFee}
                 discountAmount={customerExperience.checkout.discountAmount}
                 hasCartItems={customerExperience.checkout.hasCartItems}
+                hasDeliveryLocation={customerExperience.checkout.hasDeliveryLocation}
                 hasCheckoutAddressSelectionRef={customerExperience.checkout.hasCheckoutAddressSelectionRef}
                 isApplyingCoupon={customerExperience.checkout.isApplyingCoupon}
                 isCheckoutAddressListOpen={customerExperience.checkout.isCheckoutAddressListOpen}
@@ -412,10 +409,13 @@ export const CustomerAppShell = ({
                 isOpen={customerExperience.checkout.isCartOpen}
                 isPlacingOrder={customerExperience.checkout.isPlacingOrder}
                 isShopOpen={customerExperience.checkout.isShopOpen}
+                locationDialog={customerExperience.checkout.locationDialog}
                 onApplyCoupon={() => void customerExperience.checkout.handleApplyCoupon()}
                 onBrowseMenu={customerExperience.checkout.handleBrowseMenu}
                 onCaptureLocation={() => void customerExperience.checkout.handleCaptureCustomerLocation()}
+                onCloseLocationDialog={customerExperience.checkout.handleCloseLocationDialog}
                 onClose={() => customerExperience.checkout.setIsCartOpen(false)}
+                onLocationDialogAction={() => void customerExperience.checkout.handleLocationDialogAction()}
                 onOpenLocationSettings={() => void customerExperience.checkout.handleOpenLocationSettings()}
                 onPlaceOrder={() => void customerExperience.checkout.handlePlaceOrder()}
                 onQuantityChange={customerExperience.checkout.handleAddToCart}

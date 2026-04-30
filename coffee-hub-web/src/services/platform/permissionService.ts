@@ -1,3 +1,4 @@
+import { App as CapacitorApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import { Geolocation, type PermissionStatus } from '@capacitor/geolocation';
 import { LocalNotifications } from '@capacitor/local-notifications';
@@ -352,6 +353,15 @@ export const openPermissionSettings = async (
   try {
     if (target === 'location') {
       await openNativeLocationSettings();
+      return true;
+    }
+
+    const capacitorApp = CapacitorApp as typeof CapacitorApp & {
+      openSettings?: () => Promise<void>;
+    };
+
+    if (typeof capacitorApp.openSettings === 'function') {
+      await capacitorApp.openSettings();
       return true;
     }
 

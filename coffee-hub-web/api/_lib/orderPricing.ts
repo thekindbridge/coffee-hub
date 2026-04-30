@@ -106,9 +106,9 @@ const ensurePositiveInteger = (value: unknown, fieldName: string) => {
   return numericValue;
 };
 
-const parseOptionalLocation = (value: unknown) => {
+const parseRequiredLocation = (value: unknown) => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    return null;
+    throw new ApiError(400, 'Location is required for delivery.');
   }
 
   const location = value as Record<string, unknown>;
@@ -151,7 +151,7 @@ export const parseOrderDraft = (value: unknown): SanitizedOrderDraft => {
       name: ensureString(customer.name, 'Customer name'),
       phone: ensureString(customer.phone, 'Phone number'),
       address: ensureString(customer.address, 'Delivery address'),
-      location: parseOptionalLocation(customer.location),
+      location: parseRequiredLocation(customer.location),
     },
     items: itemsValue.map(parseItem),
     couponCode: normalizeCouponCode(payload.couponCode ?? payload.coupon_code),

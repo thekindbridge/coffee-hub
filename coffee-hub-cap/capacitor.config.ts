@@ -44,9 +44,9 @@ const config: CapacitorConfig = {
       sound: 'customer.mp3',
     },
     SplashScreen: {
-      launchShowDuration: 1800,
+      launchShowDuration: 900,
       launchAutoHide: true,
-      launchFadeOutDuration: 180,
+      launchFadeOutDuration: 120,
       backgroundColor: '#120c09',
       androidScaleType: 'CENTER_CROP',
       showSpinner: false,

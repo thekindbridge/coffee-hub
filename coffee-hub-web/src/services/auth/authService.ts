@@ -1,11 +1,13 @@
 import { onAuthStateChanged, signOut, type User as FirebaseUser } from 'firebase/auth';
 import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { formatPhoneForDisplay, normalizePhoneNumber, safeNormalizePhoneNumber } from '../../../shared/phone';
+import { resolveUserRole } from '../../../shared/userRole';
 import type { UserRole } from '../../features/app/types';
 import { reserveOtpRequest, OtpControlError } from '../api/otpControlService';
 import { syncUserProfileRequest } from '../api/userService';
 import { auth, db } from '../firebase';
 import {
+  getMainAdminPhone,
   getUserRole,
   subscribeToUserRole,
 } from '../roleService';
@@ -38,6 +40,12 @@ type AuthUserOverrides = {
 
 const buildDisplayName = (phone: string) =>
   formatPhoneForDisplay(phone) || 'COFFEE-HUB User';
+
+const buildFallbackRole = (phone: string) =>
+  resolveUserRole({
+    phone,
+    mainAdminPhone: getMainAdminPhone(),
+  });
 
 type OtpControlGrant = {
   allowVisibleRetry: boolean;
@@ -129,6 +137,20 @@ const mapFirebaseUser = (
   };
 };
 
+const buildImmediateAuthUser = (
+  firebaseUser: FirebaseUser,
+  fallbackPhone = '',
+) => {
+  const normalizedPhone = safeNormalizePhoneNumber(
+    fallbackPhone || firebaseUser.phoneNumber || '',
+  );
+
+  return mapFirebaseUser(firebaseUser, {
+    phone: normalizedPhone,
+    role: buildFallbackRole(normalizedPhone),
+  });
+};
+
 const pendingUserResolutions = new Map<string, Promise<AuthUser>>();
 
 const resolveAuthenticatedUser = (
@@ -142,17 +164,19 @@ const resolveAuthenticatedUser = (
 
   const resolution = (async () => {
     const authPhone = safeNormalizePhoneNumber(fallbackPhone || firebaseUser.phoneNumber || '');
-    const resolvedRole = await getUserRole(authPhone);
+    const resolvedRolePromise = getUserRole(authPhone);
     let resolvedPhone = authPhone;
-    let resolvedRoleValue = resolvedRole;
+    let resolvedRoleValue = await resolvedRolePromise;
 
-    await syncAuthenticatedUserIdentity({
+    void syncAuthenticatedUserIdentity({
       uid: firebaseUser.uid,
       phone: authPhone,
+    }).catch(error => {
+      console.error('Failed to sync authenticated user identity', error);
     });
 
     try {
-      const idToken = await firebaseUser.getIdToken(true);
+      const idToken = await firebaseUser.getIdToken();
       const response = await syncUserProfileRequest(
         {
           name: firebaseUser.displayName?.trim() || '',
@@ -162,9 +186,9 @@ const resolveAuthenticatedUser = (
       );
 
       resolvedPhone = safeNormalizePhoneNumber(response.profile.phone || resolvedPhone) || resolvedPhone;
-      resolvedRoleValue = response.profile.role || resolvedRoleValue;
+      resolvedRoleValue = response.profile.role || await resolvedRolePromise;
     } catch (error) {
-      console.error('Failed to sync authenticated user profile before rendering', error);
+      console.error('Failed to sync authenticated user profile in the background', error);
     }
 
     return mapFirebaseUser(firebaseUser, {
@@ -184,6 +208,45 @@ export const observeAuthSession = (onChange: (user: AuthUser | null) => void) =>
   let unsubscribeRole = () => undefined;
   let sequence = 0;
 
+  const subscribeToResolvedRole = ({
+    currentSequence,
+    fallbackUser,
+    firebaseUser,
+    phone,
+  }: {
+    currentSequence: number;
+    fallbackUser: AuthUser;
+    firebaseUser: FirebaseUser;
+    phone: string;
+  }) => {
+    if (!phone) {
+      unsubscribeRole = () => undefined;
+      return;
+    }
+
+    unsubscribeRole = subscribeToUserRole(
+      phone,
+      role => {
+        if (currentSequence !== sequence) {
+          return;
+        }
+
+        onChange(mapFirebaseUser(firebaseUser, {
+          phone,
+          role,
+        }));
+      },
+      error => {
+        console.error('Failed to subscribe to the authenticated user role', error);
+        if (currentSequence !== sequence) {
+          return;
+        }
+
+        onChange(fallbackUser);
+      },
+    );
+  };
+
   const unsubscribeAuth = onAuthStateChanged(auth, firebaseUser => {
     const currentSequence = ++sequence;
     unsubscribeRole();
@@ -193,59 +256,50 @@ export const observeAuthSession = (onChange: (user: AuthUser | null) => void) =>
       return;
     }
 
+    const immediateUser = buildImmediateAuthUser(firebaseUser);
+    onChange(immediateUser);
+    subscribeToResolvedRole({
+      currentSequence,
+      fallbackUser: immediateUser,
+      firebaseUser,
+      phone: immediateUser.phone,
+    });
+
     void (async () => {
-      let resolvedUser: AuthUser | null = null;
-
       try {
-        resolvedUser = await resolveAuthenticatedUser(firebaseUser);
+        const resolvedUser = await resolveAuthenticatedUser(
+          firebaseUser,
+          immediateUser.phone,
+        );
         if (currentSequence !== sequence) {
           return;
         }
 
         onChange(resolvedUser);
+        if (resolvedUser.phone && resolvedUser.phone !== immediateUser.phone) {
+          unsubscribeRole();
+          subscribeToResolvedRole({
+            currentSequence,
+            fallbackUser: resolvedUser,
+            firebaseUser,
+            phone: resolvedUser.phone,
+          });
+        }
       } catch (error) {
-        console.error('Failed to resolve the authenticated user role', error);
+        console.error('Failed to hydrate the authenticated user session', error);
         if (currentSequence !== sequence) {
           return;
         }
 
-        const fallbackPhone = safeNormalizePhoneNumber(firebaseUser.phoneNumber || '');
-        resolvedUser = mapFirebaseUser(firebaseUser, {
-          phone: fallbackPhone,
-          role: 'customer',
+        const fallbackUser = buildImmediateAuthUser(firebaseUser);
+        onChange(fallbackUser);
+        subscribeToResolvedRole({
+          currentSequence,
+          fallbackUser,
+          firebaseUser,
+          phone: fallbackUser.phone,
         });
-        onChange(resolvedUser);
       }
-
-      if (currentSequence !== sequence || !resolvedUser) {
-        return;
-      }
-
-      const normalizedPhone = safeNormalizePhoneNumber(
-        resolvedUser.phone || firebaseUser.phoneNumber || '',
-      );
-
-      unsubscribeRole = subscribeToUserRole(
-        normalizedPhone,
-        role => {
-          if (currentSequence !== sequence) {
-            return;
-          }
-
-          onChange(mapFirebaseUser(firebaseUser, {
-            phone: normalizedPhone,
-            role,
-          }));
-        },
-        error => {
-          console.error('Failed to subscribe to the authenticated user role', error);
-          if (currentSequence !== sequence) {
-            return;
-          }
-
-          onChange(resolvedUser);
-        },
-      );
     })();
   });
 
