@@ -99,10 +99,13 @@ const DEFAULT_WATCH_LOCATION_OPTIONS = {
 >;
 
 const isNativeRuntime = () => Capacitor.isNativePlatform();
+const isNavigatorGeolocationAvailable = () => (
+  typeof navigator !== 'undefined' && 'geolocation' in navigator
+);
 
 const isLocationApiSupported = () => (
   isNativeRuntime() ||
-  (typeof navigator !== 'undefined' && 'geolocation' in navigator)
+  isNavigatorGeolocationAvailable()
 );
 
 const normalizePermissionState = (
@@ -142,6 +145,16 @@ const normalizeLocationPermission = (
 
 const buildLocation = (
   position: Awaited<ReturnType<typeof Geolocation.getCurrentPosition>>,
+): DeliveryLocation => ({
+  lat: position.coords.latitude,
+  lng: position.coords.longitude,
+  accuracy: Number.isFinite(position.coords.accuracy)
+    ? Number(position.coords.accuracy.toFixed(1))
+    : undefined,
+});
+
+const buildNavigatorLocation = (
+  position: GeolocationPosition,
 ): DeliveryLocation => ({
   lat: position.coords.latitude,
   lng: position.coords.longitude,
@@ -303,6 +316,15 @@ const buildPositionOptions = (
   return positionOptions;
 };
 
+const buildNavigatorPositionOptions = (
+  options: LocationRequestOptions = {},
+) => ({
+  enableHighAccuracy:
+    options.enableHighAccuracy ?? DEFAULT_CURRENT_LOCATION_OPTIONS.enableHighAccuracy,
+  maximumAge: options.maximumAgeMs ?? DEFAULT_CURRENT_LOCATION_OPTIONS.maximumAgeMs,
+  timeout: options.timeoutMs ?? DEFAULT_CURRENT_LOCATION_OPTIONS.timeoutMs,
+});
+
 const getSupportedRetryAttempts = (
   maxAttempts: number | undefined,
 ) => {
@@ -323,6 +345,13 @@ const queryPluginPermission = async (): Promise<LocationPermissionState> => {
     return normalizeLocationPermission(await Geolocation.checkPermissions());
   } catch (error) {
     const mappedError = mapLocationError(error);
+    if (
+      isNavigatorGeolocationAvailable() &&
+      (mappedError.code === 'unsupported' || mappedError.code === 'unknown')
+    ) {
+      return 'prompt';
+    }
+
     return mappedError.code === 'unsupported' ? 'unsupported' : 'unavailable';
   }
 };
@@ -352,9 +381,18 @@ const ensureNativePermission = async () => {
       'open-app-settings',
     );
   } catch (error) {
-    throw error instanceof LocationAdapterError
+    const mappedError = error instanceof LocationAdapterError
       ? error
       : mapLocationError(error);
+
+    if (
+      isNavigatorGeolocationAvailable() &&
+      (mappedError.code === 'unsupported' || mappedError.code === 'unknown')
+    ) {
+      return;
+    }
+
+    throw mappedError;
   }
 };
 
@@ -367,6 +405,40 @@ const getPluginCurrentLocation = async (
 
   return buildLocation(position);
 };
+
+const getNavigatorCurrentLocation = (
+  options?: LocationRequestOptions,
+) => new Promise<DeliveryLocation>((resolve, reject) => {
+  if (!isNavigatorGeolocationAvailable()) {
+    reject(createLocationError(
+      'Location is not supported on this device.',
+      'unsupported',
+      'none',
+    ));
+    return;
+  }
+
+  navigator.geolocation.getCurrentPosition(
+    position => {
+      resolve(buildNavigatorLocation(position));
+    },
+    error => {
+      reject(mapLocationError(error));
+    },
+    buildNavigatorPositionOptions(options),
+  );
+});
+
+const shouldAttemptNavigatorFallback = (error: LocationAdapterError) => (
+  isNavigatorGeolocationAvailable() && (
+    error.code === 'unsupported' ||
+    error.code === 'unknown' ||
+    (isNativeRuntime() && (
+      error.code === 'position_unavailable' ||
+      error.code === 'timeout'
+    ))
+  )
+);
 
 const getLocationWithRetry = async (
   options?: LocationRequestOptions,
@@ -392,6 +464,16 @@ const getLocationWithRetry = async (
         ? error
         : mapLocationError(error);
 
+      if (shouldAttemptNavigatorFallback(lastError)) {
+        try {
+          return await getNavigatorCurrentLocation(options);
+        } catch (fallbackError) {
+          lastError = fallbackError instanceof LocationAdapterError
+            ? fallbackError
+            : mapLocationError(fallbackError);
+        }
+      }
+
       const canRetry =
         lastError.code === 'timeout' ||
         lastError.code === 'position_unavailable';
@@ -406,6 +488,35 @@ const getLocationWithRetry = async (
     'Unable to access your location right now.',
     'unknown',
     'retry',
+  );
+};
+
+const watchNavigatorLocation = ({
+  onError,
+  onLocation,
+  options,
+}: {
+  onError: (error: LocationAdapterError) => void;
+  onLocation: (location: DeliveryLocation) => void;
+  options?: LocationRequestOptions;
+}) => {
+  if (!isNavigatorGeolocationAvailable()) {
+    onError(createLocationError(
+      'Location is not supported on this device.',
+      'unsupported',
+      'none',
+    ));
+    return null;
+  }
+
+  return navigator.geolocation.watchPosition(
+    position => {
+      onLocation(buildNavigatorLocation(position));
+    },
+    error => {
+      onError(mapLocationError(error));
+    },
+    buildNavigatorPositionOptions(options),
   );
 };
 
@@ -426,38 +537,68 @@ const watchPluginLocation: LocationAdapter['watchLocation'] = async ({
   try {
     await ensureNativePermission();
   } catch (error) {
-    onError(
-      error instanceof LocationAdapterError
-        ? error
-        : mapLocationError(error),
-    );
+    const mappedError = error instanceof LocationAdapterError
+      ? error
+      : mapLocationError(error);
+
+    if (shouldAttemptNavigatorFallback(mappedError)) {
+      return watchNavigatorLocation({
+        onError,
+        onLocation,
+        options,
+      });
+    }
+
+    onError(mappedError);
     return null;
   }
 
-  return Geolocation.watchPosition(
-    buildPositionOptions(options, 'watch'),
-    (position, error) => {
-      if (error) {
-        onError(mapLocationError(error));
-        return;
-      }
+  try {
+    return await Geolocation.watchPosition(
+      buildPositionOptions(options, 'watch'),
+      (position, error) => {
+        if (error) {
+          onError(mapLocationError(error));
+          return;
+        }
 
-      if (!position) {
-        onError(createLocationError(
-          'Location data is unavailable.',
-          'position_unavailable',
-          'retry',
-        ));
-        return;
-      }
+        if (!position) {
+          onError(createLocationError(
+            'Location data is unavailable.',
+            'position_unavailable',
+            'retry',
+          ));
+          return;
+        }
 
-      onLocation(buildLocation(position));
-    },
-  );
+        onLocation(buildLocation(position));
+      },
+    );
+  } catch (error) {
+    const mappedError = error instanceof LocationAdapterError
+      ? error
+      : mapLocationError(error);
+
+    if (shouldAttemptNavigatorFallback(mappedError)) {
+      return watchNavigatorLocation({
+        onError,
+        onLocation,
+        options,
+      });
+    }
+
+    onError(mappedError);
+    return null;
+  }
 };
 
 export const locationAdapter: LocationAdapter = {
   clearWatch: watchId => {
+    if (typeof watchId === 'number' && isNavigatorGeolocationAvailable()) {
+      navigator.geolocation.clearWatch(watchId);
+      return;
+    }
+
     void Geolocation.clearWatch({ id: String(watchId) });
   },
   getCurrentLocation: options => getLocationWithRetry(options),

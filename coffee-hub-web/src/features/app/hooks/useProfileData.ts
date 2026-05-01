@@ -3,12 +3,16 @@ import type { CustomerProfile } from '../types';
 import { getCurrentUserIdToken } from '../../../services/auth/authService';
 import { syncUserProfileRequest } from '../../../services/api/userService';
 import { subscribeToUserProfile } from '../../../services/firebase/profileService';
-import { storageAdapter } from '../../../services/platform/storageAdapter';
 import {
   EMPTY_PROFILE,
   ensureProfileAddresses,
   normalizeNotificationSettings,
 } from '../lib/firestoreMappers';
+import {
+  readCachedProfilePayload,
+  removeCachedProfilePayload,
+  writeCachedProfilePayload,
+} from '../lib/profileCache';
 import type { UserRole } from '../types';
 
 export type ProfileData = {
@@ -17,11 +21,6 @@ export type ProfileData = {
   profileSaved: CustomerProfile;
   profileSyncError: string;
 };
-
-const PROFILE_CACHE_KEY_PREFIX = 'coffee_hub_profile_cache';
-
-const getProfileCacheKey = (currentUserId: string) =>
-  `${PROFILE_CACHE_KEY_PREFIX}:${currentUserId}`;
 
 export const useProfileData = ({
   currentUserId,
@@ -50,7 +49,6 @@ export const useProfileData = ({
     phone: currentUserPhone,
     role: currentUserRole,
   }), [currentUserId, currentUserName, currentUserPhone, currentUserRole]);
-  const profileCacheKey = currentUserId ? getProfileCacheKey(currentUserId) : '';
 
   const mergeProfileWithFallback = useCallback((profile: Partial<CustomerProfile>): CustomerProfile => {
     const addresses = ensureProfileAddresses(
@@ -97,7 +95,10 @@ export const useProfileData = ({
       return;
     }
 
-    const cachedProfile = storageAdapter.read(profileCacheKey);
+    const cachedProfile = readCachedProfilePayload({
+      currentUserId,
+      currentUserPhone,
+    });
     if (!cachedProfile) {
       setProfileSaved(fallbackProfile);
       return;
@@ -108,16 +109,19 @@ export const useProfileData = ({
       setProfileSaved(mergeProfileWithFallback(parsedProfile));
     } catch (error) {
       console.warn('Ignoring invalid cached profile payload.', error);
-      storageAdapter.remove(profileCacheKey);
+      removeCachedProfilePayload({
+        currentUserId,
+        currentUserPhone,
+      });
       setProfileSaved(fallbackProfile);
     }
   }, [
     currentUserId,
+    currentUserPhone,
     fallbackProfile,
     isAuthReady,
     isLoggedIn,
     mergeProfileWithFallback,
-    profileCacheKey,
   ]);
 
   useEffect(() => {
@@ -133,7 +137,11 @@ export const useProfileData = ({
         const nextProfile = mergeProfileWithFallback(profile);
         setProfileSaved(nextProfile);
         setHasProfileSnapshot(true);
-        storageAdapter.write(profileCacheKey, JSON.stringify(nextProfile));
+        writeCachedProfilePayload({
+          currentUserId,
+          currentUserPhone: nextProfile.phone || currentUserPhone,
+          serializedProfile: JSON.stringify(nextProfile),
+        });
       },
       error => {
         console.error('Failed to load user profile', error);
@@ -153,7 +161,6 @@ export const useProfileData = ({
     isAuthReady,
     isLoggedIn,
     mergeProfileWithFallback,
-    profileCacheKey,
   ]);
 
   useEffect(() => {
@@ -186,7 +193,11 @@ export const useProfileData = ({
 
         const nextProfile = mergeProfileWithFallback(response.profile);
         setProfileSaved(nextProfile);
-        storageAdapter.write(profileCacheKey, JSON.stringify(nextProfile));
+        writeCachedProfilePayload({
+          currentUserId,
+          currentUserPhone: nextProfile.phone || currentUserPhone,
+          serializedProfile: JSON.stringify(nextProfile),
+        });
       } catch (error) {
         console.error('Failed to sync Firebase user profile', error);
         if (!isCancelled) {
@@ -212,7 +223,6 @@ export const useProfileData = ({
     isAuthReady,
     isLoggedIn,
     mergeProfileWithFallback,
-    profileCacheKey,
   ]);
 
   return {

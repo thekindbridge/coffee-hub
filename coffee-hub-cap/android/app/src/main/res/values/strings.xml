@@ -4,5 +4,4 @@
     <string name="title_activity_main">Coffee Hub</string>
     <string name="package_name">com.coffeehub.app</string>
     <string name="custom_url_scheme">com.coffeehub.app</string>
-    <string name="default_notification_channel_id">customer_channel</string>
 </resources>

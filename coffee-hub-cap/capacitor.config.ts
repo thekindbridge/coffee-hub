@@ -1,5 +1,3 @@
-/// <reference types="@capacitor/local-notifications" />
-/// <reference types="@capacitor/push-notifications" />
 /// <reference types="@capacitor/geolocation" />
 
 import type { CapacitorConfig } from '@capacitor/cli';
@@ -35,14 +33,6 @@ const config: CapacitorConfig = {
     ],
   },
   plugins: {
-    PushNotifications: {
-      presentationOptions: [],
-    },
-    LocalNotifications: {
-      smallIcon: 'ic_launcher',
-      iconColor: '#c08a5d',
-      sound: 'customer.mp3',
-    },
     SplashScreen: {
       launchShowDuration: 900,
       launchAutoHide: true,

@@ -51,10 +51,9 @@ export const MenuItemCard = memo(function MenuItemCard({
   <motion.article
     whileHover={isShopOpen ? { y: -3, scale: 1.01 } : undefined}
     whileTap={isShopOpen ? { scale: 0.985 } : undefined}
-    className={`coffee-surface group flex h-full flex-col overflow-hidden rounded-[22px] ${
+    className={`coffee-surface group flex h-full min-h-[285px] flex-col overflow-hidden rounded-[22px] ${
       isShopOpen ? '' : 'border-[#f4c16e]/12'
     }`}
-    style={{ containIntrinsicSize: '348px', contentVisibility: 'auto' }}
   >
     <div className="relative aspect-[4/3] overflow-hidden">
       {!isImageLoaded && !hasImageError && optimizedImageUrl && (

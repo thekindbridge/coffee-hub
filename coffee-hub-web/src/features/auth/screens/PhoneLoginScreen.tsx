@@ -161,10 +161,10 @@ export const PhoneLoginScreen = () => {
                       +91
                     </span>
                     <input
-                      type="tel"
+                      type="text"
                       inputMode="numeric"
                       pattern="[0-9]*"
-                      autoComplete="tel"
+                      autoComplete="tel-national"
                       autoFocus
                       className="coffee-input pl-16"
                       value={stripPhoneCountryCode(phoneNumber)}

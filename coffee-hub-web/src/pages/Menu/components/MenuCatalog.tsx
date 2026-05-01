@@ -77,7 +77,7 @@ export const MenuCatalog = memo(function MenuCatalog({
 
   return (
   <>
-    <div className="mt-5 grid grid-cols-2 items-start gap-3 pb-28 sm:gap-4 sm:pb-32">
+    <div className="mt-5 grid grid-cols-2 gap-3 pb-28 sm:gap-4 sm:pb-32">
       {isMenuLoading
         ? [...Array(8)].map((_, index) => <MenuSkeletonCard key={index} />)
         : visibleMenu.map(item => (

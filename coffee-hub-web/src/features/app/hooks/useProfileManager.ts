@@ -6,9 +6,11 @@ import type {
 import {
   buildProfileDraft,
   EMPTY_PROFILE,
+  ensureProfileAddresses,
   getPrimaryProfileAddress,
   isMeaningfulProfileName,
 } from '../lib/firestoreMappers';
+import { writeCachedProfile } from '../lib/profileCache';
 import type { DeliveryAgent } from '../../../types';
 import {
   saveUserNotificationSettings,
@@ -106,6 +108,12 @@ export const useProfileManager = ({
 
     try {
       const primaryAddress = getPrimaryProfileAddress(profileDraft);
+      const nextAddresses = ensureProfileAddresses(profileDraft.addresses)
+        .map(address => address.trim());
+      if (primaryAddress) {
+        nextAddresses[0] = primaryAddress;
+      }
+
       await saveUserProfile({
         currentUserId,
         currentUserPhone,
@@ -123,6 +131,21 @@ export const useProfileManager = ({
         ...previousDraft,
         address: primaryAddress,
       }));
+      writeCachedProfile({
+        currentUserId,
+        currentUserPhone,
+        profile: {
+          ...profileDraft,
+          address: primaryAddress,
+          addresses: nextAddresses,
+          adminLocation: profileDraft.adminLocation.trim(),
+          email: profileDraft.email.trim(),
+          name: profileDraft.name.trim(),
+          phone: currentUserPhone,
+          role: profileSaved.role,
+          uid: currentUserId,
+        },
+      });
       setIsProfileSavedToastVisible(true);
     } catch (error) {
       console.error('Failed to save profile', error);
@@ -155,6 +178,17 @@ export const useProfileManager = ({
           role: profileSaved.role,
         },
         settings,
+      });
+      writeCachedProfile({
+        currentUserId,
+        currentUserPhone,
+        profile: {
+          ...profileDraft,
+          notificationSettings: settings,
+          phone: currentUserPhone,
+          role: profileSaved.role,
+          uid: currentUserId,
+        },
       });
     } catch (error) {
       console.error('Failed to save notification settings', error);
