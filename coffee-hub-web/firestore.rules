@@ -1354,6 +1354,14 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    match /push_tokens/{tokenId} {
+      allow read: if
+        isAuthenticated() &&
+        resource.data.userId is string &&
+        resource.data.userId == request.auth.uid;
+      allow create, update, delete: if false;
+    }
+
     match /notifications/{notificationId} {
       allow read: if isOwner(resource.data.userId);
       allow create: if false;

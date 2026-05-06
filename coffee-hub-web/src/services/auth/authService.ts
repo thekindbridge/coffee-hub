@@ -4,8 +4,16 @@ import { formatPhoneForDisplay, normalizePhoneNumber, safeNormalizePhoneNumber }
 import { resolveUserRole } from '../../../shared/userRole';
 import type { UserRole } from '../../features/app/types';
 import { reserveOtpRequest, OtpControlError } from '../api/otpControlService';
+import { registerPushToken } from '../api/notificationsService';
 import { syncUserProfileRequest } from '../api/userService';
 import { auth, db } from '../firebase';
+import {
+  clearCachedPushToken,
+  getCachedPushToken,
+  getPushRegistrationPlatform,
+  getPushRuntime,
+  inferDeviceName,
+} from '../../notifications/push/pushTokenService';
 import {
   getMainAdminPhone,
   getUserRole,
@@ -375,6 +383,27 @@ export const getCurrentUserIdToken = async (forceRefresh = false) => {
 };
 
 export const logoutCurrentUser = async () => {
+  const currentUser = auth.currentUser;
+  const cachedPushToken = getCachedPushToken();
+
+  if (currentUser && cachedPushToken) {
+    try {
+      await registerPushToken(
+        {
+          deviceName: inferDeviceName(getPushRuntime()),
+          permission: 'default',
+          platform: getPushRegistrationPlatform(getPushRuntime()),
+          token: cachedPushToken,
+          tokenType: 'fcm',
+        },
+        await currentUser.getIdToken(),
+      );
+      clearCachedPushToken();
+    } catch (error) {
+      console.error('Failed to deactivate the current push token during logout', error);
+    }
+  }
+
   clearPendingPhoneVerification();
   clearOtpControlGrant();
   await signOut(auth);

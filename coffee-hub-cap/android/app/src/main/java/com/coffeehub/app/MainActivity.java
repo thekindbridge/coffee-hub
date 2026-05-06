@@ -40,7 +40,8 @@ public class MainActivity extends BridgeActivity {
         settings.setCacheMode(WebSettings.LOAD_DEFAULT);
         settings.setLoadWithOverviewMode(true);
         settings.setLoadsImagesAutomatically(true);
-        settings.setMediaPlaybackRequiresUserGesture(true);
+        // Foreground push sounds are played from the trusted in-app web bundle.
+        settings.setMediaPlaybackRequiresUserGesture(false);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         settings.setSupportMultipleWindows(false);
         settings.setTextZoom(100);
@@ -56,6 +57,7 @@ public class MainActivity extends BridgeActivity {
             webView.setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_BOUND, true);
         }
 
+        NotificationChannelHelper.ensureChannels(this);
         cookieManager.setAcceptCookie(true);
         cookieManager.setAcceptThirdPartyCookies(webView, true);
         cookieManager.flush();

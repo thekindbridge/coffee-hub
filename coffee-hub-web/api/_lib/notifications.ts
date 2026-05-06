@@ -18,12 +18,20 @@ export type StoredNotificationSettings = {
 };
 
 type NotificationTokenType = 'expo' | 'fcm';
+export type NotificationTokenPlatform = 'android' | 'web';
+
+type RecipientPushToken = {
+  docId: string;
+  platform: NotificationTokenPlatform;
+  token: string;
+  tokenType: NotificationTokenType;
+};
 
 type NotificationRecipient = {
-  fcmToken?: string;
-  pushToken?: string;
+  phone?: string;
   role: NotificationRecipientRole;
   settings: StoredNotificationSettings;
+  tokens: RecipientPushToken[];
   userDocId?: string;
   agentDocId?: string;
 };
@@ -62,6 +70,7 @@ const COLLAPSE_DELAY_MS = 20000;
 const EXPO_PUSH_API_URL = 'https://exp.host/--/api/v2/push/send';
 const EXPO_PUSH_CHUNK_SIZE = 100;
 const FCM_TTL_MS = 60 * 60 * 1000;
+const PUSH_TOKEN_COLLECTION = 'push_tokens';
 const buildOrderTrackingUrl = (orderId: string) => `/?tab=tracking&orderId=${encodeURIComponent(orderId)}`;
 const NOTIFICATIONS_COLLECTION = 'notifications';
 
@@ -102,33 +111,114 @@ const normalizeNotificationSettings = (value: unknown): StoredNotificationSettin
 
 const normalizeUrl = (value: string) => (value.startsWith('/') ? value : `/${value}`);
 
-const buildRecipientFromUserSnapshot = (
-  snapshot: QueryDocumentSnapshot,
-): NotificationRecipient => {
-  const data = snapshot.data() as Record<string, unknown>;
+const normalizeNotificationTokenType = (value: unknown): NotificationTokenType => (
+  value === 'expo'
+    ? 'expo'
+    : 'fcm'
+);
+
+const normalizeNotificationTokenPlatform = (
+  value: unknown,
+): NotificationTokenPlatform => (
+  value === 'android'
+    ? 'android'
+    : 'web'
+);
+
+const buildPushTokenDocumentId = (token: string) =>
+  Buffer.from(token.trim(), 'utf8').toString('base64url');
+
+const buildLegacyRecipientTokens = (
+  data: Record<string, unknown>,
+): RecipientPushToken[] => {
+  const legacyTokens: RecipientPushToken[] = [];
   const fcmToken = typeof data.fcmToken === 'string' ? data.fcmToken.trim() : '';
   const pushToken = typeof data.pushToken === 'string' ? data.pushToken.trim() : '';
 
+  if (fcmToken) {
+    legacyTokens.push({
+      docId: buildPushTokenDocumentId(fcmToken),
+      platform: 'android',
+      token: fcmToken,
+      tokenType: 'fcm',
+    });
+  }
+
+  if (pushToken && isExpoPushToken(pushToken)) {
+    legacyTokens.push({
+      docId: buildPushTokenDocumentId(pushToken),
+      platform: 'web',
+      token: pushToken,
+      tokenType: 'expo',
+    });
+  }
+
+  return legacyTokens;
+};
+
+const mergeRecipientTokens = (
+  ...tokenGroups: RecipientPushToken[][]
+): RecipientPushToken[] => Array.from(
+  tokenGroups
+    .flat()
+    .reduce((accumulator, token) => {
+      const key = `${token.tokenType}:${token.token}`;
+      if (!accumulator.has(key)) {
+        accumulator.set(key, token);
+      }
+      return accumulator;
+    }, new Map<string, RecipientPushToken>())
+    .values(),
+);
+
+const mapPushTokenSnapshot = (
+  snapshot: QueryDocumentSnapshot,
+): RecipientPushToken | null => {
+  const data = snapshot.data() as Record<string, unknown>;
+  if (data.active === false) {
+    return null;
+  }
+
+  const token = typeof data.token === 'string' ? data.token.trim() : '';
+  if (!token) {
+    return null;
+  }
+
   return {
-    ...(fcmToken ? { fcmToken } : {}),
-    ...(pushToken ? { pushToken } : {}),
+    docId: snapshot.id,
+    platform: normalizeNotificationTokenPlatform(data.platform),
+    token,
+    tokenType: normalizeNotificationTokenType(data.tokenType),
+  };
+};
+
+const buildRecipientFromUserSnapshot = (
+  snapshot: QueryDocumentSnapshot,
+  registeredTokens: RecipientPushToken[] = [],
+): NotificationRecipient => {
+  const data = snapshot.data() as Record<string, unknown>;
+
+  return {
+    phone: safeNormalizePhoneNumber(`${data.phone || ''}`.trim()),
     role: normalizeRecipientRole(data.role),
     settings: normalizeNotificationSettings(data.notificationSettings),
+    tokens: mergeRecipientTokens(buildLegacyRecipientTokens(data), registeredTokens),
     userDocId: snapshot.id,
   };
 };
 
 const buildRecipientFromAgentSnapshot = (
   snapshot: QueryDocumentSnapshot,
+  registeredTokens: RecipientPushToken[] = [],
   userDocId = '',
 ): NotificationRecipient => {
   const data = snapshot.data() as Record<string, unknown>;
-  const fcmToken = typeof data.fcmToken === 'string' ? data.fcmToken.trim() : '';
 
   return {
-    ...(fcmToken ? { fcmToken } : {}),
+    phone: safeNormalizePhoneNumber(`${data.phone || snapshot.id}`.trim()),
     role: 'delivery_agent',
     settings: normalizeNotificationSettings(data.notificationSettings),
+    tokens: mergeRecipientTokens(buildLegacyRecipientTokens(data), registeredTokens),
     agentDocId: snapshot.id,
     ...(userDocId ? { userDocId } : {}),
   };
@@ -196,39 +286,135 @@ const chunkTargets = <T>(items: T[], size: number) => {
   return chunks;
 };
 
-const clearInvalidRecipientToken = async (
+const loadPushTokensForUser = async (
   adminDb: Firestore,
-  recipient: NotificationRecipient,
-  tokenType: NotificationTokenType,
+  {
+    phone,
+    userId,
+  }: {
+    phone?: string;
+    userId?: string;
+  },
 ) => {
-  const updates: Promise<unknown>[] = [];
-  const tokenField = tokenType === 'expo' ? 'pushToken' : 'fcmToken';
-  const tokenTimestampField = tokenType === 'expo' ? 'pushTokenUpdatedAt' : 'fcmTokenUpdatedAt';
+  const tasks: Array<Promise<{ docs: QueryDocumentSnapshot[] }>> = [];
 
-  if (recipient.userDocId) {
-    updates.push(
-      adminDb.collection('users').doc(recipient.userDocId).set(
-        {
-          [tokenField]: FieldValue.delete(),
-          [tokenTimestampField]: FieldValue.serverTimestamp(),
-          updatedAt: FieldValue.serverTimestamp(),
-        },
-        { merge: true },
-      ),
+  if (userId) {
+    tasks.push(
+      adminDb.collection(PUSH_TOKEN_COLLECTION)
+        .where('userId', '==', userId)
+        .get(),
     );
   }
 
-  if (recipient.agentDocId && tokenType === 'fcm') {
-    updates.push(
-      adminDb.collection('agents').doc(recipient.agentDocId).set(
-        {
-          fcmToken: FieldValue.delete(),
-          fcmTokenUpdatedAt: FieldValue.serverTimestamp(),
-          updatedAt: FieldValue.serverTimestamp(),
-        },
-        { merge: true },
-      ),
+  if (phone) {
+    tasks.push(
+      adminDb.collection(PUSH_TOKEN_COLLECTION)
+        .where('phone', '==', phone)
+        .get(),
     );
+  }
+
+  if (tasks.length === 0) {
+    return [] as RecipientPushToken[];
+  }
+
+  const snapshots = await Promise.all(tasks);
+
+  return mergeRecipientTokens(
+    ...snapshots.map(snapshot => (
+      (snapshot as { docs: QueryDocumentSnapshot[] }).docs
+        .map(mapPushTokenSnapshot)
+        .filter((token): token is RecipientPushToken => Boolean(token))
+    )),
+  );
+};
+
+type NotificationTarget = {
+  docId: string;
+  platform: NotificationTokenPlatform;
+  recipient: NotificationRecipient;
+  token: string;
+  tokenType: NotificationTokenType;
+};
+
+const clearLegacyTokenReference = async (
+  adminDb: Firestore,
+  {
+    docId,
+    collectionName,
+    token,
+    tokenType,
+  }: {
+    collectionName: 'agents' | 'users';
+    docId: string;
+    token: string;
+    tokenType: NotificationTokenType;
+  },
+) => {
+  if (!docId) {
+    return;
+  }
+
+  const tokenField = tokenType === 'expo' ? 'pushToken' : 'fcmToken';
+  const tokenTimestampField = tokenType === 'expo'
+    ? 'pushTokenUpdatedAt'
+    : 'fcmTokenUpdatedAt';
+  const docRef = adminDb.collection(collectionName).doc(docId);
+  const snapshot = await docRef.get();
+  if (!snapshot.exists) {
+    return;
+  }
+
+  const currentValue = typeof snapshot.data()?.[tokenField] === 'string'
+    ? snapshot.data()?.[tokenField].trim()
+    : '';
+  if (currentValue !== token) {
+    return;
+  }
+
+  await docRef.set(
+    {
+      [tokenField]: FieldValue.delete(),
+      [tokenTimestampField]: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    },
+    { merge: true },
+  );
+};
+
+const clearInvalidRecipientToken = async (
+  adminDb: Firestore,
+  target: NotificationTarget,
+  errorCode = '',
+) => {
+  const updates: Promise<unknown>[] = [
+    adminDb.collection(PUSH_TOKEN_COLLECTION).doc(target.docId).set(
+      {
+        active: false,
+        invalidatedAt: FieldValue.serverTimestamp(),
+        lastErrorCode: errorCode || FieldValue.delete(),
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    ),
+  ];
+
+  if (target.recipient.userDocId) {
+    updates.push(clearLegacyTokenReference(adminDb, {
+      collectionName: 'users',
+      docId: target.recipient.userDocId,
+      token: target.token,
+      tokenType: target.tokenType,
+    }));
+  }
+
+  if (target.recipient.agentDocId && target.tokenType === 'fcm') {
+    updates.push(clearLegacyTokenReference(adminDb, {
+      collectionName: 'agents',
+      docId: target.recipient.agentDocId,
+      token: target.token,
+      tokenType: 'fcm',
+    }));
   }
 
   await Promise.all(updates);
@@ -237,14 +423,18 @@ const clearInvalidRecipientToken = async (
 export const syncNotificationRegistration = async (
   adminDb: Firestore,
   {
+    deviceName = '',
     phone,
     permission,
+    platform = 'web',
     token,
     tokenType = 'fcm',
     userId,
   }: {
+    deviceName?: string;
     phone: string;
     permission: 'default' | 'denied' | 'granted';
+    platform?: NotificationTokenPlatform;
     token: string;
     tokenType?: NotificationTokenType;
     userId: string;
@@ -252,6 +442,8 @@ export const syncNotificationRegistration = async (
 ) => {
   const normalizedPhone = safeNormalizePhoneNumber(phone);
   const normalizedToken = token.trim();
+  const normalizedDeviceName = deviceName.trim().slice(0, 160);
+  const normalizedPlatform = normalizeNotificationTokenPlatform(platform);
   const tokenField = tokenType === 'expo' ? 'pushToken' : 'fcmToken';
   const tokenTimestampField = tokenType === 'expo'
     ? 'pushTokenUpdatedAt'
@@ -264,44 +456,11 @@ export const syncNotificationRegistration = async (
   const role = normalizedPhone
     ? await getUserRole(adminDb, normalizedPhone)
     : 'customer';
+  const notificationRole = normalizeRecipientRole(role);
 
   const agentSnapshot = normalizedPhone
     ? await adminDb.collection('agents').doc(normalizedPhone).get()
     : null;
-
-  if (normalizedToken) {
-    const [duplicateUsers, duplicateAgents] = await Promise.all([
-      adminDb.collection('users').where(tokenField, '==', normalizedToken).get(),
-      tokenType === 'fcm'
-        ? adminDb.collection('agents').where('fcmToken', '==', normalizedToken).get()
-        : Promise.resolve(null),
-    ]);
-
-    await Promise.all([
-      ...duplicateUsers.docs
-        .filter(snapshot => snapshot.id !== userId)
-        .map(snapshot =>
-          snapshot.ref.set(
-            {
-              [tokenField]: FieldValue.delete(),
-              [tokenTimestampField]: FieldValue.serverTimestamp(),
-              updatedAt: FieldValue.serverTimestamp(),
-            },
-            { merge: true },
-          )),
-      ...(duplicateAgents?.docs || [])
-        .filter(snapshot => snapshot.id !== normalizedPhone)
-        .map(snapshot =>
-          snapshot.ref.set(
-            {
-              fcmToken: FieldValue.delete(),
-              fcmTokenUpdatedAt: FieldValue.serverTimestamp(),
-              updatedAt: FieldValue.serverTimestamp(),
-            },
-            { merge: true },
-          )),
-    ]);
-  }
 
   const userUpdate: Record<string, unknown> = {
     notificationPermission: permission,
@@ -334,6 +493,43 @@ export const syncNotificationRegistration = async (
     );
   }
 
+  if (normalizedToken) {
+    const tokenRef = adminDb.collection(PUSH_TOKEN_COLLECTION).doc(
+      buildPushTokenDocumentId(normalizedToken),
+    );
+
+    await adminDb.runTransaction(async transaction => {
+      const tokenSnapshot = await transaction.get(tokenRef);
+      const basePayload: Record<string, unknown> = {
+        active: permission === 'granted',
+        deviceName: normalizedDeviceName || (
+          typeof tokenSnapshot.data()?.deviceName === 'string'
+            ? tokenSnapshot.data()?.deviceName
+            : ''
+        ),
+        phone: normalizedPhone,
+        platform: normalizedPlatform,
+        role: notificationRole,
+        token: normalizedToken,
+        tokenType,
+        updatedAt: FieldValue.serverTimestamp(),
+        userId,
+      };
+
+      if (permission === 'granted') {
+        basePayload.createdAt = tokenSnapshot.exists
+          ? tokenSnapshot.data()?.createdAt || FieldValue.serverTimestamp()
+          : FieldValue.serverTimestamp();
+        basePayload.invalidatedAt = FieldValue.delete();
+        basePayload.lastErrorCode = FieldValue.delete();
+      } else {
+        basePayload.invalidatedAt = FieldValue.serverTimestamp();
+      }
+
+      transaction.set(tokenRef, basePayload, { merge: true });
+    });
+  }
+
   return {
     role,
     settings: existingSettings,
@@ -349,7 +545,17 @@ export const getCustomerRecipient = async (
     return null;
   }
 
-  return buildRecipientFromUserSnapshot(snapshot as QueryDocumentSnapshot);
+  const data = snapshot.data() as Record<string, unknown>;
+  const phone = safeNormalizePhoneNumber(`${data.phone || ''}`.trim());
+  const registeredTokens = await loadPushTokensForUser(adminDb, {
+    phone,
+    userId: snapshot.id,
+  });
+
+  return buildRecipientFromUserSnapshot(
+    snapshot as QueryDocumentSnapshot,
+    registeredTokens,
+  );
 };
 
 export const getAgentRecipient = async (
@@ -371,9 +577,14 @@ export const getAgentRecipient = async (
   const userSnapshot = !agentUserId && agentPhone
     ? await findUserSnapshotByPhone(adminDb, agentPhone)
     : null;
+  const registeredTokens = await loadPushTokensForUser(adminDb, {
+    phone: agentPhone,
+    userId: agentUserId || userSnapshot?.id || '',
+  });
 
   return buildRecipientFromAgentSnapshot(
     snapshot as QueryDocumentSnapshot,
+    registeredTokens,
     agentUserId || userSnapshot?.id || '',
   );
 };
@@ -386,38 +597,32 @@ export const getAdminRecipients = async (
     adminPhones.map(phone => findUserSnapshotByPhone(adminDb, phone)),
   );
 
-  return snapshots
+  const userSnapshots = snapshots
     .filter((snapshot): snapshot is QueryDocumentSnapshot => Boolean(snapshot))
-    .map(buildRecipientFromUserSnapshot)
-    .filter((recipient): recipient is NotificationRecipient => Boolean(recipient));
-};
+    .map(snapshot => snapshot as QueryDocumentSnapshot);
 
-type NotificationTarget = {
-  recipient: NotificationRecipient;
-  token: string;
-  tokenType: NotificationTokenType;
+  return Promise.all(
+    userSnapshots.map(async snapshot => {
+      const data = snapshot.data() as Record<string, unknown>;
+      const phone = safeNormalizePhoneNumber(`${data.phone || ''}`.trim());
+      const registeredTokens = await loadPushTokensForUser(adminDb, {
+        phone,
+        userId: snapshot.id,
+      });
+
+      return buildRecipientFromUserSnapshot(snapshot, registeredTokens);
+    }),
+  );
 };
 
 const buildNotificationTargets = (recipient: NotificationRecipient): NotificationTarget[] => {
-  const targets: NotificationTarget[] = [];
-
-  if (recipient.fcmToken) {
-    targets.push({
-      recipient,
-      token: recipient.fcmToken,
-      tokenType: 'fcm',
-    });
-  }
-
-  if (recipient.pushToken && isExpoPushToken(recipient.pushToken)) {
-    targets.push({
-      recipient,
-      token: recipient.pushToken,
-      tokenType: 'expo',
-    });
-  }
-
-  return targets;
+  return recipient.tokens.map(token => ({
+    docId: token.docId,
+    platform: token.platform,
+    recipient,
+    token: token.token,
+    tokenType: token.tokenType,
+  }));
 };
 
 const buildStableHash = (value: string) => {
@@ -562,7 +767,7 @@ const sendExpoPushNotifications = async (
 
       if (target && isInvalidExpoTicketErrorCode(errorCode)) {
         cleanupTasks.push(
-          clearInvalidRecipientToken(adminDb, target.recipient, 'expo'),
+          clearInvalidRecipientToken(adminDb, target, errorCode),
         );
       }
     });
@@ -628,7 +833,7 @@ const sendFcmTargets = async (
 
       const errorCode = result.error?.code || '';
       if (isInvalidFcmTokenErrorCode(errorCode)) {
-        await clearInvalidRecipientToken(adminDb, batchTargets[index].recipient, 'fcm');
+        await clearInvalidRecipientToken(adminDb, batchTargets[index], errorCode);
         return;
       }
 
@@ -666,7 +871,7 @@ export const sendPushNotification = async (
         shouldDeliverToRecipient(recipient, content.preferenceKey),
       )
       .reduce((accumulator, recipient) => {
-        const key = recipient.userDocId || recipient.agentDocId || recipient.fcmToken || recipient.pushToken || `${recipient.role}-${accumulator.size}`;
+        const key = recipient.userDocId || recipient.agentDocId || recipient.phone || `${recipient.role}-${accumulator.size}`;
         if (!accumulator.has(key)) {
           accumulator.set(key, recipient);
         }
@@ -684,7 +889,18 @@ export const sendPushNotification = async (
   )
     .filter(result => result.shouldSend)
     .map(result => result.recipient);
-  const eligibleTargets = dispatchableRecipients.flatMap(buildNotificationTargets);
+  const eligibleTargets = Array.from(
+    dispatchableRecipients
+      .flatMap(buildNotificationTargets)
+      .reduce((accumulator, target) => {
+        const key = `${target.tokenType}:${target.token}`;
+        if (!accumulator.has(key)) {
+          accumulator.set(key, target);
+        }
+        return accumulator;
+      }, new Map<string, NotificationTarget>())
+      .values(),
+  );
 
   const fcmTargets = eligibleTargets.filter(target => target.tokenType === 'fcm');
   const expoTargets = eligibleTargets.filter(target => target.tokenType === 'expo');

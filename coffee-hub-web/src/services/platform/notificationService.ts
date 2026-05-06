@@ -6,6 +6,8 @@ import {
   PushNotifications,
   type PushNotificationSchema,
 } from '@capacitor/push-notifications';
+import type { AudioHandle } from './audioAdapter';
+import { audioAdapter } from './audioAdapter';
 import { notificationAdapter } from './notificationAdapter';
 import type { UserRole } from '../../features/app/types';
 
@@ -13,6 +15,7 @@ export type NotificationRole = 'admin' | 'customer' | 'delivery_agent';
 
 type NotificationRoleConfig = {
   channelId: string;
+  soundPath: string;
   sound: string;
   vibrationPattern: number[];
 };
@@ -21,19 +24,25 @@ const ROLE_CONFIGS: Record<NotificationRole, NotificationRoleConfig> = {
   admin: {
     channelId: 'admin_channel',
     sound: 'admin.mp3',
+    soundPath: '/sounds/admin.mp3',
     vibrationPattern: [200, 100, 200],
   },
   customer: {
     channelId: 'customer_channel',
     sound: 'customer.mp3',
+    soundPath: '/sounds/customer.mp3',
     vibrationPattern: [300],
   },
   delivery_agent: {
     channelId: 'agent_channel',
     sound: 'agent.mp3',
+    soundPath: '/sounds/agent.mp3',
     vibrationPattern: [100, 50, 100, 50, 200],
   },
 };
+
+const roleAudioHandles = new Map<NotificationRole, AudioHandle | null>();
+let notificationAudioQueue = Promise.resolve();
 
 const isAndroid = () => Capacitor.getPlatform() === 'android';
 
@@ -137,6 +146,17 @@ export const ensureNativeNotificationChannels = async () => {
   );
 };
 
+const getRoleAudioHandle = (role: NotificationRole) => {
+  if (!roleAudioHandles.has(role)) {
+    roleAudioHandles.set(
+      role,
+      audioAdapter.create(getNotificationRoleConfig(role).soundPath),
+    );
+  }
+
+  return roleAudioHandles.get(role) || null;
+};
+
 export const playRoleNotificationEffect = async ({
   body,
   role,
@@ -154,14 +174,24 @@ export const playRoleNotificationEffect = async ({
     if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
       navigator.vibrate(getNotificationRoleConfig(role).vibrationPattern);
     }
-
-    return;
   }
 
-  notificationAdapter.show({
-    body,
-    title,
-  });
+  const audioHandle = getRoleAudioHandle(role);
+  if (audioHandle) {
+    notificationAudioQueue = notificationAudioQueue
+      .catch(() => undefined)
+      .then(async () => {
+        audioHandle.reset();
+        await audioHandle.play().catch(() => undefined);
+      });
+  }
+
+  if (!isNativeAndroidNotificationRuntime()) {
+    notificationAdapter.show({
+      body,
+      title,
+    });
+  }
 };
 
 export const subscribeToNativePushNotifications = async ({

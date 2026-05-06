@@ -17,37 +17,15 @@ import { Loader } from '../components/ui/Loader';
 import { NetworkStatusBanner } from '../components/common/NetworkStatusBanner';
 import { lazyNamed } from '../utils/lazyNamed';
 import { AppRouter } from './router/AppRouter';
+import { normalizeAppNavigationUrl } from '../notifications/push/notificationRouter';
 import { storageAdapter } from '../services/platform/storageAdapter';
 
 const NOTIFICATION_PERMISSION_REQUESTED_KEY = 'notification_permission_requested';
-const COFFEE_HUB_APP_HOST = 'coffee-hub-inkollu.vercel.app';
 
 const getNotificationPermissionRequestedKey = (currentUserId: string) =>
   currentUserId
     ? `${NOTIFICATION_PERMISSION_REQUESTED_KEY}:${currentUserId}`
     : NOTIFICATION_PERMISSION_REQUESTED_KEY;
-
-const normalizeNativeAppUrl = (rawUrl: string) => {
-  const trimmedUrl = rawUrl.trim();
-  if (!trimmedUrl) {
-    return '';
-  }
-
-  if (trimmedUrl.startsWith('/')) {
-    return trimmedUrl;
-  }
-
-  try {
-    const parsedUrl = new URL(trimmedUrl);
-    if (parsedUrl.protocol === 'https:' && parsedUrl.host === COFFEE_HUB_APP_HOST) {
-      return `${parsedUrl.pathname}${parsedUrl.search}${parsedUrl.hash}` || '/';
-    }
-  } catch {
-    return '';
-  }
-
-  return '';
-};
 
 const AuthLoadingPage = lazyNamed(
   () => import('../pages/AuthLoading/AuthLoadingPage'),
@@ -80,7 +58,7 @@ export default function App() {
 
     let isDisposed = false;
     const navigateToNativeAppUrl = (nextUrl: string) => {
-      const normalizedUrl = normalizeNativeAppUrl(nextUrl);
+      const normalizedUrl = normalizeAppNavigationUrl(nextUrl, '');
       if (!normalizedUrl) {
         return;
       }

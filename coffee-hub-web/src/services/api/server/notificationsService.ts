@@ -3,6 +3,7 @@ import type { VercelRequest } from '@vercel/node';
 import { ApiError } from '../../../../api/_lib/errors.js';
 import {
   flushQueuedNotifications,
+  type NotificationTokenPlatform,
   syncNotificationRegistration,
 } from '../../../../api/_lib/notifications.js';
 import {
@@ -27,13 +28,21 @@ const parseRegistrationBody = (body: unknown) => {
     ? payload.token.trim()
     : '';
   const tokenType: 'expo' | 'fcm' = payload.tokenType === 'expo' ? 'expo' : 'fcm';
+  const platform: NotificationTokenPlatform = payload.platform === 'android'
+    ? 'android'
+    : 'web';
+  const deviceName = typeof payload.deviceName === 'string'
+    ? payload.deviceName.trim().slice(0, 160)
+    : '';
 
   if (!permission || !['default', 'denied', 'granted'].includes(permission)) {
     throw new ApiError(400, 'permission must be default, denied, or granted.');
   }
 
   return {
+    deviceName,
     permission: permission as 'default' | 'denied' | 'granted',
+    platform,
     token,
     tokenType,
   };
@@ -62,12 +71,20 @@ const isAuthorizedCronRequest = (request: VercelRequest) => {
 export const registerNotificationTokenResponse = async (
   request: VercelRequest,
 ): Promise<ApiServiceResponse> => {
-  const { permission, token, tokenType } = parseRegistrationBody(request.body);
+  const {
+    deviceName,
+    permission,
+    platform,
+    token,
+    tokenType,
+  } = parseRegistrationBody(request.body);
   const resolvedUser = await requireUserRequest(request);
 
   await syncNotificationRegistration(getServerDb(), {
+    deviceName,
     permission,
     phone: resolvedUser.phone || '',
+    platform,
     token,
     tokenType,
     userId: resolvedUser.uid,
