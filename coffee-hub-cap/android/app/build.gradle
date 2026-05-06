@@ -1,5 +1,18 @@
 apply plugin: 'com.android.application'
 
+def releaseStoreFile = (findProperty("coffeeHub.release.storeFile") ?: System.getenv("COFFEE_HUB_RELEASE_STORE_FILE"))?.toString()?.trim()
+def releaseStorePassword = (findProperty("coffeeHub.release.storePassword") ?: System.getenv("COFFEE_HUB_RELEASE_STORE_PASSWORD"))?.toString()?.trim()
+def releaseKeyAlias = (findProperty("coffeeHub.release.keyAlias") ?: System.getenv("COFFEE_HUB_RELEASE_KEY_ALIAS"))?.toString()?.trim()
+def releaseKeyPassword = (findProperty("coffeeHub.release.keyPassword") ?: System.getenv("COFFEE_HUB_RELEASE_KEY_PASSWORD"))?.toString()?.trim()
+def hasReleaseSigningConfig =
+    releaseStoreFile &&
+    releaseStorePassword &&
+    releaseKeyAlias &&
+    releaseKeyPassword
+
+def enableMinifyInRelease = (findProperty('coffeeHub.release.minify') ?: 'false').toString().toBoolean()
+def enableShrinkResourcesInRelease = (findProperty('coffeeHub.release.shrinkResources') ?: 'false').toString().toBoolean()
+
 android {
     namespace = "com.coffeehub.app"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -16,9 +29,24 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        if (hasReleaseSigningConfig) {
+            release {
+                storeFile file(releaseStoreFile)
+                storePassword releaseStorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
+            }
+        }
+    }
     buildTypes {
         release {
-            minifyEnabled false
+            if (hasReleaseSigningConfig) {
+                signingConfig = signingConfigs.release
+            }
+            debuggable = false
+            minifyEnabled = enableMinifyInRelease
+            shrinkResources = enableMinifyInRelease && enableShrinkResourcesInRelease
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }

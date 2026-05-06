@@ -328,6 +328,15 @@ service cloud.firestore {
       );
     }
 
+    function canReadOrderScopedDocument(orderId) {
+      return exists(/databases/$(database)/documents/orders/$(orderId)) &&
+        (
+          isAdmin() ||
+          isOwner(get(/databases/$(database)/documents/orders/$(orderId)).data.userId) ||
+          isAssignedAgentForOrder(get(/databases/$(database)/documents/orders/$(orderId)).data)
+        );
+    }
+
     function hasAssignedAgentIdentity(data) {
       return (
         isNonEmptyString(data.assignedAgentId, 120) ||
@@ -1268,7 +1277,13 @@ service cloud.firestore {
     }
 
     match /user_roles/{phone} {
-      allow read: if isAuthenticated();
+      allow read: if
+        isAuthenticated() &&
+        (
+          phone == requestPhone() ||
+          isAdmin() ||
+          isMainAdminPhoneRequest()
+        );
       allow create, update: if isMainAdminPhoneRequest() && isValidUserRoleAssignment(request.resource.data, phone);
       allow delete: if isMainAdminPhoneRequest();
     }
@@ -1314,7 +1329,7 @@ service cloud.firestore {
 
     // agents: delivery operations data, writable only by admins or the agent owner
     match /agents/{agentId} {
-      allow read: if true;
+      allow read: if isAuthenticated();
       allow create: if
         (isAdmin() && isValidAgentAccessRecord(request.resource.data, agentId)) ||
         isValidAgentSelfCreate(agentId);
@@ -1325,7 +1340,10 @@ service cloud.firestore {
     }
 
     match /delivery_sessions/{orderId} {
-      allow read: if isAuthenticated();
+      allow read: if
+        isAdmin() ||
+        isDeliverySessionAgent(resource.data) ||
+        canReadOrderScopedDocument(orderId);
       allow create, update: if
         (
           isAdmin() ||
@@ -1364,7 +1382,10 @@ service cloud.firestore {
     }
 
     match /agent_locations/{orderId} {
-      allow read: if isAuthenticated();
+      allow read: if
+        isAdmin() ||
+        isAgentDocumentOwner(resource.data.agentId) ||
+        canReadOrderScopedDocument(orderId);
       allow create, update: if
         (isAdmin() || isAgentDocumentOwner(request.resource.data.agentId)) &&
         isValidAgentLocationDocument(request.resource.data);
@@ -1372,7 +1393,7 @@ service cloud.firestore {
     }
 
     match /settings/{docId} {
-      allow read: if true;
+      allow read: if docId == 'shop' || isAdmin();
       allow create, update: if isAdmin();
       allow delete: if false;
     }

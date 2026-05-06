@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Coffee Hub Privacy Policy</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f7f3ee;
+        --card: #ffffff;
+        --ink: #201712;
+        --muted: #5b4a3f;
+        --accent: #8a4b21;
+        --line: #e5d7ca;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: Arial, Helvetica, sans-serif;
+        background: linear-gradient(180deg, #f7f3ee 0%, #efe6dd 100%);
+        color: var(--ink);
+        line-height: 1.65;
+      }
+      main {
+        max-width: 920px;
+        margin: 0 auto;
+        padding: 40px 20px 64px;
+      }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 20px;
+        padding: 28px;
+        box-shadow: 0 14px 38px rgba(38, 21, 12, 0.08);
+      }
+      h1, h2 { color: var(--ink); }
+      h1 { margin-top: 0; font-size: 2rem; }
+      h2 {
+        margin-top: 28px;
+        font-size: 1.15rem;
+        border-top: 1px solid var(--line);
+        padding-top: 20px;
+      }
+      p, li { color: var(--muted); }
+      a { color: var(--accent); }
+      .meta {
+        color: var(--muted);
+        font-size: 0.95rem;
+        margin-bottom: 12px;
+      }
+      ul { padding-left: 20px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="card">
+        <h1>Coffee Hub Privacy Policy</h1>
+        <p class="meta">Last updated: May 6, 2026</p>
+        <p>
+          Coffee Hub ("Coffee Hub", "we", "our", or "us") provides coffee ordering,
+          order tracking, delivery operations, and store administration services
+          through our Android app, web app, and related backend services.
+        </p>
+        <p>
+          This Privacy Policy explains what information we collect, how we use it,
+          how we protect it, and what choices users have.
+        </p>
+
+        <h2>1. Information we collect</h2>
+        <ul>
+          <li>Account and identity data such as phone number, Firebase user ID, role assignment, and optional profile details like name and email.</li>
+          <li>Order and delivery data such as cart items, order history, delivery address, delivery instructions, assigned delivery agent details, and order timestamps.</li>
+          <li>Location data, including approximate or precise device location when shared for checkout, routing, or live delivery tracking.</li>
+          <li>Device and app data such as app version, browser or webview type, operating system, network metadata, and service-generated technical identifiers used for security and reliability.</li>
+          <li>Support and contact data when you reach out to Coffee Hub for help or account-related requests.</li>
+        </ul>
+
+        <h2>2. Why we collect this information</h2>
+        <ul>
+          <li>To create and maintain user accounts.</li>
+          <li>To verify phone numbers using OTP-based sign-in.</li>
+          <li>To enable menu browsing, ordering, payment-flow completion, and delivery tracking.</li>
+          <li>To support admin and delivery-agent operations.</li>
+          <li>To secure the service, reduce abuse, and enforce role-based access control.</li>
+          <li>To investigate issues and respond to support requests.</li>
+        </ul>
+
+        <h2>3. Phone number and OTP verification</h2>
+        <p>
+          Coffee Hub uses Firebase Authentication for OTP-based phone sign-in.
+          Phone numbers and verification requests may be processed by Google and
+          Firebase anti-abuse systems. Coffee Hub also applies rate-limiting and
+          cooldown controls to reduce OTP spam and misuse.
+        </p>
+
+        <h2>4. Location data</h2>
+        <p>
+          Coffee Hub requests location access only for user-facing order and
+          delivery features. Customer location may be used during checkout to
+          confirm a delivery destination and support live order tracking. Delivery
+          location may be used to show live route progress during active orders.
+          The Android release reviewed in this repository does not require
+          background location permission.
+        </p>
+
+        <h2>5. Order, profile, and role data</h2>
+        <p>
+          Coffee Hub stores operational records in Firebase Firestore, including
+          customer profile details, saved delivery information, order records,
+          delivery session details, and access or role records for customer,
+          admin, and delivery workflows.
+        </p>
+
+        <h2>6. Third-party services and processors</h2>
+        <p>
+          Coffee Hub uses Google Firebase Authentication, Google Cloud Firestore,
+          Google Maps or related location services where enabled, and Vercel-hosted
+          backend infrastructure to operate the service. Coffee Hub does not sell
+          personal data.
+        </p>
+
+        <h2>7. Data sharing</h2>
+        <p>
+          Coffee Hub shares data only as needed to run the service, fulfill orders,
+          secure the platform, or comply with law. This can include sharing
+          authentication or anti-abuse data with Google Firebase, map and routing
+          requests with Google services, and limited operational data with admins
+          and delivery agents when required to fulfill an order.
+        </p>
+
+        <h2>8. Security measures</h2>
+        <ul>
+          <li>Encrypted network transport through HTTPS and Firebase-managed secure connections.</li>
+          <li>Authentication and role-based authorization controls.</li>
+          <li>Firestore security rules that restrict access by user identity and role.</li>
+          <li>Server-side validation for sensitive order and role-management actions.</li>
+          <li>OTP request throttling and abuse controls.</li>
+        </ul>
+
+        <h2>9. Data retention</h2>
+        <p>
+          Coffee Hub retains data only for as long as reasonably necessary to
+          operate ordering and delivery services, maintain account records and
+          order history, investigate abuse or disputes, and comply with legal or
+          operational obligations. Some information may be deleted sooner upon
+          request, while some transactional or security records may be retained for
+          a limited period where required for legitimate business or legal reasons.
+        </p>
+
+        <h2>10. User rights and choices</h2>
+        <p>
+          Depending on your location and applicable law, you may have rights to
+          access or update your account details, request deletion of your account
+          and associated personal data, withdraw optional permissions such as
+          location access, and contact Coffee Hub with privacy questions.
+        </p>
+        <p>
+          Account deletion requests can be initiated through the Coffee Hub account
+          deletion page or by contacting support. Identity verification may be
+          required before deletion is processed.
+        </p>
+
+        <h2>11. Children's privacy</h2>
+        <p>
+          Coffee Hub is intended for general food-ordering use and is not designed
+          for children under 13.
+        </p>
+
+        <h2>12. Contact information</h2>
+        <ul>
+          <li>Email: <a href="mailto:thekindbridge@gmail.com">thekindbridge@gmail.com</a></li>
+          <li>Phone: <a href="tel:+917893504892">+91 7893504892</a></li>
+          <li>Service name: Coffee Hub</li>
+          <li>Location: Inkollu, Andhra Pradesh, India</li>
+        </ul>
+
+        <h2>13. Changes to this policy</h2>
+        <p>
+          Coffee Hub may update this Privacy Policy from time to time. Updated
+          versions should be published at a public URL before they are relied on
+          for production Play Store disclosures.
+        </p>
+      </section>
+    </main>
+  </body>
+</html>

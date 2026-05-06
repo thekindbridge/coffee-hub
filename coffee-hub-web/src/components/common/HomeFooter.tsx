@@ -18,8 +18,21 @@ export const HomeFooter = ({ onNavigate }: HomeFooterProps) => (
       <div>
         <h4 className="mb-4 font-black">Legal</h4>
         <ul className="space-y-2 text-sm text-ink-muted">
-          <li className="hover:text-primary">Privacy Policy</li>
-          <li className="hover:text-primary">Terms of Service</li>
+          <li>
+            <a href="/privacy-policy.html" className="hover:text-primary">
+              Privacy Policy
+            </a>
+          </li>
+          <li>
+            <a href="/terms-and-conditions.html" className="hover:text-primary">
+              Terms of Service
+            </a>
+          </li>
+          <li>
+            <a href="/account-deletion.html" className="hover:text-primary">
+              Account Deletion
+            </a>
+          </li>
         </ul>
       </div>
     </div>

@@ -1,9 +1,10 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowRight, Coffee, LockKeyhole, RotateCcw, Smartphone } from 'lucide-react';
 import { motion } from 'motion/react';
 import {
   PHONE_AUTH_RECAPTCHA_CONTAINER_ID,
 } from '../../../services/auth/authService';
+import { OtpControlError } from '../../../services/api/otpControlService';
 import {
   shouldUseVisibleRecaptcha,
   type RecaptchaMode,
@@ -19,6 +20,32 @@ import { SteamEffect } from '../../customer/components/SteamEffect';
 import { useAuth } from '../hooks/useAuth';
 
 const sanitizePhoneInput = (value: string) => value.replace(/\D/g, '').slice(-10);
+const OTP_RESEND_COOLDOWN_MS = 60 * 1000;
+
+const extractOtpRetryAfterSeconds = (error: unknown) => {
+  let currentError: unknown = error;
+  let depth = 0;
+
+  while (currentError && depth < 5) {
+    if (currentError instanceof OtpControlError) {
+      return Math.max(0, currentError.retryAfterSeconds);
+    }
+
+    if (
+      typeof currentError === 'object' &&
+      currentError !== null &&
+      'cause' in currentError
+    ) {
+      currentError = (currentError as { cause?: unknown }).cause;
+      depth += 1;
+      continue;
+    }
+
+    break;
+  }
+
+  return 0;
+};
 
 export const PhoneLoginScreen = () => {
   const {
@@ -35,12 +62,31 @@ export const PhoneLoginScreen = () => {
   const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
   const [error, setError] = useState('');
   const [infoMessage, setInfoMessage] = useState('');
+  const [otpCooldownUntil, setOtpCooldownUntil] = useState(0);
+  const [nowMs, setNowMs] = useState(() => Date.now());
   const lastOtpRequestAtRef = useRef(0);
 
   const activePhoneNumber = useMemo(
     () => pendingPhoneNumber || safeNormalizePhoneNumber(phoneNumber),
     [pendingPhoneNumber, phoneNumber],
   );
+  const otpCooldownSecondsRemaining = Math.max(
+    0,
+    Math.ceil((otpCooldownUntil - nowMs) / 1000),
+  );
+  const isOtpCooldownActive = otpCooldownSecondsRemaining > 0;
+
+  useEffect(() => {
+    if (!isOtpCooldownActive) {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      setNowMs(Date.now());
+    }, 1000);
+
+    return () => window.clearInterval(intervalId);
+  }, [isOtpCooldownActive]);
 
   const resetMessages = () => {
     setError('');
@@ -50,6 +96,11 @@ export const PhoneLoginScreen = () => {
   const handleSendOtp = async () => {
     const now = Date.now();
     if (now - lastOtpRequestAtRef.current < 1000) {
+      return;
+    }
+
+    if (isOtpCooldownActive) {
+      setError(`Please wait ${otpCooldownSecondsRemaining}s before requesting another OTP.`);
       return;
     }
 
@@ -69,10 +120,18 @@ export const PhoneLoginScreen = () => {
 
     try {
       const pendingVerification = await requestOtp(normalizedPhone, recaptchaMode);
+      setOtpCooldownUntil(Date.now() + OTP_RESEND_COOLDOWN_MS);
+      setNowMs(Date.now());
       setInfoMessage(
         `OTP sent to ${formatPhoneForDisplay(pendingVerification.phone)}. Enter the 6-digit code to continue.`,
       );
     } catch (caughtError) {
+      const retryAfterSeconds = extractOtpRetryAfterSeconds(caughtError);
+      if (retryAfterSeconds > 0) {
+        setOtpCooldownUntil(Date.now() + retryAfterSeconds * 1000);
+        setNowMs(Date.now());
+      }
+
       if (recaptchaMode === 'invisible' && shouldUseVisibleRecaptcha(caughtError)) {
         setRecaptchaMode('visible');
         setError('This device needs a visible reCAPTCHA check. Complete it, then tap Send OTP again.');
@@ -115,6 +174,8 @@ export const PhoneLoginScreen = () => {
     cancelOtp();
     setOtpCode('');
     setRecaptchaMode('invisible');
+    setOtpCooldownUntil(0);
+    setNowMs(Date.now());
     lastOtpRequestAtRef.current = 0;
     resetMessages();
   };
@@ -181,13 +242,23 @@ export const PhoneLoginScreen = () => {
 
                 <button
                   type="button"
-                  disabled={isSendingOtp}
+                  disabled={isSendingOtp || isOtpCooldownActive}
                   className="coffee-btn-primary w-full justify-center disabled:opacity-70"
                   onClick={() => void handleSendOtp()}
                 >
-                  {isSendingOtp ? 'Sending OTP...' : 'Send OTP'}
+                  {isSendingOtp
+                    ? 'Sending OTP...'
+                    : isOtpCooldownActive
+                      ? `Send OTP in ${otpCooldownSecondsRemaining}s`
+                      : 'Send OTP'}
                   {!isSendingOtp && <ArrowRight size={17} />}
                 </button>
+
+                {isOtpCooldownActive && (
+                  <p className="text-center text-xs font-medium text-[#f0cfad]">
+                    You can request another OTP in {otpCooldownSecondsRemaining}s.
+                  </p>
+                )}
               </div>
             ) : (
               <div className="space-y-4">
@@ -254,6 +325,16 @@ export const PhoneLoginScreen = () => {
               {error}
             </div>
           )}
+
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-3 text-[11px] font-semibold text-[#f0cfad]">
+            <a href="/privacy-policy.html" className="hover:text-white">
+              Privacy Policy
+            </a>
+            <span className="text-white/35">|</span>
+            <a href="/terms-and-conditions.html" className="hover:text-white">
+              Terms
+            </a>
+          </div>
         </div>
       </motion.section>
     </AuthShell>
