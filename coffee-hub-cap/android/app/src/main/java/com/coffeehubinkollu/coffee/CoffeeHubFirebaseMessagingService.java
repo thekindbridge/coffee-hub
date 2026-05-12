@@ -1,4 +1,4 @@
-package com.coffeehub.app;
+package com.coffeehubinkollu.coffee;
 
 import android.app.ActivityManager;
 import android.app.PendingIntent;

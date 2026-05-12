@@ -1,4 +1,4 @@
-package com.coffeehub.app;
+package com.coffeehubinkollu.coffee;
 
 import android.graphics.Color;
 import android.os.Build;

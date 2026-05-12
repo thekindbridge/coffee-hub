@@ -14,10 +14,10 @@ def enableMinifyInRelease = (findProperty('coffeeHub.release.minify') ?: 'false'
 def enableShrinkResourcesInRelease = (findProperty('coffeeHub.release.shrinkResources') ?: 'false').toString().toBoolean()
 
 android {
-    namespace = "com.coffeehub.app"
+    namespace = "com.coffeehubinkollu.coffee"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.coffeehub.app"
+        applicationId "com.coffeehubinkollu.coffee"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

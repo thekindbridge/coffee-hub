@@ -7,12 +7,20 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:490208209104:android:6647cfd419b1c7ce89d6d5",
+        "mobilesdk_app_id": "1:490208209104:android:ff61660645e4c22489d6d5",
         "android_client_info": {
-          "package_name": "com.coffeehub.app"
+          "package_name": "com.coffeehubinkollu.coffee"
         }
       },
       "oauth_client": [
+        {
+          "client_id": "490208209104-6uigihj2703en74mvqmjdjn6sbtih74h.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.coffeehubinkollu.coffee",
+            "certificate_hash": "3d7158648dca38056c37cc6017115adb8649792b"
+          }
+        },
         {
           "client_id": "490208209104-kqj6tcv5iss5ej38iv0gj0pkgqtjct0p.apps.googleusercontent.com",
           "client_type": 3
